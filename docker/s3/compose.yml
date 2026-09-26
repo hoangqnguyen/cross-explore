@@ -1,0 +1,43 @@
+# MinIO for the cx-s3 integration tests.
+#
+#   docker/test-s3.sh                 # up, wait, test, down
+#   docker compose -f docker/s3/compose.yml up -d
+#   CX_TEST_S3=1 cargo test -p cx-s3 --test live
+#
+#   minio   http://127.0.0.1:9900/   root user `cxadmin` / `cxsecret123`
+#           console on http://127.0.0.1:9901/
+#
+# MinIO Inc. stopped publishing `minio/minio` and `minio/mc` on Docker Hub in
+# late 2025, so the defaults are the community builds of the same upstream
+# source (pgsty/*). Point CX_MINIO_IMAGE / CX_MC_IMAGE elsewhere if you
+# mirror your own.
+#
+# `init` creates the buckets the tests use and exits:
+#   cx-test     private, the tests' scratch space
+#   cx-public   anonymous read ("download" policy), for the anonymous tests
+name: cx-test-s3
+services:
+  minio:
+    image: ${CX_MINIO_IMAGE:-pgsty/minio:latest}
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9900:9000"
+      - "9901:9001"
+    environment:
+      MINIO_ROOT_USER: cxadmin
+      MINIO_ROOT_PASSWORD: cxsecret123
+    tmpfs:
+      - /data
+  init:
+    image: ${CX_MC_IMAGE:-pgsty/mc:latest}
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until mc alias set local http://minio:9000 cxadmin cxsecret123 >/dev/null 2>&1; do sleep 1; done &&
+        mc mb --ignore-existing local/cx-test &&
+        mc mb --ignore-existing local/cx-public &&
+        echo hello | mc pipe local/cx-public/readme.txt &&
+        mc anonymous set download local/cx-public &&
+        echo cx-s3 init done

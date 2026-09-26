@@ -1465,6 +1465,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cx-s3"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "cx-core",
+ "cx-local",
+ "futures-util",
+ "hmac 0.13.0",
+ "httpdate",
+ "md-5",
+ "percent-encoding",
+ "quick-xml",
+ "reqwest",
+ "sha2 0.11.0",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "cx-search"
 version = "0.1.0"
 dependencies = [
