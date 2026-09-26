@@ -1,0 +1,30 @@
+[package]
+name = "cx-archive"
+description = "Archives as folders for Cross Explore: zip, tar(.gz/.bz2/.xz/.zst) and 7z browsing, zip editing, compress/extract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
+tokio-util = "0.7"
+tempfile.workspace = true
+# Pure-Rust codecs only, so iOS/Android/Windows cross-builds need no C toolchain.
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64", "bzip2", "lzma", "xz"] }
+tar = "0.4"
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+bzip2 = "0.6"
+lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "xz"] }
+ruzstd = "0.9"
+sevenz-rust2 = { version = "0.20", default-features = false, features = ["bzip2", "deflate", "util"] }
+
+[dev-dependencies]
+cx-local.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "io-util"] }
+async-trait.workspace = true
+# Encoders to build test fixtures.
+sevenz-rust2 = { version = "0.20", default-features = false, features = ["compress", "util"] }
+lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "xz", "encoder"] }

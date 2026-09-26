@@ -1,0 +1,34 @@
+[package]
+name = "cx-thumbs"
+description = "Thumbnails, text previews and media info for Cross Explore (image crate + OS thumbnailers, disk LRU cache)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["io-util", "fs", "rt"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff", "ico"] }
+fast_image_resize = { version = "6.1", features = ["image"] }
+kamadak-exif = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSError", "NSData", "NSDictionary", "NSGeometry"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSImageRep", "objc2-core-graphics"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGImage"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-quick-look-thumbnailing = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-graphics", "objc2-core-foundation", "QLThumbnailGenerator", "QLThumbnailGenerationRequest", "QLThumbnailRepresentation", "QLThumbnailErrors"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Graphics_Gdi"] }
+
+[dev-dependencies]
+cx-local.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
