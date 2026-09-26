@@ -1,0 +1,22 @@
+[package]
+name = "cx-term"
+description = "Embedded terminal sessions for Cross Explore: local shells and ssh sessions over a PTY"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+serde.workspace = true
+base64 = "0.22"
+
+# Phones can't spawn shells; keep the PTY stack out of their builds entirely.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+portable-pty = "0.9"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
