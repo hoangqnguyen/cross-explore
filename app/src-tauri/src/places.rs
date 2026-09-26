@@ -10,6 +10,7 @@ use sysinfo::Disks;
 /// knows to leave its chrome see-through.
 static TRANSLUCENT: AtomicBool = AtomicBool::new(false);
 
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
 pub fn set_translucent(on: bool) {
     TRANSLUCENT.store(on, Ordering::Relaxed);
 }
