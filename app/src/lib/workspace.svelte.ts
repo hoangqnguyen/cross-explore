@@ -108,10 +108,17 @@ export class Tab {
     this.anchor = this.cursor;
     this.selection = select ? new Set([select]) : new Set();
     this.restoreScroll = select ? -1 : (mem?.scrollTop ?? 0);
-    void source.load().then(() => {
+    // Remote folders are polled against this listing, so watch after it.
+    const loaded = source.load().then(() => {
       if (source.status === "ready" && source.kind === "folder") settings.addRecent(source.info?.uri ?? uri);
     });
-    if (this.isActive()) void source.watch();
+    if (this.isActive()) {
+      if (uri.startsWith("file:") || uri.startsWith("~") || uri.startsWith("/")) void source.watch();
+      else
+        void loaded.then(() => {
+          if (this.folder === source && source.status === "ready") void source.watch();
+        });
+    }
   }
 
   isActive() {
@@ -153,9 +160,14 @@ export class Tab {
   }
 
   activate() {
-    // Hidden tabs don't watch; catch up on whatever changed meanwhile.
-    if (this.folder.status !== "loading" && this.folder.kind === "folder") void this.folder.load();
-    void this.folder.watch();
+    // Hidden tabs don't watch; catch up on whatever changed meanwhile, then
+    // watch (after the listing, which polled folders use as their baseline).
+    const f = this.folder;
+    if (f.status !== "loading" && f.kind === "folder")
+      void f.load().then(() => {
+        if (this.folder === f) void f.watch();
+      });
+    else void f.watch();
   }
 
   deactivate() {
@@ -430,6 +442,13 @@ export class Workspace {
     this.places = p;
     this.platform = p.platform;
     ui.platform = p.platform;
+    // Our own finished jobs refresh the polled folders they touched right away.
+    transfers.onFinished = (job) => {
+      const dirs = new Set([job.dest, ...job.sources.map((s) => s.replace(/\/[^/]*\/?$/, ""))].filter(Boolean).map((u) => u!.replace(/\/+$/, "")));
+      for (const t of this.allTabs) {
+        if (t.folder.kind === "folder" && t.folder.live !== "live" && dirs.has(t.dirUri.replace(/\/+$/, ""))) void t.folder.load();
+      }
+    };
     try {
       await subscribe((e) => {
         if (e.type === "job") transfers.onJob(e.job);

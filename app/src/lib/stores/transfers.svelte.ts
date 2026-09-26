@@ -39,12 +39,15 @@ class Transfers {
   });
 
   #announced = new Set<number>();
+  /** Called once per job when it ends (set by the workspace). */
+  onFinished: (job: JobSnapshot) => void = () => {};
 
   onJob(job: JobSnapshot) {
     const i = this.jobs.findIndex((j) => j.id === job.id);
     this.jobs = i < 0 ? [job, ...this.jobs] : this.jobs.map((j) => (j.id === job.id ? job : j));
     if (["done", "failed", "cancelled"].includes(job.state) && !this.#announced.has(job.id)) {
       this.#announced.add(job.id);
+      this.onFinished(job);
       if (job.state === "done" && job.undo) this.pushUndo(jobTitle(job), job.undo);
       if (job.errors.length) toasts.show(`${job.errors.length} ${job.errors.length === 1 ? "item" : "items"} couldn't be processed: ${job.errors[0].message}`, "error", 6000);
       else if (job.state === "failed") toasts.show(`${jobTitle(job)} failed`, "error");

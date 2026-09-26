@@ -2,7 +2,7 @@
 //! over Tauri channels so the UI renders before a folder is fully read.
 
 use super::AppState;
-use cx_core::poll::{poll_watch, PollConfig};
+use cx_core::poll::{poll_watch_from, PollConfig};
 use cx_core::{Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem, WatchGuard};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
@@ -21,22 +21,44 @@ pub enum ListEvent {
     Done { total: usize, elapsed_ms: f64 },
 }
 
+/// The last full listing of each polled (non-live) folder: the baseline its
+/// poller diffs against, so changes right after the UI's listing are caught.
+#[derive(Default)]
+pub struct RecentListings(Mutex<HashMap<String, (Instant, Vec<Entry>)>>);
+
+impl RecentListings {
+    fn take(&self, uri: &str) -> Option<Vec<Entry>> {
+        let mut map = self.0.lock().unwrap();
+        map.retain(|_, (t, _)| t.elapsed() < Duration::from_secs(30));
+        map.remove(uri).map(|(_, v)| v)
+    }
+}
+
 #[tauri::command]
-pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, app: AppState<'_>) -> Result<()> {
+pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, app: AppState<'_>, recent: State<'_, RecentListings>) -> Result<()> {
     let started = Instant::now();
     let loc = Location::parse(&uri)?;
     let provider = app.vfs.provider(&loc).await?;
-    let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: provider.capabilities() });
+    let caps = provider.capabilities();
+    let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: caps });
 
     let (tx, mut rx) = mpsc::channel(8);
+    let key = loc.uri();
     let listing = tokio::spawn(async move { provider.list(&loc, tx).await });
+    let mut kept = (!caps.live_watch).then(Vec::new);
     while let Some(entries) = rx.recv().await {
+        if let Some(k) = kept.as_mut() {
+            k.extend(entries.iter().cloned());
+        }
         if on_event.send(ListEvent::Batch { entries }).is_err() {
             break; // UI went away; dropping rx cancels the listing
         }
     }
     drop(rx);
     let total = listing.await.map_err(|e| CxError::Io(e.to_string()))??;
+    if let Some(k) = kept {
+        recent.0.lock().unwrap().insert(key, (Instant::now(), k));
+    }
     let _ = on_event.send(ListEvent::Done { total, elapsed_ms: started.elapsed().as_secs_f64() * 1e3 });
     Ok(())
 }
@@ -55,7 +77,7 @@ pub struct WatchInfo {
 }
 
 #[tauri::command]
-pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: State<'_, Watches>, app: AppState<'_>) -> Result<WatchInfo> {
+pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: State<'_, Watches>, app: AppState<'_>, recent: State<'_, RecentListings>) -> Result<WatchInfo> {
     let loc = Location::parse(&uri)?;
     let provider = app.vfs.provider(&loc).await?;
     let sink: cx_core::WatchSink = Arc::new(move |changes| {
@@ -63,7 +85,10 @@ pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: St
     });
     let (guard, mode) = match provider.watch(&loc, sink.clone()).await? {
         Some(g) => (g, "live"),
-        None => (poll_watch(provider, loc, sink, PollConfig::default()), "polling"),
+        None => {
+            let baseline = recent.take(&loc.uri());
+            (poll_watch_from(provider, loc, sink, PollConfig::default(), baseline), "polling")
+        }
     };
     let id = watches.next.fetch_add(1, Ordering::Relaxed);
     watches.active.lock().unwrap().insert(id, guard);

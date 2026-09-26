@@ -37,11 +37,22 @@ pub fn diff(old: &HashMap<String, Entry>, new: &HashMap<String, Entry>) -> Vec<C
 
 /// Start polling `dir`. Stops when the returned guard is dropped.
 pub fn poll_watch(provider: Arc<dyn Provider>, dir: Location, sink: WatchSink, cfg: PollConfig) -> WatchGuard {
+    poll_watch_from(provider, dir, sink, cfg, None)
+}
+
+/// Like [`poll_watch`], diffing against `baseline` (the listing the caller
+/// is showing) instead of a fresh one. Without it, a change landing between
+/// the caller's listing and the poller's first listing would never be
+/// reported.
+pub fn poll_watch_from(provider: Arc<dyn Provider>, dir: Location, sink: WatchSink, cfg: PollConfig, baseline: Option<Vec<Entry>>) -> WatchGuard {
     let task = tokio::spawn(async move {
         let snapshot = |v: Vec<Entry>| v.into_iter().map(|e| (e.name.clone(), e)).collect::<HashMap<_, _>>();
-        let mut last = match crate::provider::list_all(provider.as_ref(), &dir).await {
-            Ok(v) => snapshot(v),
-            Err(_) => HashMap::new(),
+        let mut last = match baseline {
+            Some(v) => snapshot(v),
+            None => match crate::provider::list_all(provider.as_ref(), &dir).await {
+                Ok(v) => snapshot(v),
+                Err(_) => HashMap::new(),
+            },
         };
         let mut interval = cfg.min;
         loop {

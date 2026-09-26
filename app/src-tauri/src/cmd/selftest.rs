@@ -33,11 +33,13 @@ fn dir() -> &'static Option<PathBuf> {
 #[derive(Serialize)]
 pub struct Config {
     uri: String,
+    /// Test servers (see docker/) when CX_SELFTEST_REMOTE is set.
+    remote: bool,
 }
 
 #[tauri::command]
 pub fn selftest_config() -> Option<Config> {
-    dir().as_ref().map(|d| Config { uri: Location::local(d).uri() })
+    dir().as_ref().map(|d| Config { uri: Location::local(d).uri(), remote: std::env::var_os("CX_SELFTEST_REMOTE").is_some() })
 }
 
 /// Simulate another app changing the folder.

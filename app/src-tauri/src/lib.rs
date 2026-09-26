@@ -17,6 +17,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(cmd::files::Watches::default())
+        .manage(cmd::files::RecentListings::default())
         .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
         .register_asynchronous_uri_scheme_protocol("cxthumb", protocols::thumb_protocol)
         .invoke_handler(tauri::generate_handler![

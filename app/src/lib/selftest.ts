@@ -2,7 +2,7 @@
 // started with CX_SELFTEST=1: drives the UI state layer through a realistic
 // session and reports each check to the terminal, then exits.
 import { invoke } from "@tauri-apps/api/core";
-import { childUri, dirSize, fileUrl, getTags, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
+import { asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { ws } from "./workspace.svelte";
@@ -22,7 +22,7 @@ async function until<T>(what: string, f: () => T | Promise<T>, ms = 5000): Promi
 }
 
 export async function selftest() {
-  const cfg = await invoke<{ uri: string } | null>("selftest_config");
+  const cfg = await invoke<{ uri: string; remote: boolean } | null>("selftest_config");
   if (!cfg) return;
   let failed = 0;
   let passed = 0;
@@ -161,6 +161,50 @@ export async function selftest() {
     if (!Array.isArray(d)) throw new Error("devices");
     await log(`  peer ${p.deviceId} · ${d.length} devices discovered so far`, "test");
   });
+
+  if (cfg.remote) {
+    const servers = [
+      { name: "SFTP (OpenSSH)", uri: "sftp://127.0.0.1:2223/config", mode: "polling" },
+      { name: "SMB (Samba)", uri: "smb://127.0.0.1:1445/private", mode: "live" },
+      { name: "WebDAV (rclone)", uri: "dav://127.0.0.1:8088/", mode: "polling" },
+      { name: "FTP (Pure-FTPd)", uri: "ftp://127.0.0.1:2121/", mode: "polling" },
+      { name: "FTPS (Pure-FTPd)", uri: "ftps://127.0.0.1:2121/", mode: "polling" },
+    ];
+    for (const srv of servers) {
+      await check(`${srv.name}: sign in, browse, upload, preview, rename, delete`, async () => {
+        const creds = { user: "cx", secret: { type: "password" as const, password: "cxpass" } };
+        for (let i = 0; ; i++) {
+          try {
+            await connectServer(srv.uri, creds, false);
+            break;
+          } catch (e) {
+            const err = asCxError(e);
+            // What the host-key dialog does after the user accepts.
+            if (err?.kind === "hostKeyUnknown" && i < 2) await trustHostKey(err.message.uri, err.message.keyType, err.message.fingerprint);
+            else throw e;
+          }
+        }
+        tab().navigate(srv.uri);
+        await until("remote listing", () => tab().folder.status === "ready" || tab().folder.status === "error", 15000);
+        if (tab().folder.status === "error") throw new Error(tab().folder.error ?? "listing failed");
+        await until(`${srv.mode} watch`, () => tab().folder.live === srv.mode, 5000);
+        const name = `cx-${Date.now()}.txt`;
+        const up = await job(await transfers.submit({ kind: "copy", sources: [childUri(dir, "alpha.txt")], dest: srv.uri, conflict: "replace" }));
+        if (up.state !== "done") throw new Error(`upload ${up.state}: ${up.errors[0]?.message}`);
+        const remote = childUri(srv.uri, "alpha.txt");
+        // Our own finished upload refreshes the polled folder immediately.
+        await until("uploaded file listed", () => has("alpha.txt"), 5000);
+        const t = await previewText(remote);
+        if (!t.text.startsWith("hello")) throw new Error(`preview: ${t.text}`);
+        const bytes = await (await fetch(fileUrl(remote), { headers: { Range: "bytes=0-4" } })).text();
+        if (bytes !== "hello") throw new Error(`range read: ${bytes}`);
+        await renameEntry(srv.uri, "alpha.txt", name);
+        const del = await job(await transfers.submit({ kind: "delete", sources: [childUri(srv.uri, name)] }));
+        if (del.state !== "done") throw new Error(`delete ${del.state}: ${del.errors[0]?.message}`);
+      });
+    }
+    tab().navigate(dir);
+  }
 
   await log(`SELFTEST ${failed ? "FAILED" : "PASSED"}: ${passed} passed, ${failed} failed`, "result");
   await invoke("selftest_exit", { code: failed ? 1 : 0 });
