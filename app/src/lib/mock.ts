@@ -51,6 +51,7 @@ const roots: Record<string, Node> = {
         dir("Music", 60 * day),
         dir("Pictures", 7 * day, Array.from({ length: 300 }, (_, i) => file(`IMG_${1000 + i}.jpg`, 1_500_000 + ((i * 7919) % 3_000_000), i * 3 * 3600_000))),
         dir("Code", 3 * 3600_000, [dir("cross-explore", 10 * min), dir("dotfiles", 20 * day)]),
+        dir("Big", day),
         dir(".config", 10 * day, [], true),
         file(".zshrc", 3_400, 15 * day, true, "export PATH=$HOME/bin:$PATH\n"),
         dir("Library", 90 * day, [], true),
@@ -79,12 +80,23 @@ function parse(uri: string): { base: string; path: string } {
   return { base, path };
 }
 
+// A 100,000-item folder for performance checks, generated on first use.
+function bigFolder(n: Node) {
+  if (n.children!.size) return;
+  const exts = ["jpg", "pdf", "txt", "mp4", "zip", "md", "rs", "png"];
+  for (let i = 0; i < 100_000; i++) {
+    const name = `file-${String(i).padStart(6, "0")}.${exts[i % exts.length]}`;
+    n.children!.set(name, file(name, (i * 7919) % 5_000_000, (i % 1000) * min));
+  }
+}
+
 function lookup(uri: string): Node | null {
   const { base, path } = parse(uri);
   let n: Node | undefined = roots[base];
   if (!n) throw { kind: "connection", message: `${base} is not reachable` };
   if (base.startsWith("smb://") && !nasSignedIn) throw { kind: "authRequired", message: { uri: base, user: null, reason: "" } };
   for (const part of path.split("/").filter(Boolean)) n = n?.children?.get(part);
+  if (n && path.endsWith("/Big")) bigFolder(n);
   return n ?? null;
 }
 
@@ -319,9 +331,23 @@ const handlers: Record<string, (a: Args) => unknown> = {
     const remote = parse(uri).base !== "file://";
     onEvent({ type: "meta", info: info(uri) as any, capabilities: { liveWatch: !remote, polling: remote, serverCopy: true, trash: !remote, posix: true, writable: true } });
     await sleep(remote ? 120 : 5);
-    const entries = [...node.children!.values()].map(strip);
-    onEvent({ type: "batch", entries });
-    onEvent({ type: "done", total: entries.length, elapsedMs: 5 });
+    // Stream like the real backend: a small first batch, then big ones.
+    let batch: Entry[] = [];
+    let total = 0;
+    let limit = 128;
+    for (const child of node.children!.values()) {
+      batch.push(strip(child));
+      if (batch.length >= limit) {
+        total += batch.length;
+        onEvent({ type: "batch", entries: batch });
+        await sleep(0); // IPC delivers each batch as its own task
+        batch = [];
+        limit = 4096;
+      }
+    }
+    total += batch.length;
+    if (batch.length) onEvent({ type: "batch", entries: batch });
+    onEvent({ type: "done", total, elapsedMs: 5 });
   },
   watch_dir({ uri, onChange }: { uri: string; onChange: (c: Change[]) => void }) {
     const node = lookup(uri);
