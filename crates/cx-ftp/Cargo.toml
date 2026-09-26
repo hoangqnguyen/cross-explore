@@ -1,0 +1,21 @@
+[package]
+name = "cx-ftp"
+description = "FTP/FTPS provider for Cross Explore (suppaftp)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["io-util", "net"] }
+# Explicit FTPS through rustls (ring backend; re-exported as suppaftp::tokio_rustls).
+suppaftp = { version = "12", features = ["tokio-rustls-ring"] }
+webpki-roots = "1"
+# Certificate fingerprints for trust-on-first-use of self-signed servers.
+sha2 = "0.10"
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }

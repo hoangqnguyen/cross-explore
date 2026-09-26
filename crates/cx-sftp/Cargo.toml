@@ -1,0 +1,22 @@
+[package]
+name = "cx-sftp"
+description = "SFTP provider for Cross Explore (russh + russh-sftp)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "fs"] }
+dirs.workspace = true
+russh = { version = "0.63", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "3"
+# known_hosts hashed-host matching (HMAC-SHA1 of the host name, base64).
+hmac = "0.13"
+sha1 = "0.11"
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
