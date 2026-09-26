@@ -1,0 +1,15 @@
+[package]
+name = "cx-testkit"
+description = "Test doubles for Cross Explore: an in-memory provider and connector with fault injection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }

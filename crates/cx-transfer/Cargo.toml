@@ -1,0 +1,19 @@
+[package]
+name = "cx-transfer"
+description = "Transfer engine for Cross Explore: copy/move/delete jobs, conflicts, resume, undo and folder compare"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+cx-local.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["io-util", "rt"] }
+blake3 = "1.8"
+
+[dev-dependencies]
+cx-testkit = { path = "../cx-testkit" }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }
