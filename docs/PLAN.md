@@ -278,3 +278,23 @@ Phase 0:
 2. Implement `cx-core` with the local provider and the `notify` patch pipeline.
 3. Build the virtual Details list with the Explorer-style chrome (tabs, command bar, breadcrumb, sidebar).
 4. Add the benchmark harness, so the "fast and live" claims are measured from day one.
+
+---
+
+## Implementation status (2026-09-26)
+
+| Phase | Status |
+|---|---|
+| 0. Foundations | Done: core VFS, live watcher, Tauri shell, benchmarks |
+| 1. Local explorer | Done: tabs, dual pane, Details/Icons/Columns/Gallery, Home, Quick Look, preview pane, palette, transfer queue with conflicts/resume/undo, keymap presets, drag and drop, clipboard |
+| 2. Network | Done: SMB (live), SFTP, FTP/FTPS, WebDAV, S3; keychain; host-key trust; discovery (mDNS, Tailscale, SSDP, WS-Discovery, NetBIOS, probes) and Nearby |
+| 3. Peer mode | Done: QUIC agent, SPAKE2 pairing, tailnet auto-trust, shares, live remote watch, send-to-device, `cx serve` |
+| 4. Power tools | Done: multi-rename, compare/sync, file diff, archives, name/content search, tags, hotlist, workspaces, terminal (external + embedded) |
+| 5. Mobile | Done: iOS and Android apps with a touch layout (verified on simulator and emulator) |
+| 6. Polish & extensibility | Partly done: OS clipboard, native drag-out, S3 (in place of OpenDAL), embedded terminal. Still open: delta sync, Google Drive/OneDrive, WASM plugins, updater |
+
+Differences from the plan:
+- Job state is kept in JSON files, not SQLite.
+- Sorting happens in the UI, which stays fast at 100k items.
+- S3 has its own small client instead of going through OpenDAL.
+- Only SMB and peers push changes; SFTP change streaming (`inotifywait`) was not built.

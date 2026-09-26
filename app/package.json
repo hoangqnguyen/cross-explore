@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:ui": "node tests/ui-smoke.mjs",
+    "test:perf": "node tests/ui-perf.mjs --check",
+    "shots": "node tests/ui-shots.mjs"
   },
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "^2.1.0",
