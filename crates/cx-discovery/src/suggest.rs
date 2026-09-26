@@ -45,6 +45,7 @@ fn service_score(kind: DeviceKind, scheme: Scheme, on_tailnet: bool) -> i32 {
         (Scheme::Dav, _) => 45,
         (Scheme::Ftps, _) => 35,
         (Scheme::Ftp, _) => 30,
+        (Scheme::S3, _) => 40,
     }
 }
 

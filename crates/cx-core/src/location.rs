@@ -33,6 +33,9 @@ pub enum Scheme {
     Davs,
     /// Another Cross Explore instance (peer mode).
     Peer,
+    /// S3-compatible object storage (AWS, MinIO, R2, B2, Wasabi…). The host
+    /// is the service endpoint and the first path segment the bucket.
+    S3,
 }
 
 impl Scheme {
@@ -45,6 +48,7 @@ impl Scheme {
             Scheme::Dav => "dav",
             Scheme::Davs => "davs",
             Scheme::Peer => "peer",
+            Scheme::S3 => "s3",
         }
     }
 
@@ -57,6 +61,7 @@ impl Scheme {
             "dav" | "webdav" | "http" => Scheme::Dav,
             "davs" | "webdavs" | "https" => Scheme::Davs,
             "peer" | "cx" => Scheme::Peer,
+            "s3" => Scheme::S3,
             _ => return None,
         })
     }
@@ -69,6 +74,7 @@ impl Scheme {
             Scheme::Dav => 80,
             Scheme::Davs => 443,
             Scheme::Peer => 47470,
+            Scheme::S3 => 443,
         }
     }
 
@@ -80,6 +86,7 @@ impl Scheme {
             Scheme::Smb => "SMB",
             Scheme::Dav | Scheme::Davs => "WebDAV",
             Scheme::Peer => "Cross Explore",
+            Scheme::S3 => "S3",
         }
     }
 }
@@ -466,7 +473,7 @@ fn remote_info(endpoint: &Endpoint, path: &str) -> LocationInfo {
     let mut acc = String::new();
     for (i, seg) in path.split('/').filter(|s| !s.is_empty()).enumerate() {
         acc = join_posix(&acc, seg);
-        let icon = if i == 0 && endpoint.scheme == Scheme::Smb { "share" } else { "folder" };
+        let icon = if i == 0 && matches!(endpoint.scheme, Scheme::Smb | Scheme::S3) { "share" } else { "folder" };
         crumbs.push(Crumb { label: seg.to_string(), uri: Location::remote(endpoint.clone(), acc.clone()).uri(), icon });
     }
     LocationInfo {

@@ -363,6 +363,7 @@ pub(crate) fn scheme_order(s: Scheme) -> u8 {
         Scheme::Dav => 4,
         Scheme::Ftps => 5,
         Scheme::Ftp => 6,
+        Scheme::S3 => 7,
     }
 }
 
