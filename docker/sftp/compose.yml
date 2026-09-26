@@ -1,0 +1,35 @@
+# OpenSSH SFTP test server for cx-sftp integration tests.
+#
+#   docker/test-remote.sh sftp        # up, test, down
+#
+# Users (both chrooted, writable folder is /upload):
+#   cx     / cxpass           password login
+#   cxkey  / (key only)       public key from ./keys/id_ed25519.pub
+#
+# A second, current OpenSSH (10.x) listens on 2223 (user cx / cxpass, home
+# /config): it advertises the `copy-data` extension, so server-side copies
+# get tested too.
+#
+# Host keys are generated on every container start, so each run begins with
+# an unknown host key (exercises the trust-on-first-use flow).
+name: cx-test-sftp
+services:
+  sftp:
+    image: atmoz/sftp:latest
+    platform: linux/amd64
+    ports:
+      - "2222:22"
+    volumes:
+      - ./keys/id_ed25519.pub:/home/cxkey/.ssh/keys/id_ed25519.pub:ro
+    command: "cx:cxpass:1001:100:upload cxkey::1002:100:upload"
+
+  sftp-modern:
+    image: lscr.io/linuxserver/openssh-server:latest
+    ports:
+      - "2223:2222"
+    environment:
+      USER_NAME: cx
+      USER_PASSWORD: cxpass
+      PASSWORD_ACCESS: "true"
+      PUID: "1000"
+      PGID: "1000"

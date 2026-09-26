@@ -1,0 +1,36 @@
+# FTP test servers for cx-ftp integration tests.
+#
+#   docker/test-remote.sh ftp         # up, test, down
+#
+# pureftpd  127.0.0.1:2121  cx / cxpass   MLSD/MLST, explicit FTPS (self-signed
+#                                         certificate, regenerated per start)
+#           passive ports 30000-30019
+# vsftpd    127.0.0.1:2122  cx / cxpass   no MLSD: exercises the LIST fallback
+#           passive ports 30020-30029
+name: cx-test-ftp
+services:
+  pureftpd:
+    build: ./pureftpd
+    image: cx-test-pureftpd
+    # Debian's pure-ftpd drops privileges with libcap and exits (252)
+    # without these.
+    cap_add: [SYS_NICE, DAC_READ_SEARCH]
+    ports:
+      - "2121:21"
+      - "30000-30019:30000-30019"
+    environment:
+      FTP_USER: cx
+      FTP_PASS: cxpass
+      PUBLICHOST: 127.0.0.1
+      PASSIVE_PORTS: "30000:30019"
+
+  vsftpd:
+    image: delfer/alpine-ftp-server:latest
+    ports:
+      - "2122:21"
+      - "30020-30029:30020-30029"
+    environment:
+      USERS: "cx|cxpass"
+      ADDRESS: 127.0.0.1
+      MIN_PORT: "30020"
+      MAX_PORT: "30029"
