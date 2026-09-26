@@ -72,8 +72,10 @@
       <!-- The live dot: changes here appear without refreshing. -->
       {#if tab?.folder.refreshing || tab?.folder.status === "loading"}
         <span class="state loading" title="Loading…"><span class="spinner"></span></span>
-      {:else if tab?.folder.live}
+      {:else if tab?.folder.live === "live"}
         <span class="state live" title="Live: changes to this folder appear automatically"><span class="dot"></span>Live</span>
+      {:else if tab?.folder.live === "polling"}
+        <span class="state polling" title="This server can't push changes, so the folder is checked every few seconds"><span class="dot"></span>Auto-refresh</span>
       {/if}
     {/if}
   </div>
@@ -186,6 +188,11 @@
     background: var(--live);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent);
     animation: breathe 3s ease-in-out infinite;
+  }
+  .polling .dot {
+    background: var(--text-3);
+    box-shadow: none;
+    animation: none;
   }
   @keyframes breathe {
     50% {

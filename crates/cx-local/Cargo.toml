@@ -1,0 +1,25 @@
+[package]
+name = "cx-local"
+description = "Local file system provider for Cross Explore, with live watching"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+notify.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
+trash.workspace = true
+sysinfo.workspace = true
+dirs.workspace = true
+reflink-copy = "0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSFileManager", "NSURL", "NSError", "NSString"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "io-util"] }

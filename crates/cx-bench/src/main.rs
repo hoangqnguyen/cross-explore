@@ -6,8 +6,9 @@
 //! With `--check` the process exits non-zero when a budget is missed, so CI
 //! can gate on it. Fixture folders live in the system temp dir and are reused.
 
-use cx_core::{Location, LocalProvider, Provider};
-use cx_watch::{watch_dir, Change};
+use cx_core::{Location, Provider};
+use cx_local::LocalProvider;
+use cx_local::{watch_dir, Change};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};

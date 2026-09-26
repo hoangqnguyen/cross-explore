@@ -1,17 +1,19 @@
 //! IPC surface for the UI. Listings and watch patches stream over Tauri
 //! channels so the UI can render before a whole folder has been read.
 
-use cx_core::{Capabilities, CxError, Entry, LocalProvider, Location, LocationInfo, Provider, Result};
-use cx_watch::{Change, DirWatch};
+use cx_core::poll::{poll_watch, PollConfig};
+use cx_core::{Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, Vfs, WatchGuard};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::mpsc;
+
+pub type VfsState = Arc<Vfs>;
 
 #[derive(Serialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
@@ -21,18 +23,11 @@ pub enum ListEvent {
     Done { total: usize, elapsed_ms: f64 },
 }
 
-fn provider_for(loc: &Location) -> &'static dyn Provider {
-    static LOCAL: LocalProvider = LocalProvider;
-    match loc {
-        Location::Local(_) => &LOCAL,
-    }
-}
-
 #[tauri::command]
-pub async fn list_dir(uri: String, on_event: Channel<ListEvent>) -> Result<()> {
+pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, vfs: State<'_, VfsState>) -> Result<()> {
     let started = Instant::now();
     let loc = Location::parse(&uri)?;
-    let provider = provider_for(&loc);
+    let provider = vfs.provider(&loc).await?;
     let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: provider.capabilities() });
 
     let (tx, mut rx) = mpsc::channel(8);
@@ -51,20 +46,31 @@ pub async fn list_dir(uri: String, on_event: Channel<ListEvent>) -> Result<()> {
 #[derive(Default)]
 pub struct Watches {
     next: AtomicU64,
-    active: Mutex<HashMap<u64, DirWatch>>,
+    active: Mutex<HashMap<u64, WatchGuard>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchInfo {
+    id: u64,
+    /// "live" when changes are pushed, "polling" when we re-list periodically.
+    mode: &'static str,
 }
 
 #[tauri::command]
-pub fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: State<'_, Watches>) -> Result<u64> {
+pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: State<'_, Watches>, vfs: State<'_, VfsState>) -> Result<WatchInfo> {
     let loc = Location::parse(&uri)?;
-    let path = loc.local_path().ok_or_else(|| CxError::Unsupported("watching remote folders".into()))?;
-    let watch = cx_watch::watch_dir(path, move |changes| {
+    let provider = vfs.provider(&loc).await?;
+    let sink: cx_core::WatchSink = Arc::new(move |changes| {
         let _ = on_change.send(changes);
-    })
-    .map_err(|e| CxError::Io(format!("cannot watch {}: {e}", path.display())))?;
+    });
+    let (guard, mode) = match provider.watch(&loc, sink.clone()).await? {
+        Some(g) => (g, "live"),
+        None => (poll_watch(provider, loc, sink, PollConfig::default()), "polling"),
+    };
     let id = watches.next.fetch_add(1, Ordering::Relaxed);
-    watches.active.lock().unwrap().insert(id, watch);
-    Ok(id)
+    watches.active.lock().unwrap().insert(id, guard);
+    Ok(WatchInfo { id, mode })
 }
 
 #[tauri::command]
@@ -73,21 +79,27 @@ pub fn unwatch_dir(id: u64, watches: State<'_, Watches>) {
 }
 
 #[tauri::command]
-pub async fn create_folder(uri: String, name: Option<String>) -> Result<Entry> {
+pub async fn create_folder(uri: String, name: Option<String>, vfs: State<'_, VfsState>) -> Result<Entry> {
     let loc = Location::parse(&uri)?;
-    provider_for(&loc).create_dir(&loc, name.as_deref()).await
+    vfs.provider(&loc).await?.create_dir(&loc, name.as_deref()).await
 }
 
 #[tauri::command]
-pub async fn rename_entry(uri: String, from: String, to: String) -> Result<Entry> {
+pub async fn rename_entry(uri: String, from: String, to: String, vfs: State<'_, VfsState>) -> Result<Entry> {
     let loc = Location::parse(&uri)?;
-    provider_for(&loc).rename(&loc, &from, &to).await
+    vfs.provider(&loc).await?.rename(&loc, &from, &to).await
 }
 
 #[tauri::command]
-pub async fn trash_entries(uri: String, names: Vec<String>) -> Result<()> {
+pub async fn trash_entries(uri: String, names: Vec<String>, vfs: State<'_, VfsState>) -> Result<Vec<cx_core::TrashedItem>> {
     let loc = Location::parse(&uri)?;
-    provider_for(&loc).trash(&loc, &names).await
+    vfs.provider(&loc).await?.trash(&loc, &names).await
+}
+
+#[tauri::command]
+pub async fn free_space(uri: String, vfs: State<'_, VfsState>) -> Result<Option<Space>> {
+    let loc = Location::parse(&uri)?;
+    vfs.provider(&loc).await?.free_space(&loc).await
 }
 
 /// Open a file with its default application.

@@ -8,6 +8,6 @@ publish = false
 
 [dependencies]
 cx-core.workspace = true
-cx-watch.workspace = true
+cx-local.workspace = true
 tokio.workspace = true
 serde_json.workspace = true

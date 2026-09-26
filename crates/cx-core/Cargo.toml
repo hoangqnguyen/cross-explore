@@ -1,6 +1,6 @@
 [package]
 name = "cx-core"
-description = "Core VFS model for Cross Explore: locations, entries, providers"
+description = "Core VFS model for Cross Explore: locations, entries, providers, connection registry"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,9 +11,9 @@ serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 url.workspace = true
-trash.workspace = true
 dirs.workspace = true
+percent-encoding = "2"
 
 [dev-dependencies]
 tempfile.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }

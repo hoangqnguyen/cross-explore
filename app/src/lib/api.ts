@@ -54,6 +54,7 @@ export interface Capabilities {
   serverCopy: boolean;
   trash: boolean;
   posix: boolean;
+  writable: boolean;
 }
 
 export type ListEvent =
@@ -120,8 +121,14 @@ export async function listDir(uri: string, onEvent: (ev: ListEvent) => void): Pr
   await invoke("list_dir", { uri, onEvent: channel(onEvent) });
 }
 
-export async function watchDir(uri: string, onChange: (changes: Change[]) => void): Promise<number> {
-  return invoke<number>("watch_dir", { uri, onChange: channel(onChange) });
+export interface WatchInfo {
+  id: number;
+  /** "live" when changes are pushed; "polling" when the folder is re-listed periodically. */
+  mode: "live" | "polling";
+}
+
+export async function watchDir(uri: string, onChange: (changes: Change[]) => void): Promise<WatchInfo> {
+  return invoke<WatchInfo>("watch_dir", { uri, onChange: channel(onChange) });
 }
 
 export const unwatchDir = (id: number) => invoke<void>("unwatch_dir", { id });

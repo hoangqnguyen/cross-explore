@@ -15,7 +15,8 @@ export class Folder {
   /** Re-listing in the background while the old rows stay on screen. */
   refreshing = $state(false);
   error = $state<string | null>(null);
-  live = $state(false);
+  /** How changes reach us: pushed ("live"), re-listed ("polling"), or not at all. */
+  live = $state<"live" | "polling" | null>(null);
   /** All entries (hidden ones included), sorted. */
   items = $state.raw<Entry[]>([]);
   /** Names that just appeared through a live update. */
@@ -116,22 +117,22 @@ export class Folder {
     if (this.#wantWatch) return;
     this.#wantWatch = true;
     try {
-      const id = await watchDir(this.uri, (changes) => this.#onChanges(changes));
+      const { id, mode } = await watchDir(this.uri, (changes) => this.#onChanges(changes));
       if (!this.#wantWatch) {
         void unwatchDir(id); // stopped while we were starting
         return;
       }
       this.#watchId = id;
-      this.live = true;
+      this.live = mode;
     } catch {
       this.#wantWatch = false;
-      this.live = false;
+      this.live = null;
     }
   }
 
   unwatch() {
     this.#wantWatch = false;
-    this.live = false;
+    this.live = null;
     if (this.#watchId != null) {
       void unwatchDir(this.#watchId);
       this.#watchId = null;

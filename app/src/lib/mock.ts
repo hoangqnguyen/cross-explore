@@ -110,7 +110,7 @@ const handlers: Record<string, (a: any) => unknown> = {
     const path = pathOf(uri);
     const node = lookup(path);
     if (!node?.isDir) throw { kind: "notFound", message: path };
-    onEvent({ type: "meta", info: info(path), capabilities: { liveWatch: true, polling: false, serverCopy: true, trash: true, posix: true } });
+    onEvent({ type: "meta", info: info(path), capabilities: { liveWatch: true, polling: false, serverCopy: true, trash: true, posix: true, writable: true } });
     await sleep(5);
     const entries = [...node.children!.values()].map(strip);
     onEvent({ type: "batch", entries });
@@ -136,7 +136,7 @@ const handlers: Record<string, (a: any) => unknown> = {
         }
       }, 6000),
     );
-    return id;
+    return { id, mode: "live" };
   },
   unwatch_dir({ id }: { id: number }) {
     clearInterval(watchers.get(id));
@@ -163,6 +163,7 @@ const handlers: Record<string, (a: any) => unknown> = {
   trash_entries({ uri, names }: { uri: string; names: string[] }) {
     const node = lookup(pathOf(uri))!;
     names.forEach((n) => node.children!.delete(n));
+    return names.map((n) => ({ original: uri + "/" + n, trashed: null }));
   },
   open_entry: () => undefined,
 };

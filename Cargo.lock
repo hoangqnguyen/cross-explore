@@ -563,7 +563,7 @@ name = "cross-explore"
 version = "0.1.0"
 dependencies = [
  "cx-core",
- "cx-watch",
+ "cx-local",
  "dirs",
  "serde",
  "serde_json",
@@ -643,7 +643,7 @@ name = "cx-bench"
 version = "0.1.0"
 dependencies = [
  "cx-core",
- "cx-watch",
+ "cx-local",
  "serde_json",
  "tokio",
 ]
@@ -654,22 +654,30 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "dirs",
+ "percent-encoding",
  "serde",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "trash",
  "url",
 ]
 
 [[package]]
-name = "cx-watch"
+name = "cx-local"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "cx-core",
+ "dirs",
  "notify",
+ "objc2",
+ "objc2-foundation",
+ "reflink-copy",
  "serde",
+ "sysinfo",
  "tempfile",
+ "tokio",
+ "trash",
 ]
 
 [[package]]
@@ -2406,6 +2414,7 @@ checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.13.2",
  "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
 ]
@@ -2881,6 +2890,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
+]
+
+[[package]]
+name = "reflink-copy"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9dd7ab4af0363d5ccfd2838d782a28196cf32a5cc2e4fe3c5dc83f2be588b8b"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "rustix",
+ "windows 0.62.2",
 ]
 
 [[package]]

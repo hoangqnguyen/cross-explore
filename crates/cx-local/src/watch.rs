@@ -10,9 +10,9 @@
 //! all report renames and saves differently. When the OS says it dropped
 //! events we send [`Change::Reset`] and the UI re-lists the folder.
 
+pub use cx_core::Change;
 use cx_core::Entry;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Serialize;
 use std::collections::BTreeSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,14 +28,6 @@ pub const MAX_WAIT: Duration = Duration::from_millis(100);
 /// Past this many changed names in one batch, a full re-list is cheaper
 /// than patching row by row.
 const RESET_THRESHOLD: usize = 5_000;
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum Change {
-    Upsert { entry: Entry },
-    Remove { name: String },
-    Reset,
-}
 
 /// Watches one directory (not its subfolders) until dropped.
 pub struct DirWatch {

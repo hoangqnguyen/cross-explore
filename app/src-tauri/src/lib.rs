@@ -3,10 +3,16 @@ mod places;
 
 use tauri::Manager;
 
+fn build_vfs() -> commands::VfsState {
+    use std::sync::Arc;
+    cx_core::Vfs::new(Arc::new(cx_local::LocalProvider), Arc::new(cx_core::MemoryCredentials::default()))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(commands::Watches::default())
+        .manage(build_vfs())
         .invoke_handler(tauri::generate_handler![
             commands::list_dir,
             commands::watch_dir,
@@ -17,7 +23,7 @@ pub fn run() {
             commands::open_entry,
             commands::ui_log,
             places::places,
-            places::free_space,
+            commands::free_space,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window");

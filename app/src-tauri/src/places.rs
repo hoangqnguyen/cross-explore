@@ -1,6 +1,6 @@
 //! Sidebar sources: the home folder, standard folders and mounted volumes.
 
-use cx_core::{Location, Result};
+use cx_core::Location;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,12 +40,6 @@ pub struct Places {
     home: Place,
     favorites: Vec<Place>,
     volumes: Vec<Volume>,
-}
-
-#[derive(Serialize)]
-pub struct Space {
-    free: u64,
-    total: u64,
 }
 
 fn place(path: PathBuf, icon: &'static str) -> Option<Place> {
@@ -126,16 +120,3 @@ pub fn places() -> Places {
     }
 }
 
-/// Free space on the volume holding `uri` (the longest matching mount point).
-#[tauri::command]
-pub fn free_space(uri: String) -> Result<Option<Space>> {
-    let loc = Location::parse(&uri)?;
-    let Some(path) = loc.local_path() else { return Ok(None) };
-    let disks = Disks::new_with_refreshed_list();
-    Ok(disks
-        .list()
-        .iter()
-        .filter(|d| path.starts_with(d.mount_point()))
-        .max_by_key(|d| d.mount_point().as_os_str().len())
-        .map(|d| Space { free: d.available_space(), total: d.total_space() }))
-}
