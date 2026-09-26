@@ -50,8 +50,8 @@
   const symbols: Record<DiffKind, { icon: "forward" | "back" | "diff" | "check"; label: string; tone: string }> = {
     leftOnly: { icon: "forward", label: "Only on the left", tone: "left" },
     rightOnly: { icon: "back", label: "Only on the right", tone: "right" },
-    leftNewer: { icon: "forward", label: "Newer on the left", tone: "left" },
-    rightNewer: { icon: "back", label: "Newer on the right", tone: "right" },
+    newerLeft: { icon: "forward", label: "Newer on the left", tone: "left" },
+    newerRight: { icon: "back", label: "Newer on the right", tone: "right" },
     different: { icon: "diff", label: "Different", tone: "diff" },
     same: { icon: "check", label: "Identical", tone: "same" },
   };
@@ -62,8 +62,8 @@
 
   async function sync(direction: "right" | "left" | "both") {
     const plans: { from: string; to: string; kinds: DiffKind[] }[] = [];
-    if (direction !== "left") plans.push({ from: left, to: right, kinds: ["leftOnly", "leftNewer"] });
-    if (direction !== "right") plans.push({ from: right, to: left, kinds: ["rightOnly", "rightNewer"] });
+    if (direction !== "left") plans.push({ from: left, to: right, kinds: ["leftOnly", "newerLeft"] });
+    if (direction !== "right") plans.push({ from: right, to: left, kinds: ["rightOnly", "newerRight"] });
     let jobs = 0;
     for (const p of plans) {
       // One copy job per destination folder.

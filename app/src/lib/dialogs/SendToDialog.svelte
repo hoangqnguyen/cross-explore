@@ -27,10 +27,10 @@
   <p>{uris.length === 1 ? `“${uriName(uris[0])}”` : `${uris.length} items`} will be offered to the device. It arrives once they accept.</p>
   <div class="list">
     {#each targets as d (d.id)}
-      <button type="button" class="dev" disabled={!!busy || (d.tailnet ? !d.tailnet.online : false)} onclick={() => send(d.id, d.name)}>
+      <button type="button" class="dev" disabled={!!busy || (d.tailnet ? !d.tailnet.online : false)} onclick={() => send(d.services.find((s) => s.scheme === "peer")!.uri, d.name)}>
         <DeviceIcon kind={d.kind} size={22} />
         <span class="name">{d.name}</span>
-        <span class="muted">{busy === d.id ? "Sending…" : d.tailnet ? "tailnet" : "nearby"}</span>
+        <span class="muted">{busy === d.services.find((s) => s.scheme === "peer")!.uri ? "Sending…" : d.tailnet ? "tailnet" : "nearby"}</span>
       </button>
     {:else}
       <p class="muted">No devices running Cross Explore were found. Turn on sharing on your other device (Settings → Sharing & devices) and pair it.</p>

@@ -228,7 +228,7 @@ export const previewText = (uri: string, maxBytes = 512 * 1024) => invoke<TextPr
 
 // ---------- transfers ----------
 
-export type JobKind = "copy" | "move" | "delete" | "trash" | "extract" | "compress";
+export type JobKind = "copy" | "move" | "delete" | "trash" | "extract" | "compress" | "send" | "receive";
 export type ConflictPolicy = "ask" | "replace" | "skip" | "keepBoth" | "replaceIfNewer";
 export type Resolution = "replace" | "skip" | "keepBoth" | "replaceIfNewer";
 export type JobState = "queued" | "scanning" | "running" | "paused" | "waitingForConflict" | "done" | "failed" | "cancelled";
@@ -278,6 +278,7 @@ export const cancelJob = (id: number) => invoke<void>("transfer_cancel", { id })
 export const resolveConflict = (id: number, conflictId: number, resolution: Resolution, applyToAll: boolean) =>
   invoke<void>("transfer_resolve", { id, conflictId, resolution, applyToAll });
 export const listJobs = () => invoke<JobSnapshot[]>("transfer_list");
+export const clearJobs = () => invoke<void>("transfer_clear");
 export const undoOp = (op: UndoOp) => invoke<void>("undo", { op });
 
 // ---------- search ----------
@@ -369,7 +370,7 @@ export interface PeerStatus {
 }
 
 export interface IncomingOffer {
-  id: number;
+  id: string;
   from: { id: string; name: string };
   files: { name: string; size: number }[];
   total: number;
@@ -382,8 +383,8 @@ export const peerSetAutoTrust = (on: boolean) => invoke<PeerStatus>("peer_set_au
 export const peerPairCode = () => invoke<string>("peer_pair_code");
 export const peerPair = (address: string, code: string) => invoke<{ id: string; name: string }>("peer_pair", { address, code });
 export const peerForget = (id: string) => invoke<PeerStatus>("peer_forget", { id });
-export const peerSend = (device: string, uris: string[]) => invoke<number>("peer_send", { device, uris });
-export const peerRespond = (offerId: number, accept: boolean, dest: string | null) => invoke<void>("peer_respond", { offerId, accept, dest });
+export const peerSend = (device: string, uris: string[]) => invoke<string>("peer_send", { device, uris });
+export const peerRespond = (offerId: string, accept: boolean, dest: string | null) => invoke<void>("peer_respond", { offerId, accept, dest });
 
 // ---------- tags ----------
 
@@ -393,7 +394,7 @@ export const findTagged = (tag: string) => invoke<SearchHit[]>("tags_find", { ta
 
 // ---------- compare ----------
 
-export type DiffKind = "leftOnly" | "rightOnly" | "leftNewer" | "rightNewer" | "different" | "same";
+export type DiffKind = "leftOnly" | "rightOnly" | "newerLeft" | "newerRight" | "different" | "same";
 export interface DiffItem {
   relPath: string;
   kind: DiffKind;

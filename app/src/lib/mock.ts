@@ -438,6 +438,7 @@ const handlers: Record<string, (a: Args) => unknown> = {
     jobs.get(id)?.resolve?.(resolution + (applyToAll ? "!" : ""));
   },
   transfer_list: () => [...jobs.values()].map((j) => ({ ...j, resolve: undefined })),
+  transfer_clear: () => undefined,
   undo({ op }: Args) {
     if (op.type === "copy") for (const u of op.created as string[]) {
       const parentUri = u.slice(0, u.lastIndexOf("/"));
@@ -512,7 +513,7 @@ const handlers: Record<string, (a: Args) => unknown> = {
     peer = { ...peer, trusted: peer.trusted.filter((t) => t.id !== id) };
     return peer;
   },
-  peer_send: () => nextId++,
+  peer_send: () => String(nextId++),
   peer_respond: () => undefined,
   tags_get({ uris }: Args) {
     return Object.fromEntries((uris as string[]).map((u) => [u, tags.get(u) ?? []]));
@@ -530,7 +531,7 @@ const handlers: Record<string, (a: Args) => unknown> = {
     return [...names].sort().map((n): DiffItem => {
       const a = l.children!.get(n);
       const b = r.children!.get(n);
-      const kind = !b ? "leftOnly" : !a ? "rightOnly" : a.size !== b.size ? "different" : (a.modified ?? 0) > (b.modified ?? 0) + 2000 ? "leftNewer" : (b.modified ?? 0) > (a.modified ?? 0) + 2000 ? "rightNewer" : "same";
+      const kind = !b ? "leftOnly" : !a ? "rightOnly" : a.size !== b.size ? "different" : (a.modified ?? 0) > (b.modified ?? 0) + 2000 ? "newerLeft" : (b.modified ?? 0) > (a.modified ?? 0) + 2000 ? "newerRight" : "same";
       return { relPath: n, kind, left: a ? strip(a) : null, right: b ? strip(b) : null };
     });
   },

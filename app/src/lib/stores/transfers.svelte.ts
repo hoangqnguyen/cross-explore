@@ -1,5 +1,5 @@
 // Live view of transfer jobs (fed by backend events) and the undo stack.
-import { cancelJob, errorText, pauseJob, resolveConflict, resumeJob, submitJob, undoOp, uriName, type JobRequest, type JobSnapshot, type Resolution, type UndoOp } from "../api";
+import { cancelJob, clearJobs, errorText, pauseJob, resolveConflict, resumeJob, submitJob, undoOp, uriName, type JobRequest, type JobSnapshot, type Resolution, type UndoOp } from "../api";
 import { toasts } from "../toasts.svelte";
 
 export interface UndoEntry {
@@ -12,6 +12,8 @@ const verbs: Record<string, [string, string]> = {
   move: ["Moving", "Moved"],
   trash: ["Moving to Trash", "Moved to Trash"],
   delete: ["Deleting", "Deleted"],
+  send: ["Sending", "Sent"],
+  receive: ["Receiving", "Received"],
   extract: ["Extracting", "Extracted"],
   compress: ["Compressing", "Compressed"],
 };
@@ -64,6 +66,7 @@ class Transfers {
   resolve = (id: number, conflictId: number, r: Resolution, all: boolean) => resolveConflict(id, conflictId, r, all);
 
   clearFinished() {
+    void clearJobs().catch(() => {});
     this.jobs = this.jobs.filter((j) => !["done", "failed", "cancelled"].includes(j.state));
   }
 

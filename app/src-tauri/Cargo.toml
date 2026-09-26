@@ -15,6 +15,18 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 cx-core.workspace = true
 cx-local.workspace = true
+cx-transfer = { path = "../../crates/cx-transfer" }
+cx-archive = { path = "../../crates/cx-archive" }
+cx-search = { path = "../../crates/cx-search" }
+cx-thumbs = { path = "../../crates/cx-thumbs" }
+cx-discovery = { path = "../../crates/cx-discovery" }
+cx-peer = { path = "../../crates/cx-peer" }
+cx-smb = { path = "../../crates/cx-smb" }
+cx-webdav = { path = "../../crates/cx-webdav" }
+tokio-util = "0.7"
+mime_guess = "2"
+percent-encoding = "2"
+blake3 = "1"
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 serde.workspace = true
@@ -22,4 +34,12 @@ serde_json.workspace = true
 tokio.workspace = true
 dirs.workspace = true
 sysinfo.workspace = true
+url.workspace = true
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+xattr = "1"
+plist = "1"
 

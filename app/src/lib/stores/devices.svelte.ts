@@ -42,7 +42,7 @@ class Devices {
     this.offers = [...this.offers, o];
   }
 
-  dropOffer(id: number) {
+  dropOffer(id: string) {
     this.offers = this.offers.filter((o) => o.id !== id);
   }
 }

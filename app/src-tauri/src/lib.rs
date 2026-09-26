@@ -1,31 +1,83 @@
-mod commands;
+mod cmd;
+mod credentials;
+mod events;
+mod jobs;
 mod places;
+mod protocols;
+mod sftp;
+mod state;
+mod tags;
 
+use cx_core::Vfs;
+use std::sync::Arc;
 use tauri::Manager;
-
-fn build_vfs() -> commands::VfsState {
-    use std::sync::Arc;
-    cx_core::Vfs::new(Arc::new(cx_local::LocalProvider), Arc::new(cx_core::MemoryCredentials::default()))
-}
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(commands::Watches::default())
-        .manage(build_vfs())
+        .manage(cmd::files::Watches::default())
+        .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
+        .register_asynchronous_uri_scheme_protocol("cxthumb", protocols::thumb_protocol)
         .invoke_handler(tauri::generate_handler![
-            commands::list_dir,
-            commands::watch_dir,
-            commands::unwatch_dir,
-            commands::create_folder,
-            commands::rename_entry,
-            commands::trash_entries,
-            commands::open_entry,
-            commands::ui_log,
+            cmd::files::list_dir,
+            cmd::files::watch_dir,
+            cmd::files::unwatch_dir,
+            cmd::files::stat_entry,
+            cmd::files::create_folder,
+            cmd::files::rename_entry,
+            cmd::files::trash_entries,
+            cmd::files::free_space,
+            cmd::files::dir_size,
+            cmd::files::preview_text,
+            cmd::files::ui_log,
+            cmd::files::subscribe,
+            cmd::system::open_entry,
+            cmd::system::reveal_entry,
+            cmd::system::open_terminal,
+            cmd::jobs::transfer_submit,
+            cmd::jobs::transfer_pause,
+            cmd::jobs::transfer_resume,
+            cmd::jobs::transfer_cancel,
+            cmd::jobs::transfer_resolve,
+            cmd::jobs::transfer_list,
+            cmd::jobs::transfer_clear,
+            cmd::jobs::undo,
+            cmd::jobs::compare_dirs,
+            cmd::search::search_start,
+            cmd::search::cancel_task,
+            cmd::net::connect_server,
+            cmd::net::disconnect_server,
+            cmd::net::connections,
+            cmd::net::trust_host_key,
+            cmd::peer::peer_status,
+            cmd::peer::peer_set_enabled,
+            cmd::peer::peer_set_shares,
+            cmd::peer::peer_set_auto_trust,
+            cmd::peer::peer_pair_code,
+            cmd::peer::peer_pair,
+            cmd::peer::peer_forget,
+            cmd::peer::peer_send,
+            cmd::peer::peer_respond,
+            cmd::peer::discovery_devices,
+            cmd::peer::discovery_refresh,
+            cmd::tags::tags_get,
+            cmd::tags::tags_set,
+            cmd::tags::tags_find,
             places::places,
-            commands::free_space,
+            cmd::selftest::selftest_config,
+            cmd::selftest::selftest_touch,
+            cmd::selftest::selftest_exit,
         ])
         .setup(|app| {
+            let state = build_state(app)?;
+            app.manage(state.clone());
+            cmd::peer::start_discovery(state.clone());
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = cmd::peer::start_peer(state).await {
+                    eprintln!("peer mode unavailable: {e}");
+                }
+            });
+
             let window = app.get_webview_window("main").expect("main window");
             style_window(&window);
             // The UI shows the window after its first paint. If it never gets
@@ -38,6 +90,36 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Cross Explore");
+}
+
+fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::Error>> {
+    let data_dir = app.path().app_data_dir()?;
+    let cache_dir = app.path().app_cache_dir()?;
+    std::fs::create_dir_all(&data_dir)?;
+    std::fs::create_dir_all(&cache_dir)?;
+
+    let vfs = Vfs::new(Arc::new(cx_local::LocalProvider), state::App::credentials());
+    vfs.register(Arc::new(cx_smb::SmbConnector::new()));
+    vfs.register(Arc::new(cx_webdav::DavConnector::http()));
+    vfs.register(Arc::new(cx_webdav::DavConnector::https()));
+    sftp::register(&vfs, &data_dir);
+    cx_archive::ArchiveProvider::install(&vfs, cache_dir.join("archives"));
+
+    let events = Arc::new(events::Events::default());
+    let jobs = jobs::Jobs::new(events.clone());
+    let transfers = {
+        let jobs = jobs.clone();
+        let vfs = vfs.clone();
+        let dir = data_dir.join("transfers");
+        // The manager spawns onto the current runtime, so build it inside one.
+        tauri::async_runtime::block_on(async move { cx_transfer::TransferManager::new(vfs, dir, move |e| jobs.on_transfer(e)) })
+    };
+    // Jobs interrupted by a quit come back paused, ready to resume.
+    for job in transfers.restore_pending() {
+        jobs.on_transfer(cx_transfer::TransferEvent::JobAdded { job });
+    }
+    let thumbs = cx_thumbs::Thumbnailer::new(cache_dir.join("thumbs"), 512 << 20)?;
+    Ok(Arc::new(state::App::new(vfs, events, jobs, transfers, thumbs, data_dir, cache_dir)))
 }
 
 /// Translucent materials where the OS has them: vibrancy on macOS (the

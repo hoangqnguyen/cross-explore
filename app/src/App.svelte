@@ -30,8 +30,12 @@
     // Show the window once the first frame is painted: no white flash.
     requestAnimationFrame(() => requestAnimationFrame(() => appWindow.show()));
     const testing = !inTauri && new URLSearchParams(location.search).has("path");
-    if (!settings.data.onboarded && !testing) void dialogs.ask("onboarding");
-    if (inTauri) void listenForOsDrops();
+    const selftest = inTauri && (await import("@tauri-apps/api/core").then((c) => c.invoke("selftest_config")));
+    if (!settings.data.onboarded && !testing && !selftest) void dialogs.ask("onboarding");
+    if (inTauri) {
+      void listenForOsDrops();
+      void import("./lib/selftest").then((m) => m.selftest());
+    }
   });
 
   // Files dropped in from Finder / Explorer: copy them where they landed.
