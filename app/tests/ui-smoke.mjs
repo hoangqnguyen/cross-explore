@@ -1,134 +1,154 @@
-// UI smoke test: drives the browser preview (mock backend) through headless
-// Chrome over the DevTools protocol. Needs `npm run dev` running.
-//   node tests/ui-smoke.mjs
-import { spawn } from "node:child_process";
+// UI smoke test over the browser preview (mock backend): drives the real
+// UI with keyboard and mouse the way a person would.
+//   npm run dev & node tests/ui-smoke.mjs
+import { checker, launch, MOD, sleep } from "./cdp.mjs";
 
-const CHROME = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const URL = process.env.UI_URL ?? "http://localhost:1420/?path=~/Downloads";
-const port = 9333;
-const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${port}`, "--window-size=1180,740", "--user-data-dir=/tmp/cx-ui-smoke", "about:blank"], { stdio: "ignore" });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-let ws, seq = 0;
-const pending = new Map();
-function send(method, params = {}) {
-  const id = ++seq;
-  ws.send(JSON.stringify({ id, method, params }));
-  return new Promise((res, rej) => pending.set(id, { res, rej }));
-}
-async function evaluate(expr) {
-  const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + " " + JSON.stringify(r.exceptionDetails.exception?.description));
-  return r.result.value;
-}
-async function key(k, opts = {}) {
-  const text = k.length === 1 ? k : undefined;
-  const code = { Enter: 13, Escape: 27, ArrowDown: 40, ArrowUp: 38, Backspace: 8, F2: 113, End: 35, Home: 36 }[k] ?? k.toUpperCase().charCodeAt(0);
-  const base = { key: k, windowsVirtualKeyCode: code, modifiers: opts.modifiers ?? 0 };
-  await send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", text, ...base });
-  await send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
-  await sleep(30);
-}
-const rows = () => evaluate(`[...document.querySelectorAll('.details .row:not(.skeleton) .text')].map(e => e.textContent)`);
-const selected = () => evaluate(`[...document.querySelectorAll('.details .row.selected .text')].map(e => e.textContent)`);
-
-let failures = 0;
-function check(name, cond, detail = "") {
-  console.log(`${cond ? "✓" : "✗"} ${name}${cond ? "" : "  " + detail}`);
-  if (!cond) failures++;
-}
+const mac = process.platform === "darwin";
+const M = mac ? MOD.meta : MOD.ctrl;
+const { check, failures } = checker();
+const t = await launch();
 
 try {
-  let target;
-  for (let i = 0; i < 50 && !target; i++) {
-    await sleep(100);
-    try {
-      target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === "page");
-    } catch {}
-  }
-  ws = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((r) => (ws.onopen = r));
-  ws.onmessage = (m) => {
-    const d = JSON.parse(m.data);
-    if (d.id && pending.has(d.id)) (d.error ? pending.get(d.id).rej(d.error) : pending.get(d.id).res(d.result)), pending.delete(d.id);
-  };
-  await send("Page.enable");
-  await send("Runtime.enable");
-  await send("Page.navigate", { url: URL });
-  await sleep(1500);
-
-  const initial = await rows();
+  await t.open("?path=~/Downloads");
+  const initial = await t.rows();
   check("lists the folder", initial.length === 10, JSON.stringify(initial));
-  check("natural sort, case-insensitive", initial[0] === "cross-explore-0.1.0.dmg" && initial.indexOf("IMG_2041.HEIC") < initial.indexOf("Inter-4.0.zip"), JSON.stringify(initial));
-  check("breadcrumb shows path", (await evaluate(`[...document.querySelectorAll('.crumb')].map(c => c.textContent.trim()).join(' > ')`)) === "demo > Downloads");
+  check("natural sort, case-insensitive", initial[0] === "cross-explore-0.1.0.dmg" && initial.indexOf("IMG_2041.HEIC") < initial.indexOf("Inter-4.0.zip"));
+  check("breadcrumb shows path", (await t.eval(`[...document.querySelectorAll('.crumb')].map(c => c.textContent.trim()).join(' > ')`)) === "demo > Downloads");
+  check("live indicator", (await t.eval(`document.querySelector('.state.live')?.textContent ?? ''`)).includes("Live"));
 
-  await evaluate(`document.querySelector('.details').focus()`);
-  await key("ArrowDown");
-  await key("ArrowDown");
-  check("arrow keys move selection", JSON.stringify(await selected()) === JSON.stringify([initial[1]]), JSON.stringify(await selected()));
-  await key("ArrowDown", { modifiers: 8 /* shift */ });
-  check("shift+arrow extends selection", (await selected()).length === 2);
+  await t.focusList();
+  await t.key("ArrowDown");
+  await t.key("ArrowDown");
+  check("arrow keys move selection", JSON.stringify(await t.selected()) === JSON.stringify([initial[1]]));
+  await t.key("ArrowDown", MOD.shift);
+  check("shift+arrow extends selection", (await t.selected()).length === 2);
 
-  for (const c of "img") await key(c);
-  check("type-to-filter", JSON.stringify(await rows()) === JSON.stringify(["IMG_2041.HEIC", "IMG_2042.HEIC"]), JSON.stringify(await rows()));
-  check("status bar shows filtered count", (await evaluate(`document.querySelector('.status').textContent`)).includes("filtered from 10"));
-  await key("Escape");
-  check("escape clears filter", (await rows()).length === 10);
+  await t.type("img");
+  check("type-to-filter", JSON.stringify(await t.rows()) === JSON.stringify(["IMG_2041.HEIC", "IMG_2042.HEIC"]), JSON.stringify(await t.rows()));
+  await t.key("Escape");
+  check("escape clears filter", (await t.rows()).length === 10);
 
-  // New folder → inline rename → commit.
-  await evaluate(`[...document.querySelectorAll('.commands button')].find(b => b.textContent.includes('New folder')).click()`);
+  // New folder via command bar → inline rename → commit.
+  await t.clickText(".commands button", "New folder");
+  await sleep(150);
+  check("new folder enters rename mode", await t.eval(`document.activeElement?.classList.contains('rename') && document.activeElement.value === 'New folder'`));
+  await t.eval(`document.activeElement.value = 'Receipts'`);
+  await t.key("Enter");
   await sleep(200);
-  check("new folder enters rename mode", await evaluate(`document.activeElement?.classList.contains('rename') && document.activeElement.value === 'New folder'`));
-  await evaluate(`document.activeElement.value = 'Receipts'`);
-  await key("Enter");
-  await sleep(200);
-  const afterRename = await rows();
-  check("renamed folder sorts first (folders first)", afterRename[0] === "Receipts", JSON.stringify(afterRename));
-  check("renamed folder is selected", JSON.stringify(await selected()) === '["Receipts"]');
+  check("renamed folder sorts first", (await t.rows())[0] === "Receipts", JSON.stringify(await t.rows()));
 
-  // The mock backend adds a file every 6 s to watched folders.
+  // Undo the rename, then the folder creation.
+  await t.focusList();
+  await t.key("z", M);
+  await sleep(200);
+  check("undo rename", (await t.rows()).includes("New folder"), JSON.stringify(await t.rows()));
+
+  // Live update from "someone else".
   let fresh = [];
-  for (let i = 0; i < 70 && !fresh.length; i++) {
+  for (let i = 0; i < 90 && !fresh.some((n) => n.startsWith("Shared note")); i++) {
     await sleep(100);
-    fresh = await evaluate(`[...document.querySelectorAll('.details .row.fresh .text')].map(e => e.textContent)`);
+    fresh = await t.eval(`[...document.querySelectorAll('.pane.active .row.fresh .text')].map(e => e.textContent)`);
   }
-  check("live update appears with highlight, no refresh", fresh.some((n) => n.startsWith("Shared note")), JSON.stringify(fresh));
+  check("live update appears with highlight", fresh.some((n) => n.startsWith("Shared note")), JSON.stringify(fresh));
 
-  // Navigate into a folder with Enter and back up.
-  await evaluate(`document.querySelector('.details').focus()`);
-  await key("Home");
-  await key("Enter", { modifiers: 0 });
+  // Quick Look.
+  await t.focusList();
+  await t.key("End");
+  await t.key(" ");
+  await sleep(200);
+  check("space opens Quick Look", await t.eval(`!!document.querySelector('.ql')`));
+  const qlFirst = await t.eval(`document.querySelector('.ql .title strong')?.textContent`);
+  await t.key("ArrowUp");
+  await sleep(100);
+  const qlTitle = await t.eval(`document.querySelector('.ql .title strong')?.textContent`);
+  check("arrows walk items in Quick Look", !!qlTitle && qlTitle !== qlFirst, `${qlFirst} → ${qlTitle}`);
+  await t.key("Escape");
+  await sleep(100);
+  check("Quick Look closes", !(await t.eval(`!!document.querySelector('.ql')`)));
+
+  // Copy + paste duplicates through the transfer engine.
+  await t.focusList();
+  await t.key("Home");
+  await t.key("ArrowDown");
+  const picked = (await t.selected())[0];
+  await t.key("c", M);
+  await t.key("v", M);
+  await sleep(1500);
+  check("paste into same folder makes a copy", (await t.rows()).some((n) => n.includes(" - Copy")), JSON.stringify(await t.rows()));
+
+  // Views.
+  await t.key("1", mac ? MOD.meta : MOD.ctrl | MOD.shift);
+  await t.key("2", mac ? MOD.meta : MOD.ctrl | MOD.shift);
+  for (const [cmd, sel] of [["view.icons", ".icons"], ["view.columns", ".columns"], ["view.gallery", ".gallery"], ["view.details", ".details"]]) {
+    await t.eval(`document.dispatchEvent(new CustomEvent('cx:palette'))`);
+    await sleep(80);
+    await t.type(cmd === "view.icons" ? "icons view" : cmd === "view.columns" ? "columns view" : cmd === "view.gallery" ? "gallery view" : "details view");
+    await t.key("Enter");
+    await sleep(250);
+    check(`palette switches to ${cmd}`, await t.eval(`!!document.querySelector('.pane.active ${sel}')`));
+  }
+
+  // Dual pane + F5 in commander mode.
+  await t.eval(`document.dispatchEvent(new CustomEvent('cx:palette'))`);
+  await t.type("dual pane");
+  await t.key("Enter");
   await sleep(300);
-  const macRename = await evaluate(`!!document.querySelector('.rename')`);
-  if (macRename) await key("Escape"); // Enter renames on macOS, like Finder
-  await key("ArrowDown", { modifiers: 4 /* meta */ });
+  check("dual pane shows two panes", (await t.eval(`document.querySelectorAll('.pane').length`)) === 2);
+  check("each pane has tabs", (await t.eval(`document.querySelectorAll('.phead .tab').length`)) >= 2);
+
+  // Navigate with Enter into a folder, then up.
+  await t.open("?path=~/Documents");
+  await t.focusList();
+  await t.key("Home");
+  await t.key(mac ? "ArrowDown" : "Enter", mac ? MOD.meta : 0);
   await sleep(300);
-  check("open folder", (await evaluate(`document.querySelector('.crumb.current').textContent.trim()`)) === "Receipts");
-  check("empty state", (await evaluate(`document.querySelector('.empty')?.textContent ?? ''`)).includes("This folder is empty"));
-  await key("ArrowUp", { modifiers: 4 });
+  check("open folder", (await t.eval(`document.querySelector('.crumb.current').textContent.trim()`)) === "Invoices");
+  await t.key("ArrowUp", mac ? MOD.meta : MOD.alt);
   await sleep(300);
-  check("up selects the folder we came from", JSON.stringify(await selected()) === '["Receipts"]', JSON.stringify(await selected()));
+  check("up selects the folder we came from", JSON.stringify(await t.selected()) === '["Invoices"]', JSON.stringify(await t.selected()));
+
+  // Search subfolders.
+  await t.eval(`document.dispatchEvent(new CustomEvent('cx:focus-search'))`);
+  await t.type("invoice-2026-00");
+  await t.key("Enter", M);
+  await sleep(400);
+  check("recursive search finds nested files", (await t.rows()).length === 9, JSON.stringify(await t.rows()));
 
   // Tabs.
-  await key("t", { modifiers: 4 });
-  await sleep(300);
-  check("new tab", (await evaluate(`document.querySelectorAll('.tab').length`)) === 2);
-  await key("w", { modifiers: 4 });
+  await t.focusList();
+  await t.key("t", M);
   await sleep(200);
-  check("close tab", (await evaluate(`document.querySelectorAll('.tab').length`)) === 1);
+  check("new tab", (await t.eval(`document.querySelectorAll('.titlebar .tab').length`)) === 2);
+  await t.key("w", M);
+  await sleep(200);
+  check("close tab", (await t.eval(`document.querySelectorAll('.titlebar .tab').length`)) === 1);
+
+  // NAS needs a password.
+  await t.open("?path=smb://nas.local/Media");
+  await sleep(300);
+  check("sign-in dialog for protected share", await t.eval(`document.querySelector('.modal h2')?.textContent.includes('Sign in')`));
+  await t.eval(`(() => { const [u, p] = document.querySelectorAll('.modal input'); u.value = 'demo'; u.dispatchEvent(new Event('input')); p.value = 'demo'; p.dispatchEvent(new Event('input')); })()`);
+  await t.key("Enter");
+  await sleep(600);
+  check("share lists after sign in", (await t.rows()).includes("Movies"), JSON.stringify(await t.rows()));
+  check("remote folder shows auto-refresh", (await t.eval(`document.querySelector('.state.polling')?.textContent ?? ''`)).includes("Auto"));
 
   // Trash.
-  await evaluate(`document.querySelector('.details').focus()`);
-  await key("Home");
-  await key("Backspace", { modifiers: 4 });
+  await t.open("?path=~/Downloads");
+  await t.focusList();
+  await t.key("Home");
+  await t.key(mac ? "Backspace" : "Delete", mac ? MOD.meta : 0);
   await sleep(300);
-  check("move to trash removes the row", !(await rows()).includes("Receipts"), JSON.stringify(await rows()));
-  check("toast confirms", (await evaluate(`document.querySelector('.toast')?.textContent ?? ''`)).includes("Moved"));
+  check("move to trash removes the row", !(await t.rows()).includes("cross-explore-0.1.0.dmg"));
+  check("toast confirms", (await t.eval(`document.querySelector('.toast')?.textContent ?? ''`)).includes("Moved"));
+
+  check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);
-  failures++;
+  check("test run", false, String(e));
 } finally {
-  chrome.kill();
+  t.close();
 }
-console.log(failures ? `\n${failures} failed` : "\nall passed");
-process.exit(failures ? 1 : 0);
+const failed = failures();
+console.log(failed ? `\n${failed} failed` : "\nall passed");
+process.exit(failed ? 1 : 0);

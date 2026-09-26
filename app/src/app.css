@@ -39,7 +39,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --accent: #4cc2ff;
     --accent-text: #00121f;
     --accent-soft: rgba(76, 194, 255, 0.14);
@@ -66,16 +66,50 @@
   }
 }
 
+:root.dark {
+    --accent: #4cc2ff;
+    --accent-text: #00121f;
+    --accent-soft: rgba(76, 194, 255, 0.14);
+    --live: #3ddc84;
+
+    --window-solid: #1c1e22;
+    --chrome: rgba(32, 32, 32, 0.55);
+    --layer: #1d1d1d;
+    --layer-2: #262626;
+    --flyout: rgba(44, 44, 44, 0.97);
+    --text: #f3f3f3;
+    --text-2: #c5c5c5;
+    --text-3: #8b8b8b;
+    --stroke: rgba(255, 255, 255, 0.075);
+    --stroke-strong: rgba(255, 255, 255, 0.13);
+    --hover: rgba(255, 255, 255, 0.06);
+    --pressed: rgba(255, 255, 255, 0.09);
+    --sel: rgba(76, 194, 255, 0.17);
+    --sel-hover: rgba(76, 194, 255, 0.22);
+    --sel-stroke: rgba(76, 194, 255, 0.3);
+    --fresh: rgba(61, 220, 132, 0.2);
+    --shadow-flyout: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --danger: #ff99a4;
+  color-scheme: dark;
+}
+:root.light {
+  color-scheme: light;
+}
+
 .platform-macos {
   --accent: #007aff;
   --accent-soft: rgba(0, 122, 255, 0.1);
   --sel-stroke: rgba(0, 122, 255, 0.22);
 }
 @media (prefers-color-scheme: dark) {
-  .platform-macos {
+  :root.platform-macos:not(.light) {
     --accent: #0a84ff;
     --accent-text: #ffffff;
   }
+}
+:root.dark.platform-macos {
+  --accent: #0a84ff;
+  --accent-text: #ffffff;
 }
 
 .compact {
@@ -161,4 +195,15 @@ input {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.drag-ghost {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: 12px var(--font);
 }

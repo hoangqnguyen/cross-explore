@@ -1,20 +1,50 @@
 // A live view of one folder: streamed listing + watcher patches, kept sorted.
-import { errorText, listDir, unwatchDir, watchDir, type Capabilities, type Change, type Entry, type LocationInfo } from "./api";
+import { asCxError, errorText, listDir, unwatchDir, watchDir, type Capabilities, type Change, type CxError, type Entry, type Item, type LocationInfo } from "./api";
 import { comparator, insertionIndex, mergeSorted, type SortSpec } from "./sort";
+
+/** Something a tab shows: a folder, search results, a tag… */
+export interface Source {
+  readonly uri: string;
+  readonly kind: "folder" | "search" | "home" | "compare";
+  info: LocationInfo | null;
+  caps: Capabilities | null;
+  status: "loading" | "ready" | "error";
+  refreshing: boolean;
+  error: string | null;
+  /** The raw error, so the UI can offer to sign in, trust a host, … */
+  errorDetail: CxError | null;
+  live: "live" | "polling" | null;
+  items: Item[];
+  fresh: ReadonlySet<string>;
+  timing: { firstRowsMs: number; totalMs: number; count: number } | null;
+  load(): Promise<void>;
+  watch(): Promise<void>;
+  unwatch(): void;
+  dispose(): void;
+  setSort(spec: SortSpec): void;
+  get(key: string): Item | undefined;
+  upsertLocal(entry: Entry): void;
+  removeLocal(keys: string[]): void;
+}
+
+/** Stable identity of a row within its source. */
+export const keyOf = (e: Item) => e.uri ?? e.name;
 
 /** How long a newly appeared row keeps its highlight. */
 const FRESH_MS = 1600;
 /** Above this many changes at once, re-sorting everything beats patching. */
 const BULK_CHANGES = 64;
 
-export class Folder {
+export class Folder implements Source {
   readonly uri: string;
+  readonly kind = "folder" as const;
   info = $state.raw<LocationInfo | null>(null);
   caps = $state.raw<Capabilities | null>(null);
   status = $state<"loading" | "ready" | "error">("loading");
   /** Re-listing in the background while the old rows stay on screen. */
   refreshing = $state(false);
   error = $state<string | null>(null);
+  errorDetail = $state.raw<CxError | null>(null);
   /** How changes reach us: pushed ("live"), re-listed ("polling"), or not at all. */
   live = $state<"live" | "polling" | null>(null);
   /** All entries (hidden ones included), sorted. */
@@ -95,6 +125,7 @@ export class Folder {
       this.items = acc;
       this.status = "ready";
       this.error = null;
+      this.errorDetail = null;
       this.refreshing = false;
       const total = performance.now() - t0;
       this.timing = { firstRowsMs: this.timing?.firstRowsMs ?? total, totalMs: total, count: acc.length };
@@ -109,6 +140,7 @@ export class Folder {
       this.refreshing = false;
       this.status = "error";
       this.error = errorText(e);
+      this.errorDetail = asCxError(e);
     }
   }
 
@@ -151,6 +183,7 @@ export class Folder {
   }
 
   removeLocal(names: string[]) {
+    // For folders a row's key is its name.
     this.#apply(
       names.map((name) => ({ type: "remove", name })),
       false,

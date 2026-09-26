@@ -1,49 +1,38 @@
 <script lang="ts">
-  import { appWindow as win } from "../api";
+  import { appWindow } from "../api";
+  import { run, shortcut } from "../commands.svelte";
+  import { transfers } from "../stores/transfers.svelte";
   import { ws } from "../workspace.svelte";
-  import { mod } from "../keys";
   import Icon from "./Icon.svelte";
-  import FileIcon from "./FileIcon.svelte";
+  import TabStrip from "./TabStrip.svelte";
+  import TransferCapsule from "./TransferCapsule.svelte";
 
-  // macOS keeps native traffic lights; elsewhere we draw caption buttons.
+  // macOS keeps native traffic lights; Windows gets drawn caption buttons.
   let customCaption = $derived(ws.platform === "windows");
 </script>
 
 <header class="titlebar" class:mac={ws.platform === "macos"} data-tauri-drag-region>
-  <div class="tabs" role="tablist" data-tauri-drag-region>
-    {#each ws.tabs as tab (tab.id)}
-      {@const active = tab.id === ws.activeId}
-      <div
-        class="tab"
-        class:active
-        role="tab"
-        tabindex="-1"
-        aria-selected={active}
-        title={tab.folder.info?.display}
-        onpointerdown={(e) => e.button === 0 && ws.activate(tab.id)}
-        onauxclick={(e) => e.button === 1 && ws.closeTab(tab.id)}
-      >
-        {#if tab.folder.info?.crumbs.length === 1 && tab.folder.info.crumbs[0].icon === "home"}
-          <Icon name="home" size={15} />
-        {:else}
-          <FileIcon name="" isDir size={16} />
-        {/if}
-        <span class="title">{tab.title || "Loading…"}</span>
-        <button class="close" title="Close tab ({mod}W)" aria-label="Close tab" onpointerdown={(e) => e.stopPropagation()} onclick={() => ws.closeTab(tab.id)}>
-          <Icon name="close" size={12} stroke={1.6} />
-        </button>
-      </div>
-    {/each}
-    <button class="new" title="New tab ({mod}T)" aria-label="New tab" onclick={() => ws.newTab()}>
-      <Icon name="plus" size={14} />
+  {#if ws.dual}
+    <div class="app-title" data-tauri-drag-region>Cross Explore</div>
+  {:else}
+    <TabStrip pane={ws.panes[0]} />
+  {/if}
+
+  <div class="tools">
+    {#if transfers.jobs.length}<TransferCapsule />{/if}
+    <button class="palette" title="Command palette ({shortcut('app.palette')})" onclick={() => run("app.palette")}>
+      <Icon name="search" size={14} />
+      <span>Search commands</span>
+      <kbd>{shortcut("app.palette")}</kbd>
     </button>
+    <button class="icon-btn" title="Settings ({shortcut('app.settings')})" aria-label="Settings" onclick={() => run("app.settings")}><Icon name="settings" size={16} /></button>
   </div>
 
   {#if customCaption}
     <div class="caption">
-      <button aria-label="Minimize" onclick={() => win.minimize()}><Icon name="minimize" size={14} stroke={1} /></button>
-      <button aria-label="Maximize" onclick={() => win.toggleMaximize()}><Icon name="maximize" size={12} stroke={1} /></button>
-      <button class="close-win" aria-label="Close" onclick={() => win.close()}><Icon name="winClose" size={14} stroke={1} /></button>
+      <button aria-label="Minimize" onclick={() => appWindow.minimize()}><Icon name="minimize" size={14} stroke={1} /></button>
+      <button aria-label="Maximize" onclick={() => appWindow.toggleMaximize()}><Icon name="maximize" size={12} stroke={1} /></button>
+      <button class="close-win" aria-label="Close" onclick={() => appWindow.close()}><Icon name="winClose" size={14} stroke={1} /></button>
     </div>
   {/if}
 </header>
@@ -52,6 +41,7 @@
   .titlebar {
     display: flex;
     align-items: flex-end;
+    gap: 8px;
     height: var(--titlebar-h);
     padding-left: 8px;
     background: var(--chrome);
@@ -60,80 +50,59 @@
   .titlebar.mac {
     padding-left: 84px;
   }
-  .tabs {
-    display: flex;
-    align-items: flex-end;
+  .app-title {
     flex: 1;
-    min-width: 0;
-    height: 100%;
-    gap: 2px;
+    align-self: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
   }
-  .tab {
-    position: relative;
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    align-self: center;
+    padding-right: 8px;
+  }
+  .palette {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 0 1 230px;
-    min-width: 96px;
-    height: 36px;
-    padding: 0 6px 0 12px;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    color: var(--text-2);
-    transition: background 0.1s;
-  }
-  .tab:hover:not(.active) {
+    height: 28px;
+    padding: 0 6px 0 10px;
+    border-radius: var(--radius);
+    color: var(--text-3);
     background: var(--hover);
+    font-size: 12px;
   }
-  .tab.active {
-    background: var(--layer);
-    color: var(--text);
-    box-shadow: 0 0 0 1px var(--stroke);
-    clip-path: inset(-1px -1px 0 -1px);
+  .palette:hover {
+    color: var(--text-2);
+    background: var(--pressed);
   }
-  /* Separators between inactive tabs, as in Windows 11. */
-  .tab:not(.active):not(:hover) + .tab:not(.active):not(:hover)::before {
-    content: "";
-    position: absolute;
-    left: -1px;
-    top: 10px;
-    bottom: 10px;
-    width: 1px;
-    background: var(--stroke-strong);
-  }
-  .title {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .close {
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
+  kbd {
+    font-family: inherit;
+    font-size: 11px;
+    padding: 1px 5px;
     border-radius: 4px;
-    color: var(--text-2);
-    opacity: 0;
+    background: var(--layer);
+    color: var(--text-3);
   }
-  .tab:hover .close,
-  .tab.active .close {
-    opacity: 1;
-  }
-  .close:hover {
-    background: var(--hover);
-  }
-  .new {
+  .icon-btn {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 30px;
-    margin: 0 0 3px 2px;
+    width: 30px;
+    height: 28px;
     border-radius: var(--radius);
     color: var(--text-2);
   }
-  .new:hover {
+  .icon-btn:hover {
     background: var(--hover);
+  }
+  @media (max-width: 900px) {
+    .palette span,
+    .palette kbd {
+      display: none;
+    }
   }
   .caption {
     display: flex;
