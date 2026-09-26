@@ -110,6 +110,10 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     let cache_dir = app.path().app_cache_dir()?;
     std::fs::create_dir_all(&data_dir)?;
     std::fs::create_dir_all(&cache_dir)?;
+    #[cfg(target_os = "ios")]
+    if let Some(home) = dirs::home_dir() {
+        std::fs::create_dir_all(home.join("Downloads"))?;
+    }
     #[cfg(target_os = "android")]
     {
         // No Unix home on Android: the app's own storage is "home", with a

@@ -52,6 +52,10 @@ fn place(path: PathBuf, icon: &'static str) -> Option<Place> {
 }
 
 fn user_visible_mount(mount: &Path) -> bool {
+    // Phone mounts are system internals the app can't browse anyway.
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        return false;
+    }
     if cfg!(target_os = "macos") {
         mount == Path::new("/") || mount.starts_with("/Volumes")
     } else if cfg!(windows) {
@@ -80,7 +84,10 @@ fn volume_name(mount: &Path, label: &str) -> String {
 #[tauri::command]
 pub fn places() -> Places {
     let home_dir = cx_core::location::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let phone = cfg!(any(target_os = "ios", target_os = "android"));
     let favorites = [
+        (if phone { Some(home_dir.join("Documents")) } else { None }, "documents"),
+        (if phone { Some(home_dir.join("Downloads")) } else { None }, "downloads"),
         (dirs::desktop_dir(), "desktop"),
         (dirs::document_dir(), "documents"),
         (dirs::download_dir(), "downloads"),
@@ -90,7 +97,12 @@ pub fn places() -> Places {
     ]
     .into_iter()
     .filter_map(|(p, icon)| p.and_then(|p| place(p, icon)))
-    .collect();
+    .fold(Vec::<Place>::new(), |mut v, p| {
+        if !v.iter().any(|x| x.uri == p.uri) {
+            v.push(p);
+        }
+        v
+    });
 
     let disks = Disks::new_with_refreshed_list();
     let mut volumes: Vec<Volume> = Vec::new();

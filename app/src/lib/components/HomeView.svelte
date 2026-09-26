@@ -20,7 +20,9 @@
 
   function pretty(uri: string) {
     if (!uri.startsWith("file://")) return uri.replace(/^(\w+):\/\//, "$1 · ");
-    return decodeURIComponent(uri.slice(7)).replace(/^\/Users\/[^/]+/, "~");
+    const home = ws.places?.home.uri.replace(/\/+$/, "");
+    if (home && (uri === home || uri.startsWith(home + "/"))) return "~" + decodeURIComponent(uri.slice(home.length));
+    return decodeURIComponent(uri.slice(7));
   }
 
   function open(uri: string, e?: MouseEvent) {
