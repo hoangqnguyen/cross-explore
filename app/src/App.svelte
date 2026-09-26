@@ -16,6 +16,8 @@
   import Toasts from "./lib/components/Toasts.svelte";
   import TransferFlyout from "./lib/components/TransferFlyout.svelte";
   import Dialogs from "./lib/dialogs/Dialogs.svelte";
+  import MobileBar from "./lib/components/MobileBar.svelte";
+  import { ui } from "./lib/stores/ui.svelte";
   import { isTextInput } from "./lib/keys";
   import { dropDestAt } from "./lib/listing";
   import { dialogs } from "./lib/stores/dialogs.svelte";
@@ -31,6 +33,8 @@
     requestAnimationFrame(() => requestAnimationFrame(() => appWindow.show()));
     const testing = !inTauri && new URLSearchParams(location.search).has("path");
     const selftest = inTauri && (await import("@tauri-apps/api/core").then((c) => c.invoke("selftest_config")));
+    // The layout choice is a desktop thing; phones start right away.
+    if (ui.phone) settings.data.onboarded = true;
     if (!settings.data.onboarded && !testing && !selftest) void dialogs.ask("onboarding");
     if (inTauri) {
       void listenForOsDrops();
@@ -57,6 +61,7 @@
   $effect(() => {
     const root = document.documentElement;
     root.classList.toggle("compact", settings.data.compact);
+    root.classList.toggle("mobile", ui.mobile);
     root.classList.toggle("light", settings.data.theme === "light");
     root.classList.toggle("dark", settings.data.theme === "dark");
   });
@@ -84,7 +89,27 @@
 
 <svelte:window {onkeydown} {onmouseup} oncontextmenu={(e) => !isTextInput(e.target) && e.preventDefault()} />
 
-{#if ws.ready && ws.activeTab}
+{#if ws.ready && ws.activeTab && ui.mobile}
+  <div class="window phone">
+    <header class="mtop"><AddressBar tab={ws.activeTab} compact /></header>
+    <div class="body">
+      <div class="panes"><PaneView pane={ws.panes[0]} /></div>
+    </div>
+    <MobileBar />
+  </div>
+  {#if ui.drawerOpen}
+    <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+    <div class="scrim" onclick={() => (ui.drawerOpen = false)}></div>
+    <aside class="drawer"><Sidebar /></aside>
+  {/if}
+  <QuickLook />
+  <TransferFlyout />
+  <ConflictDialog />
+  <CommandPalette />
+  <Dialogs />
+  <Menu />
+  <Toasts />
+{:else if ws.ready && ws.activeTab}
   <div class="window">
     <TitleBar />
     {#if !ws.dual}<AddressBar tab={ws.activeTab} />{/if}
@@ -113,6 +138,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
   }
   .body {
     display: flex;
@@ -125,5 +151,47 @@
     flex: 1;
     min-width: 0;
     border-left: 1px solid var(--stroke);
+  }
+  .phone .panes {
+    border-left: 0;
+  }
+  .mtop {
+    padding-top: env(safe-area-inset-top);
+    background: var(--layer);
+    border-bottom: 1px solid var(--stroke);
+    flex: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.35);
+    animation: fade 0.15s;
+  }
+  .drawer {
+    position: fixed;
+    z-index: 51;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 82vw);
+    padding-top: env(safe-area-inset-top);
+    background: var(--layer);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.3);
+    display: flex;
+    animation: slidein 0.2s var(--ease);
+  }
+  .drawer :global(.sidebar) {
+    width: 100% !important;
+  }
+  @keyframes slidein {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
   }
 </style>

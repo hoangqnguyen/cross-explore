@@ -4,7 +4,7 @@
 
 use cx_core::{CredentialStore, Credentials, CxError, Endpoint, MemoryCredentials, Result};
 
-const SERVICE: &str = "dev.crossexplore.app";
+const SERVICE: &str = "dev.crossexplore.explorer";
 
 #[derive(Default)]
 pub struct KeychainCredentials {

@@ -207,3 +207,56 @@ input {
   color: var(--accent-text);
   font: 12px var(--font);
 }
+
+/* ---------- phones ---------- */
+.mobile {
+  --font-size: 15px;
+  --radius: 8px;
+}
+.mobile body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+.mobile .toasts {
+  bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+  left: 12px;
+  right: 12px !important;
+}
+.mobile .flyout {
+  top: auto !important;
+  left: 0;
+  right: 0 !important;
+  bottom: 0;
+  width: auto !important;
+  border-radius: 14px 14px 0 0 !important;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobile .ql {
+  inset: env(safe-area-inset-top) 0 0 0 !important;
+  border-radius: 0 !important;
+}
+.mobile .modal {
+  width: calc(100vw - 24px) !important;
+}
+.mobile .palette {
+  top: calc(env(safe-area-inset-top) + 12px) !important;
+}
+.mobile .bar .nav button:nth-child(2) {
+  display: none;
+}
+.mobile .bar .search {
+  width: 40px;
+  padding: 0 10px;
+  transition: width 0.2s var(--ease);
+}
+.mobile .bar .search:focus-within,
+.mobile .bar .search.active {
+  width: 46vw;
+}
+.mobile .bar .state {
+  padding: 0 6px;
+}
+/* Android's WebView reports no safe-area inset for the gesture bar. */
+.platform-android .mobile-bar {
+  padding-bottom: 22px;
+}

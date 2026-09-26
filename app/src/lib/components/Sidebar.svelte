@@ -7,6 +7,7 @@
   import { devices } from "../stores/devices.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
+  import { ui } from "../stores/ui.svelte";
   import { TAG_COLORS } from "../tags";
   import { toasts } from "../toasts.svelte";
   import { HOME_URI, ws } from "../workspace.svelte";
@@ -22,6 +23,7 @@
   }
 
   function go(uri: string, e: MouseEvent) {
+    ui.drawerOpen = false;
     // Cmd/Ctrl-click or middle-click opens in a new tab, like a browser.
     if (e.metaKey || e.ctrlKey || e.button === 1) ws.newTab(uri, false);
     else ws.activeTab?.navigate(uri);

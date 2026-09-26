@@ -99,6 +99,15 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     let cache_dir = app.path().app_cache_dir()?;
     std::fs::create_dir_all(&data_dir)?;
     std::fs::create_dir_all(&cache_dir)?;
+    #[cfg(target_os = "android")]
+    {
+        // No Unix home on Android: the app's own storage is "home", with a
+        // Documents folder people can fill from the network.
+        let home = data_dir.join("files");
+        std::fs::create_dir_all(home.join("Documents"))?;
+        std::fs::create_dir_all(home.join("Downloads"))?;
+        cx_core::location::set_home(home);
+    }
 
     let vfs = Vfs::new(Arc::new(cx_local::LocalProvider), state::App::credentials());
     vfs.register(Arc::new(cx_smb::SmbConnector::new()));

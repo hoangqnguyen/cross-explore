@@ -491,8 +491,18 @@ export class Workspace {
     const panes = [new Pane(0), new Pane(1)];
     for (const old of this.panes) for (const t of old.tabs) t.close();
     this.panes = panes;
+    const home = this.places?.home.uri ?? "~";
     w.panes.forEach((pw, i) => {
-      pw.tabs.forEach((t, j) => panes[i]?.add(t.uri, j === pw.active, t.view));
+      pw.tabs.forEach((t, j) => {
+        const tab = panes[i]?.add(t.uri, j === pw.active, t.view);
+        // A restored folder may be gone (unplugged drive, or a phone app's
+        // sandbox that moved on reinstall): fall back to home quietly.
+        const f = tab?.folder;
+        if (tab && f && t.uri.startsWith("file:"))
+          void f.load().then(() => {
+            if (tab.folder === f && f.status === "error" && (f.errorDetail?.kind === "notFound" || f.errorDetail?.kind === "permissionDenied")) tab.navigate(home);
+          });
+      });
     });
     if (!panes[0].tabs.length) panes[0].add(this.places?.home.uri ?? "~");
     if (!panes[1].tabs.length) panes[1].add(panes[0].active.folder.uri);

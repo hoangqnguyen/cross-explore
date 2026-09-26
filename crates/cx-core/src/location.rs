@@ -3,7 +3,21 @@ use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 use url::Url;
+
+static HOME: OnceLock<PathBuf> = OnceLock::new();
+
+/// Use `path` as the home folder. Phones have no Unix home (Android) or a
+/// sandbox (iOS); the app points this at its own data folder there.
+pub fn set_home(path: PathBuf) {
+    let _ = HOME.set(path);
+}
+
+/// The home folder: the override if set, otherwise the user's home.
+pub fn home_dir() -> Option<PathBuf> {
+    HOME.get().cloned().or_else(dirs::home_dir)
+}
 
 /// Remote protocols. Each maps to a URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -217,7 +231,7 @@ impl Location {
             return Ok(Location::Remote { endpoint: Endpoint { scheme: Scheme::Smb, user: None, host, port: None }, path: normalize_posix(&path) });
         }
         let path = if input == "~" || input.starts_with("~/") || input.starts_with("~\\") {
-            let home = dirs::home_dir().ok_or_else(|| CxError::InvalidLocation("no home directory".into()))?;
+            let home = home_dir().ok_or_else(|| CxError::InvalidLocation("no home directory".into()))?;
             home.join(input[1..].trim_start_matches(['/', '\\']))
         } else {
             PathBuf::from(input)
@@ -398,14 +412,16 @@ fn normalize(path: &Path) -> PathBuf {
 }
 
 fn local_info(path: &Path) -> LocationInfo {
-    let home = dirs::home_dir();
+    let home = home_dir();
     let mut crumbs = Vec::new();
 
     // Paths inside the home folder start at the home crumb, like Finder and
     // Explorer do, instead of spelling out /Users/<name>.
     let rel_start = match &home {
         Some(h) if path.starts_with(h) => {
-            crumbs.push(Crumb { label: file_label(h), uri: path_uri(h), icon: "home" });
+            // Phone apps live in a sandbox whose folder name is a UUID.
+            let label = if cfg!(any(target_os = "ios", target_os = "android")) { "On this device".to_string() } else { file_label(h) };
+            crumbs.push(Crumb { label, uri: path_uri(h), icon: "home" });
             Some(h.clone())
         }
         _ => None,

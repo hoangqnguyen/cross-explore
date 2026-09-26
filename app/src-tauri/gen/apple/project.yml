@@ -1,8 +1,8 @@
 name: cross-explore
 options:
-  bundleIdPrefix: dev.crossexplore.app
+  bundleIdPrefix: dev.crossexplore.explorer
   deploymentTarget:
-    iOS: 14.0
+    iOS: 16.0
 fileGroups: [../../src]
 configs:
   debug: debug
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Cross Explore
-      PRODUCT_BUNDLE_IDENTIFIER: dev.crossexplore.app
+      PRODUCT_BUNDLE_IDENTIFIER: dev.crossexplore.explorer
 targetTemplates:
   app:
     type: application

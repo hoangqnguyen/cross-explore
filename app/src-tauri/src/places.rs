@@ -78,7 +78,7 @@ fn volume_name(mount: &Path, label: &str) -> String {
 
 #[tauri::command]
 pub fn places() -> Places {
-    let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let home_dir = cx_core::location::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let favorites = [
         (dirs::desktop_dir(), "desktop"),
         (dirs::document_dir(), "documents"),
