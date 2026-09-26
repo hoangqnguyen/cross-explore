@@ -1,0 +1,21 @@
+[package]
+name = "cx-cli"
+description = "Headless Cross Explore: serve folders to peers, pair, and copy files from the command line"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "cx"
+path = "src/main.rs"
+
+[dependencies]
+cx-core.workspace = true
+cx-local.workspace = true
+cx-peer = { path = "../cx-peer" }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "fs", "io-util"] }
+clap = { version = "4", features = ["derive", "env"] }
+
+[dev-dependencies]
+tempfile.workspace = true
