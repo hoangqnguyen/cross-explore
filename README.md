@@ -133,6 +133,32 @@ npx tauri android build --debug --target aarch64 --apk
 cargo run -p cx-cli --release -- serve --share Media=/srv/media:ro
 ```
 
+### Building on Windows (x64)
+
+1. Install **Visual Studio 2022 Build Tools** with the *Desktop development with C++*
+   workload (MSVC and the Windows 11 SDK).
+2. Install **Rust** with rustup, using the default `x86_64-pc-windows-msvc` toolchain.
+3. Install **Node.js 20+**. The WebView2 runtime is already part of Windows 11.
+4. Build:
+
+   ```powershell
+   git clone https://github.com/hoangqnguyen/cross-explore
+   cd cross-explore\app
+   npm ci
+   npx tauri build          # → target\release\bundle\msi\*.msi and bundle\nsis\*-setup.exe
+   ```
+
+5. Optional: run the end-to-end self test on Windows:
+
+   ```powershell
+   npx tauri build --debug
+   $env:CX_SELFTEST=1; ..\target\debug\cross-explore.exe
+   ```
+
+   The test prints its results to the console.
+
+The first `tauri build` downloads the WiX and NSIS installer tools on its own.
+
 ## Tests
 
 | What | Command |
