@@ -1,0 +1,32 @@
+[package]
+name = "cx-peer"
+description = "Peer mode for Cross Explore: QUIC transport, pairing, shares and the peer:// provider"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+cx-local.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "fs", "io-util", "process", "time", "sync", "rt-multi-thread", "macros"] }
+dirs.workspace = true
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring", "log"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging"] }
+rustls-pki-types = "1"
+webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+ring = "0.17"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+blake3 = "1"
+data-encoding = "2"
+spake2 = "0.4"
+socket2 = "0.6"
+hostname = "0.4"
+reflink-copy = "0.1"
+
+[dev-dependencies]
+tempfile.workspace = true
