@@ -14,8 +14,10 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_drag::init());
+    builder
         .manage(cmd::files::Watches::default())
         .manage(cmd::files::RecentListings::default())
         .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
@@ -38,6 +40,7 @@ pub fn run() {
             cmd::system::open_terminal,
             cmd::system::os_clipboard_set,
             cmd::system::os_clipboard_get,
+            cmd::system::drag_icon,
             cmd::jobs::transfer_submit,
             cmd::jobs::transfer_pause,
             cmd::jobs::transfer_resume,

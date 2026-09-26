@@ -9,6 +9,8 @@ import { menu, type MenuItem } from "./menu.svelte";
 import { settings } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
+import { inTauri } from "./api";
+import { invoke } from "@tauri-apps/api/core";
 
 // ---- touch: tap opens, long-press selects (and shows the menu) ----
 
@@ -189,10 +191,33 @@ export function blankMenu(e: MouseEvent, tab: Tab) {
 const MIME = "application/x-cx-uris";
 let dragging = false;
 
+/** Our own native drag in flight (so drops back into the window stay internal). */
+export let nativeDrag: { uris: string[] } | null = null;
+let dragIconPath: Promise<string> | null = null;
+
+function localPath(uri: string) {
+  const p = decodeURIComponent(uri.replace(/^file:\/\//, ""));
+  return /^\/[A-Za-z]:/.test(p) ? p.slice(1).replaceAll("/", "\\") : p;
+}
+
 export function onDragStart(e: DragEvent, tab: Tab, item: Item) {
   const key = keyOf(item);
   if (!tab.selection.has(key)) tab.selectOnly(key);
   const uris = tab.selectedEntries.map((x) => tab.uriOf(x));
+  // Local files get a real OS drag, so they can land in Finder, Explorer,
+  // mail or chat apps too. Drops back into our window arrive via Tauri.
+  if (inTauri && !ui.phone && uris.every((u) => u.startsWith("file:"))) {
+    e.preventDefault();
+    nativeDrag = { uris };
+    dragIconPath ??= invoke<string>("drag_icon");
+    void Promise.all([dragIconPath, import("@crabnebula/tauri-plugin-drag")]).then(([icon, { startDrag }]) =>
+      startDrag({ item: uris.map(localPath), icon }, () => {
+        // Keep the marker briefly: the drop event may arrive after this.
+        setTimeout(() => (nativeDrag = null), 500);
+      }),
+    );
+    return;
+  }
   dragging = true;
   e.dataTransfer!.effectAllowed = "copyMove";
   e.dataTransfer!.setData(MIME, JSON.stringify(uris));
@@ -219,10 +244,20 @@ function volumeOf(uri: string): string {
 }
 
 /** Explorer/Finder rule: same volume moves, different volume copies; modifiers override. */
-export function dropIsMove(e: DragEvent, uris: string[], dest: string): boolean {
-  if (e.altKey || (!isMac && e.ctrlKey)) return false;
-  if (e.shiftKey || (isMac && e.metaKey)) return true;
+export function dropIsMove(e: DragEvent | null, uris: string[], dest: string): boolean {
+  if (e && (e.altKey || (!isMac && e.ctrlKey))) return false;
+  if (e && (e.shiftKey || (isMac && e.metaKey))) return true;
   return uris.every((u) => volumeOf(u) === volumeOf(dest));
+}
+
+/** The drop target element under a window point, if any. */
+export function dropElementAt(x: number, y: number): (HTMLElement & { cxDropDest?: () => string | null }) | null {
+  let el = document.elementFromPoint(x, y) as (HTMLElement & { cxDropDest?: () => string | null }) | null;
+  while (el) {
+    if (el.cxDropDest?.()) return el;
+    el = el.parentElement as typeof el;
+  }
+  return null;
 }
 
 function dragUris(e: DragEvent): string[] | null {
@@ -288,11 +323,5 @@ export function dropTarget(node: HTMLElement, opts: { dest: () => string | null;
 
 /** Folder URI under a window point, for files dropped in from other apps. */
 export function dropDestAt(x: number, y: number): string | null {
-  let el = document.elementFromPoint(x, y) as (HTMLElement & { cxDropDest?: () => string | null }) | null;
-  while (el) {
-    const dest = el.cxDropDest?.();
-    if (dest) return dest;
-    el = el.parentElement as typeof el;
-  }
-  return null;
+  return dropElementAt(x, y)?.cxDropDest?.() ?? null;
 }

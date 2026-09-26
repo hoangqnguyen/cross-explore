@@ -19,7 +19,7 @@
   import MobileBar from "./lib/components/MobileBar.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { isTextInput } from "./lib/keys";
-  import { dropDestAt } from "./lib/listing";
+  import { dropDestAt, dropElementAt, dropIsMove, nativeDrag } from "./lib/listing";
   import { dialogs } from "./lib/stores/dialogs.svelte";
   import { settings } from "./lib/stores/settings.svelte";
   import { ws } from "./lib/workspace.svelte";
@@ -42,19 +42,44 @@
     }
   });
 
-  // Files dropped in from Finder / Explorer: copy them where they landed.
+  // Files dropped from Finder / Explorer (or our own native drags): copy them
+  // where they landed; our own drags keep move-within-a-volume semantics.
   async function listenForOsDrops() {
     const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    let hovered: HTMLElement | null = null;
+    const unhover = () => {
+      hovered?.classList.remove("drop-hover");
+      hovered = null;
+    };
     await getCurrentWebview().onDragDropEvent((ev) => {
-      if (ev.payload.type !== "drop" || !ev.payload.paths.length) return;
+      const p = ev.payload;
+      if (p.type === "leave") return unhover();
       const scale = window.devicePixelRatio || 1;
-      const dest = dropDestAt(ev.payload.position.x / scale, ev.payload.position.y / scale) ?? ws.activeTab.dirUri;
-      const uris = ev.payload.paths.map((p) => "file://" + p.replaceAll("\\", "/").replace(/^\/?/, "/").split("/").map(encodeURIComponent).join("/").replace(/^\/%3A/, "/"));
-      void ws.transfer(
-        uris.map((u) => u.replace(/^file:\/\/\/([A-Za-z])%3A/, "file:///$1:")),
-        dest,
-        false,
-      );
+      const x = p.position.x / scale;
+      const y = p.position.y / scale;
+      if (p.type === "over" || p.type === "enter") {
+        const el = dropElementAt(x, y);
+        if (el !== hovered) {
+          unhover();
+          hovered = el;
+          el?.classList.add("drop-hover");
+        }
+        return;
+      }
+      unhover();
+      if (p.type !== "drop" || !p.paths.length) return;
+      const dest = dropDestAt(x, y) ?? ws.activeTab.dirUri;
+      const uris = p.paths.map((path) => {
+        const norm = path.replaceAll("\\", "/");
+        const withRoot = norm.startsWith("/") ? norm : "/" + norm;
+        return "file://" + withRoot.split("/").map((seg, i) => (i === 1 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg))).join("/");
+      });
+      const own = nativeDrag;
+      const internal = !!own && own.uris.length === uris.length;
+      const sources = internal ? own!.uris : uris;
+      // Don't drop things onto the folder they're already in.
+      const moving = sources.filter((u) => u !== dest && u.replace(/\/[^/]*$/, "") !== dest.replace(/\/$/, ""));
+      if (moving.length) void ws.transfer(moving, dest, internal && dropIsMove(null, moving, dest));
     });
   }
 

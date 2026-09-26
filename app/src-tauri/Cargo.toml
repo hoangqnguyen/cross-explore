@@ -48,3 +48,5 @@ version = "0.3"
 xattr = "1"
 plist = "1"
 
+[target.'cfg(any(target_os = "macos", windows, all(target_os = "linux", not(target_os = "android"))))'.dependencies.tauri-plugin-drag]
+version = "2"

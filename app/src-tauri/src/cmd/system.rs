@@ -182,3 +182,13 @@ mod os_clipboard {
         Vec::new()
     }
 }
+
+/// Image shown under the cursor when dragging files out to other apps.
+#[tauri::command]
+pub fn drag_icon(app: AppState<'_>) -> Result<String> {
+    let path = app.cache_dir.join("drag-icon.png");
+    if !path.exists() {
+        std::fs::write(&path, include_bytes!("../../icons/64x64.png")).map_err(|e| CxError::from_io(e, path.display()))?;
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
