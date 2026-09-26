@@ -22,6 +22,7 @@ import { devices } from "./stores/devices.svelte";
 import { dialogs } from "./stores/dialogs.svelte";
 import { settings, type SavedWorkspace, type ViewMode } from "./stores/settings.svelte";
 import { transfers } from "./stores/transfers.svelte";
+import { ui } from "./stores/ui.svelte";
 import { toasts } from "./toasts.svelte";
 
 export const HOME_URI = "cx:home";
@@ -416,7 +417,7 @@ export class Workspace {
   platform = $state("macos");
   ready = $state(false);
 
-  dual = $derived(settings.data.dual);
+  dual = $derived(settings.data.dual && !ui.mobile);
   pane = $derived(this.panes[this.dual ? this.activePane : 0]);
   otherPane = $derived(this.dual ? this.panes[1 - this.activePane] : null);
   activeTab = $derived(this.pane.active);
@@ -428,6 +429,7 @@ export class Workspace {
     const p = await loadPlaces();
     this.places = p;
     this.platform = p.platform;
+    ui.platform = p.platform;
     try {
       await subscribe((e) => {
         if (e.type === "job") transfers.onJob(e.job);

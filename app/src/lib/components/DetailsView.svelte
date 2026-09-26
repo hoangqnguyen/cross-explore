@@ -8,6 +8,7 @@
   import type { SortKey } from "../sort";
   import { clipboard } from "../stores/clipboard.svelte";
   import { settings } from "../stores/settings.svelte";
+  import { ui } from "../stores/ui.svelte";
   import { sizes } from "../stores/sizes.svelte";
   import { ws, type Tab } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
@@ -22,7 +23,7 @@
   let viewportH = $state(600);
   let now = $state(Date.now());
 
-  let rowH = $derived(settings.data.compact ? 24 : 30);
+  let rowH = $derived(ui.mobile ? 48 : settings.data.compact ? 24 : 30);
   let rows = $derived(tab.visible);
   let start = $derived(Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN));
   let end = $derived(Math.min(rows.length, Math.ceil((scrollTop + viewportH) / rowH) + OVERSCAN));
@@ -155,7 +156,7 @@
         style:height="{rowH}px"
         onpointerdown={(e) => onItemPointerDown(e, tab, entry)}
         onpointerup={(e) => onItemPointerUp(e, tab, entry)}
-        ondblclick={() => tab.open(entry)}
+        ondblclick={() => !ui.phone && tab.open(entry)}
         oncontextmenu={(e) => itemMenu(e, tab, entry)}
         ondragstart={(e) => onDragStart(e, tab, entry)}
         ondragend={onDragEnd}

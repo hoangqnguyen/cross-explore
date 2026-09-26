@@ -7,6 +7,7 @@
   import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp } from "../listing";
   import { clipboard } from "../stores/clipboard.svelte";
   import { settings } from "../stores/settings.svelte";
+  import { ui } from "../stores/ui.svelte";
   import { ws, type Tab } from "../workspace.svelte";
   import Thumb from "./Thumb.svelte";
   import ViewStates from "./ViewStates.svelte";
@@ -122,7 +123,7 @@
       title={entry.name}
       onpointerdown={(e) => onItemPointerDown(e, tab, entry)}
       onpointerup={(e) => onItemPointerUp(e, tab, entry)}
-      ondblclick={() => tab.open(entry)}
+      ondblclick={() => !ui.phone && tab.open(entry)}
       oncontextmenu={(e) => itemMenu(e, tab, entry)}
       ondragstart={(e) => onDragStart(e, tab, entry)}
       ondragend={onDragEnd}

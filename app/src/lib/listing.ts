@@ -7,10 +7,46 @@ import { keyOf } from "./folder.svelte";
 import { isMac, primary } from "./keys";
 import { menu, type MenuItem } from "./menu.svelte";
 import { settings } from "./stores/settings.svelte";
+import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
+
+// ---- touch: tap opens, long-press selects (and shows the menu) ----
+
+let pressTimer: ReturnType<typeof setTimeout> | undefined;
+let pressStart: { x: number; y: number } | null = null;
+let longPressed = false;
+
+function touchDown(e: PointerEvent, tab: Tab, item: Item) {
+  longPressed = false;
+  pressStart = { x: e.clientX, y: e.clientY };
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    longPressed = true;
+    ui.selecting = true;
+    const key = keyOf(item);
+    if (!tab.selection.has(key)) tab.toggle(key);
+    navigator.vibrate?.(10);
+  }, 480);
+}
+
+function touchUp(e: PointerEvent, tab: Tab, item: Item) {
+  clearTimeout(pressTimer);
+  const moved = pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10;
+  pressStart = null;
+  if (longPressed || moved) return;
+  const key = keyOf(item);
+  if (ui.selecting) {
+    tab.toggle(key);
+    if (!tab.selection.size) ui.selecting = false;
+  } else {
+    tab.selectOnly(key);
+    tab.open(item);
+  }
+}
 
 export function onItemPointerDown(e: PointerEvent, tab: Tab, item: Item) {
   ws.focusPane(tab.pane.id);
+  if (e.pointerType === "touch") return touchDown(e, tab, item);
   const key = keyOf(item);
   if (e.button === 2) {
     if (!tab.selection.has(key)) tab.selectOnly(key);
@@ -24,6 +60,7 @@ export function onItemPointerDown(e: PointerEvent, tab: Tab, item: Item) {
 }
 
 export function onItemPointerUp(e: PointerEvent, tab: Tab, item: Item) {
+  if (e.pointerType === "touch") return touchUp(e, tab, item);
   // Clicking one row of a multi-selection narrows to it on release (a drag
   // of the whole selection would have started instead).
   if (e.button === 0 && !e.shiftKey && !primary(e) && tab.selection.size > 1 && !dragging) tab.selectOnly(keyOf(item));

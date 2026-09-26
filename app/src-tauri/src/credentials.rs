@@ -49,34 +49,34 @@ impl CredentialStore for KeychainCredentials {
     }
 }
 
-#[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
 fn keychain_get(account: &str) -> Option<String> {
     keyring::Entry::new(SERVICE, account).ok()?.get_password().ok()
 }
 
-#[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
 fn keychain_set(account: &str, secret: &str) -> Result<()> {
     keyring::Entry::new(SERVICE, account)
         .and_then(|e| e.set_password(secret))
         .map_err(|e| CxError::Io(format!("couldn't save to the keychain: {e}")))
 }
 
-#[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
 fn keychain_delete(account: &str) {
     if let Ok(e) = keyring::Entry::new(SERVICE, account) {
         let _ = e.delete_credential();
     }
 }
 
-#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", windows, target_os = "linux")))]
 fn keychain_get(_account: &str) -> Option<String> {
     None
 }
 
-#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", windows, target_os = "linux")))]
 fn keychain_set(_account: &str, _secret: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", windows, target_os = "linux")))]
 fn keychain_delete(_account: &str) {}

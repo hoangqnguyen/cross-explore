@@ -84,7 +84,7 @@ impl Provider for LocalProvider {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities { live_watch: true, polling: false, server_copy: true, trash: true, posix: cfg!(unix), writable: true }
+        Capabilities { live_watch: true, polling: false, server_copy: true, trash: crate::trash::AVAILABLE, posix: cfg!(unix), writable: true }
     }
 
     async fn list(&self, dir: &Location, sink: mpsc::Sender<Vec<Entry>>) -> Result<usize> {

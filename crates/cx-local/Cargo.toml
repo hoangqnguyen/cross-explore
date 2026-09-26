@@ -11,10 +11,12 @@ async-trait.workspace = true
 notify.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["fs", "io-util"] }
-trash.workspace = true
 sysinfo.workspace = true
 dirs.workspace = true
 reflink-copy = "0.1"
+
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+trash.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

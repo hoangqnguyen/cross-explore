@@ -19,11 +19,20 @@ fn trash_one(path: &Path) -> Result<Option<PathBuf>> {
     Ok(result.and_then(|u| u.path()).map(|p| PathBuf::from(p.to_string())))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
 fn trash_one(path: &Path) -> Result<Option<PathBuf>> {
     trash::delete(path).map_err(|e| CxError::Io(format!("move to trash failed: {e}")))?;
     Ok(None)
 }
+
+/// Phones have no system trash for app files.
+#[cfg(any(target_os = "ios", target_os = "android"))]
+fn trash_one(path: &Path) -> Result<Option<PathBuf>> {
+    Err(CxError::Unsupported(format!("moving {} to a trash", path.display())))
+}
+
+/// Whether this platform has a restorable trash.
+pub const AVAILABLE: bool = !cfg!(any(target_os = "ios", target_os = "android"));
 
 pub fn trash_paths(paths: &[PathBuf]) -> Result<Vec<TrashedItem>> {
     paths
