@@ -1,0 +1,26 @@
+# WebDAV test servers for the cx-webdav integration tests.
+#
+#   docker compose -f docker/webdav/compose.yml up -d
+#   CX_TEST_DAV=1 cargo test -p cx-webdav --test live
+#
+#   rclone   http://127.0.0.1:8088/   Basic auth, user `cx` / `cxpass`
+#   apache   http://127.0.0.1:8089/   Digest auth (mod_dav), user `cx` / `cxpass`
+name: cx-test-webdav
+services:
+  rclone:
+    image: rclone/rclone:latest
+    ports:
+      - "8088:8088"
+    command: ["serve", "webdav", "/data", "--addr", ":8088", "--user", "cx", "--pass", "cxpass"]
+    tmpfs:
+      - /data
+  apache:
+    image: bytemark/webdav:latest
+    ports:
+      - "8089:80"
+    environment:
+      AUTH_TYPE: Digest
+      USERNAME: cx
+      PASSWORD: cxpass
+    tmpfs:
+      - /var/lib/dav/data

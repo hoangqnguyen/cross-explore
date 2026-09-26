@@ -1,0 +1,21 @@
+[package]
+name = "cx-smb"
+description = "SMB2/3 provider for Cross Explore (pure Rust, via the smb2 crate)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["io-util", "rt"] }
+# Pure-Rust SMB2/3 client with pipelined I/O, CHANGE_NOTIFY, srvsvc share
+# enumeration and server-side copy. See the crate docs (src/lib.rs) for why
+# this one over `smb` and `pavao`.
+smb2 = "0.26"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio-util = "0.7"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "time"] }
+cx-local.workspace = true
