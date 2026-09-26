@@ -49,5 +49,7 @@ pub fn connections(app: AppState<'_>) -> Vec<String> {
 
 #[tauri::command]
 pub fn trust_host_key(uri: String, key_type: String, fingerprint: String, app: AppState<'_>) -> Result<()> {
-    crate::sftp::trust(&app, &uri, &key_type, &fingerprint)
+    crate::sftp::trust(&app, &uri, &key_type, &fingerprint)?;
+    app.vfs.clear_failure(&endpoint_of(&uri)?);
+    Ok(())
 }

@@ -38,6 +38,9 @@ impl RecentListings {
 pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, app: AppState<'_>, recent: State<'_, RecentListings>) -> Result<()> {
     let started = Instant::now();
     let loc = Location::parse(&uri)?;
+    // Name the tab and breadcrumb before connecting, so a slow or failing
+    // server still shows where you are.
+    let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: Capabilities::default() });
     let provider = app.vfs.provider(&loc).await?;
     let caps = provider.capabilities();
     let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: caps });

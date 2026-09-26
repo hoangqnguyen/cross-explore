@@ -6,6 +6,7 @@ import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey,
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { ws } from "./workspace.svelte";
+import { dialogs } from "./stores/dialogs.svelte";
 
 const log = (message: string, level = "test") => invoke("ui_log", { level, message });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -214,6 +215,36 @@ export async function selftest() {
         if (del.state !== "done") throw new Error(`delete ${del.state}: ${del.errors[0]?.message}`);
       });
     }
+    await check("opening an untrusted SFTP server from the sidebar: trust key, sign in, browse", async () => {
+      // Answer the dialogs like a person would.
+      const seen: string[] = [];
+      const ask = dialogs.ask.bind(dialogs);
+      dialogs.ask = (async (kind: string, props: Record<string, unknown>) => {
+        seen.push(kind);
+        if (kind === "hostKey") return true;
+        if (kind === "signIn") {
+          try {
+            await connectServer(props.uri as string, { user: "cx", secret: { type: "password", password: "cxpass" } }, false);
+          } catch (e) {
+            seen.push(`signIn failed for ${props.uri}: ${JSON.stringify(e)}`);
+            return false;
+          }
+          return true;
+        }
+        return ask(kind as never, props);
+      }) as typeof dialogs.ask;
+      try {
+        // The IPv6 loopback is a host name we have never trusted.
+        tab().navigate("sftp://[::1]:2223/config");
+        await until("listing after trust + sign-in", () => tab().folder.status === "ready", 20000).catch((e) => {
+          throw new Error(`${e.message}; dialogs: ${seen.join(",")}; state: ${tab().folder.status} ${tab().folder.error ?? ""}`);
+        });
+        if (!seen.includes("hostKey")) throw new Error(`dialogs: ${seen.join(",")}`);
+        if (!tab().folder.info?.name) throw new Error("tab has no name");
+      } finally {
+        dialogs.ask = ask;
+      }
+    });
     tab().navigate(dir);
   }
 

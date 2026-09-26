@@ -1,7 +1,9 @@
 <script lang="ts">
   // Loading skeleton, errors (with sign-in / trust actions) and empty states,
   // shared by all views.
+  import { errorText, trustHostKey } from "../api";
   import { dialogs } from "../stores/dialogs.svelte";
+  import { toasts } from "../toasts.svelte";
   import type { Tab } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
 
@@ -26,17 +28,30 @@
       const ok = await dialogs.ask("signIn", { uri: detail.message.uri, user: detail.message.user, reason: detail.message.reason });
       if (ok) tab.reload();
     } else if (detail?.kind === "hostKeyUnknown") {
-      const ok = await dialogs.ask("hostKey", { ...detail.message });
-      if (ok) tab.reload();
+      const key = detail.message;
+      const ok = await dialogs.ask("hostKey", { ...key });
+      if (!ok) return;
+      try {
+        // Remember the key, then connect again (which may now ask to sign in).
+        await trustHostKey(key.uri, key.keyType, key.fingerprint);
+        tab.reload();
+      } catch (e) {
+        toasts.show(errorText(e), "error");
+      }
     }
   }
 
-  // Ask right away instead of making people click through an error first.
-  let asked: object | null = null;
+  // Ask right away instead of making people click through an error first:
+  // once per folder and kind of problem (trusting a key can lead to a
+  // sign-in prompt next).
+  let asked = "";
   $effect(() => {
-    if (folder.status === "error" && (detail?.kind === "authRequired" || detail?.kind === "hostKeyUnknown") && asked !== folder) {
-      asked = folder;
-      void signIn();
+    if (folder.status === "error" && (detail?.kind === "authRequired" || detail?.kind === "hostKeyUnknown")) {
+      const key = `${folder.uri}|${detail.kind}`;
+      if (asked !== key) {
+        asked = key;
+        void signIn();
+      }
     }
   });
 </script>
