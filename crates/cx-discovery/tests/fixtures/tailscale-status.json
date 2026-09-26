@@ -1,0 +1,113 @@
+{
+  "Version": "1.102.3-t9329c3677-ga522f65e9",
+  "TUN": true,
+  "BackendState": "Running",
+  "HaveNodeKey": true,
+  "AuthURL": "",
+  "TailscaleIPs": ["100.101.1.3", "fd7a:115c:a1e0::3701:9961"],
+  "Self": {
+    "ID": "nSelf11CNTRL",
+    "NodeID": 2768904749427267,
+    "PublicKey": "nodekey:0000000000000000000000000000000000000000000000000000000000000001",
+    "HostName": "Alex's MacBook Pro",
+    "DNSName": "alexs-macbook-pro-1.example-tail.ts.net.",
+    "OS": "macOS",
+    "UserID": 1001,
+    "TailscaleIPs": ["100.101.1.3", "fd7a:115c:a1e0::3701:9961"],
+    "AllowedIPs": ["100.101.1.3/32", "fd7a:115c:a1e0::3701:9961/128"],
+    "Addrs": ["203.0.113.7:21540", "172.27.48.176:41641", "192.168.1.76:41641", "[2402:800:61b3::1]:41641"],
+    "CurAddr": "",
+    "Relay": "sin",
+    "Created": "2025-10-08T16:39:33.785548706Z",
+    "LastSeen": "0001-01-01T00:00:00Z",
+    "Online": true,
+    "ExitNode": false,
+    "Active": false,
+    "PeerAPIURL": ["http://100.101.1.3:56683"],
+    "InNetworkMap": true,
+    "KeyExpiry": "2026-12-27T11:38:59Z"
+  },
+  "Health": [],
+  "MagicDNSSuffix": "example-tail.ts.net",
+  "CurrentTailnet": {"Name": "owner@example.com", "MagicDNSSuffix": "example-tail.ts.net", "MagicDNSEnabled": true},
+  "CertDomains": ["alexs-macbook-pro-1.example-tail.ts.net"],
+  "Peer": {
+    "nodekey:aa01": {
+      "ID": "nHpc11CNTRL",
+      "HostName": "hpc",
+      "DNSName": "hpc.example-tail.ts.net.",
+      "OS": "windows",
+      "UserID": 1001,
+      "TailscaleIPs": ["100.101.1.1", "fd7a:115c:a1e0::a039:1266"],
+      "Addrs": ["198.51.100.20:41641", "192.168.1.40:41641"],
+      "CurAddr": "192.168.1.40:41641",
+      "Relay": "sin",
+      "LastSeen": "0001-01-01T00:00:00Z",
+      "Online": true,
+      "Active": true
+    },
+    "nodekey:aa02": {
+      "ID": "nAlpha11CNTRL",
+      "HostName": "edge-box-f942",
+      "DNSName": "alpha.other-tail.ts.net.",
+      "OS": "linux",
+      "UserID": 3003,
+      "AltSharerUserID": 2002,
+      "TailscaleIPs": ["100.101.1.2", "fd7a:115c:a1e0::4f01:46bd"],
+      "Tags": ["tag:server"],
+      "Addrs": null,
+      "CurAddr": "",
+      "Relay": "tok",
+      "LastSeen": "0001-01-01T00:00:00Z",
+      "Online": true,
+      "sshHostKeys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMHGBB6woO2ROo9slcxKGyjHWOpqClntyXrQJqbQWkiN"]
+    },
+    "nodekey:aa03": {
+      "ID": "nPhone11CNTRL",
+      "HostName": "Alex's Phone",
+      "DNSName": "alexs-phone.example-tail.ts.net.",
+      "OS": "android",
+      "UserID": 1001,
+      "TailscaleIPs": ["100.101.1.6", "fd7a:115c:a1e0::ac39:4c6b"],
+      "LastSeen": "0001-01-01T00:00:00Z",
+      "Online": true
+    },
+    "nodekey:aa04": {
+      "ID": "nIphone11CNTRL",
+      "HostName": "localhost",
+      "DNSName": "alexs-iphone.example-tail.ts.net.",
+      "OS": "iOS",
+      "UserID": 1001,
+      "TailscaleIPs": ["100.101.1.7", "fd7a:115c:a1e0::ca39:1104"],
+      "LastSeen": "2026-09-26T12:10:00.1Z",
+      "Online": false
+    },
+    "nodekey:aa05": {
+      "ID": "nR3811CNTRL",
+      "HostName": "r38",
+      "DNSName": "r38-2.example-tail.ts.net.",
+      "OS": "windows",
+      "UserID": 1001,
+      "TailscaleIPs": ["100.101.1.4", "fd7a:115c:a1e0::4a39:f25b"],
+      "LastSeen": "2026-07-31T14:48:38.1Z",
+      "Online": false,
+      "Expired": true
+    },
+    "nodekey:aa06": {
+      "ID": "nMini11CNTRL",
+      "HostName": "Sam’s Mac mini",
+      "DNSName": "sams-mac-mini.third-tail.ts.net.",
+      "OS": "macOS",
+      "UserID": 2002,
+      "TailscaleIPs": ["100.101.1.8"],
+      "LastSeen": "2026-09-10T00:46:36.1Z",
+      "Online": false
+    }
+  },
+  "User": {
+    "1001": {"ID": 1001, "LoginName": "owner@example.com", "DisplayName": "Owner"},
+    "2002": {"ID": 2002, "LoginName": "friend@example.com", "DisplayName": "Friend"},
+    "3003": {"ID": 3003, "LoginName": "tagged-devices", "DisplayName": "Tagged Devices"}
+  },
+  "ClientVersion": null
+}
