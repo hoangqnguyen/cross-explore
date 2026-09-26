@@ -1,0 +1,35 @@
+# Samba test server for the cx-smb integration tests.
+#
+#   docker compose -f docker/smb/compose.yml up -d
+#   CX_TEST_SMB=1 cargo test -p cx-smb --test live -- --test-threads=1
+#
+# Shares:
+#   public   guest ok, writable (anyone)
+#   private  only user `cx` / password `cxpass`
+# Host port 1445 → 445, so the client's non-default port handling is exercised.
+name: cx-test-smb
+services:
+  samba:
+    image: ghcr.io/servercontainers/samba:latest
+    ports:
+      - "1445:445"
+    environment:
+      ACCOUNT_cx: cxpass
+      UID_cx: "1000"
+      AVAHI_DISABLE: "1"
+      WSDD2_DISABLE: "1"
+      NETBIOS_DISABLE: "1"
+      SAMBA_CONF_LOG_LEVEL: "1"
+      SAMBA_CONF_MAP_TO_GUEST: "Bad User"
+      SAMBA_GLOBAL_STANZA: "server min protocol = SMB2_10;guest account = nobody"
+      SAMBA_VOLUME_CONFIG_public: "[public]; path=/shares/public; guest ok = yes; read only = no; browseable = yes; force user = cx; create mask = 0664; directory mask = 0775"
+      SAMBA_VOLUME_CONFIG_private: "[private]; path=/shares/private; valid users = cx; guest ok = no; read only = no; browseable = yes; force user = cx; create mask = 0664; directory mask = 0775"
+    volumes:
+      - shares:/shares
+    command: >
+      sh -c "mkdir -p /shares/public /shares/private && chown -R 1000 /shares && exec runsvdir -P /container/config/runit"
+
+# A named volume (not tmpfs) so data survives the restart in the reconnect
+# test; `docker compose down -v` removes it.
+volumes:
+  shares:

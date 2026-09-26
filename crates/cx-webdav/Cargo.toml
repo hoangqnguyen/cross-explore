@@ -1,0 +1,23 @@
+[package]
+name = "cx-webdav"
+description = "WebDAV provider for Cross Explore (reqwest + streaming PROPFIND parser)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "http2"] }
+quick-xml = { version = "0.42", features = ["async-tokio"] }
+httpdate = "1"
+md-5 = "0.11"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio-util = { version = "0.7", features = ["io"] }
+percent-encoding = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "time"] }
+cx-local.workspace = true
