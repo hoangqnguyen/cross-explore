@@ -2,7 +2,9 @@
 //! `com.apple.metadata:_kMDItemUserTags` attribute, so Finder and Spotlight
 //! see them); everything else is kept in a small JSON file keyed by URI.
 
-use cx_core::{CxError, Location, Result};
+#[cfg(target_os = "macos")]
+use cx_core::Location;
+use cx_core::{CxError, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
