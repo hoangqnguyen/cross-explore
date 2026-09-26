@@ -188,6 +188,7 @@
 <style>
   .view {
     --cols: minmax(180px, 1fr) 190px 150px 100px;
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -330,6 +331,28 @@
   .badge {
     font-size: 11px;
     color: var(--text-3);
+  }
+  /* Narrow panes (dual pane, small windows) drop the less useful columns. */
+  @container (max-width: 720px) {
+    .header,
+    .row {
+      grid-template-columns: minmax(150px, 1fr) 150px 90px;
+    }
+    .col.type,
+    .col.where,
+    .cell.type {
+      display: none;
+    }
+  }
+  @container (max-width: 470px) {
+    .header,
+    .row {
+      grid-template-columns: minmax(120px, 1fr) 84px;
+    }
+    .col.modified,
+    .cell.modified {
+      display: none;
+    }
   }
   .rename {
     flex: 1;

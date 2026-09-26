@@ -127,6 +127,7 @@
     {/if}
   </div>
 
+  {#if tab.folder.kind !== "home" && tab.folder.kind !== "compare"}
   <label class="search" class:active={!!tab.filter}>
     <Icon name="search" size={14} />
     <input bind:this={searchInput} bind:value={tab.filter} onkeydown={onSearchKey} placeholder="Filter {info?.name ?? ''}" spellcheck="false" aria-label="Filter" />
@@ -135,6 +136,7 @@
       <button class="clear" aria-label="Clear filter" onclick={() => (tab.filter = "")}><Icon name="close" size={12} /></button>
     {/if}
   </label>
+  {/if}
 </div>
 
 <style>

@@ -14,7 +14,8 @@
 
   $effect(() => {
     // Focus the first field (or the dialog) when it opens.
-    const first = box?.querySelector<HTMLElement>("input:not([type=checkbox]):not([disabled]), select, textarea, button.primary");
+    const candidates = box?.querySelectorAll<HTMLElement>("input:not([type=checkbox]):not([type=radio]):not([disabled]), select, textarea, button.primary") ?? [];
+    const first = [...candidates].find((el) => el.offsetParent !== null);
     (first ?? box)?.focus();
   });
 

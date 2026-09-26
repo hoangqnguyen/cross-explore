@@ -67,7 +67,11 @@
   });
 
   function onkeydown(e: KeyboardEvent) {
-    if (dialogs.current) return;
+    if (dialogs.current) {
+      // Escape always dismisses, even if focus drifted out of the dialog.
+      if (e.key === "Escape") dialogs.close(null);
+      return;
+    }
     handleKey(e);
   }
 
