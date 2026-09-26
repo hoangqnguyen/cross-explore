@@ -15,6 +15,7 @@ import { toasts } from "./toasts.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
 import { sizes } from "./stores/sizes.svelte";
 import { HOME_URI, isArchive, ws } from "./workspace.svelte";
+import { ui } from "./stores/ui.svelte";
 
 export interface Command {
   id: string;
@@ -83,7 +84,8 @@ export const commands: Command[] = [
   { id: "file.moveOther", label: "Move to other pane", group: "Panes", icon: "move", keys: { commander: ["F6"], explorer: ["Mod+Shift+6"] }, list: true, when: () => ws.dual && hasTargets(), run: () => ws.toOtherPane(true) },
   { id: "file.copyPath", label: "Copy path", group: "File", icon: "link", keys: { both: [m("Mod+Alt+C", "Mod+Shift+C")] }, run: () => tab().copyPath() },
   { id: "file.reveal", label: isMac ? "Show in Finder" : "Show in Explorer", group: "File", icon: "open", keys: { both: [m("Mod+Shift+R", "Mod+Shift+E")] }, when: () => tab().folder.info?.local === true && tab().folder.kind !== "home", run: () => revealEntry(tab().targets()[0] ? tab().uriOf(tab().targets()[0]) : tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
-  { id: "file.terminal", label: "Open in Terminal", group: "Tools", icon: "terminal", keys: { both: [m("Mod+Alt+T", "Mod+Shift+`")] }, when: () => tab().folder.kind === "folder", run: () => openTerminal(tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
+  { id: "view.terminal", label: "Toggle terminal panel", group: "View", icon: "terminal", keys: { both: [m("Ctrl+`", "Mod+`")] }, when: () => !ui.phone, run: () => (ui.terminalOpen = !ui.terminalOpen) },
+  { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { both: [m("Mod+Alt+T", "Mod+Shift+`")] }, when: () => tab().folder.kind === "folder", run: () => openTerminal(tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
   { id: "file.calcSize", label: "Calculate folder sizes", group: "Tools", icon: "sigma", keys: { both: ["Alt+Shift+Enter"], commander: ["Space"] }, list: true, when: () => tab().targets().some((e) => e.isDir) || tab().visible.some((e) => e.isDir), run: () => calcSizes() },
   { id: "file.compress", label: "Compress to ZIP", group: "Tools", icon: "archive", when: () => hasTargets() && writable(), run: () => compress() },
   { id: "file.extract", label: "Extract here", group: "Tools", icon: "archive", when: () => tab().targets().some((e) => isArchive(e.name)) && writable(), run: () => extract() },

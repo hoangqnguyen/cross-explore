@@ -8,6 +8,7 @@ pub mod search;
 pub mod selftest;
 pub mod system;
 pub mod tags;
+pub mod term;
 
 use crate::state::App;
 use std::sync::Arc;

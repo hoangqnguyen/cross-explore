@@ -1119,6 +1119,7 @@ dependencies = [
  "cx-search",
  "cx-sftp",
  "cx-smb",
+ "cx-term",
  "cx-thumbs",
  "cx-transfer",
  "cx-webdav",

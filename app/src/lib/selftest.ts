@@ -2,7 +2,7 @@
 // started with CX_SELFTEST=1: drives the UI state layer through a realistic
 // session and reports each check to the terminal, then exits.
 import { invoke } from "@tauri-apps/api/core";
-import { asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
+import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { ws } from "./workspace.svelte";
@@ -147,11 +147,20 @@ export async function selftest() {
   await check("views render with real data", async () => {
     for (const v of ["icons", "columns", "gallery", "details"] as const) {
       tab().view = v;
-      await sleep(150);
       const cls = v === "details" ? ".details" : `.${v}`;
-      if (!document.querySelector(`.pane.active ${cls}`)) throw new Error(`${v} view missing`);
+      await until(`${v} view`, () => document.querySelector(`.pane.active ${cls}`), 3000);
     }
     tab().selectOnly(keyOf(tab().visible[0]));
+  });
+
+  await check("embedded terminal runs a shell in the folder", async () => {
+    let out = "";
+    const id = await termOpen(dir, 80, 24, (e) => {
+      if (e.kind === "output") out += atob(e.data);
+    });
+    await termWrite(id, "echo cx-$((2+3)) && pwd\r");
+    await until("shell output", () => out.includes("cx-5") && out.includes("cx-selftest"), 8000);
+    await termClose(id);
   });
 
   await check("peer service and discovery respond", async () => {

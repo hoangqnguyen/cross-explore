@@ -287,6 +287,7 @@ const fakeDevices: Device[] = [
 ];
 
 let peer: PeerStatus = { enabled: false, deviceId: "k7d2-mq4x", name: "demo's MacBook Pro", port: 47470, shares: [{ name: "Downloads", path: HOME + "/Downloads", readOnly: false }], trusted: [], tailnetAutoTrust: true };
+const terms = new Map<number, (t: string) => void>();
 const tags = new Map<string, string[]>([["file://" + HOME + "/Documents/Budget%202026.xlsx", ["Red", "Work"]]]);
 
 // ---------- handlers ----------
@@ -538,6 +539,24 @@ const handlers: Record<string, (a: Args) => unknown> = {
     });
   },
   cancel_task: () => undefined,
+  // A toy shell that echoes, for the browser preview.
+  term_open({ uri, onEvent }: Args) {
+    const id = nextId++;
+    const say = (t: string) => onEvent({ kind: "output", data: btoa(unescape(encodeURIComponent(t))) });
+    terms.set(id, say);
+    say(`\x1b[1;32mdemo@preview\x1b[0m:${parse(uri).path}$ `);
+    return id;
+  },
+  term_write({ id, data }: Args) {
+    const say = terms.get(id);
+    if (!say) return;
+    say(data === "\r" ? `\r\n(preview: no real shell)\r\n$ ` : data);
+  },
+  term_resize: () => undefined,
+  term_close({ id }: Args) {
+    terms.delete(id);
+  },
+  term_cwd: () => null,
   ui_log: () => undefined,
 };
 

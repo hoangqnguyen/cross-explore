@@ -3,6 +3,8 @@ class Ui {
   width = $state(typeof window === "undefined" ? 1200 : window.innerWidth);
   platform = $state("macos");
   drawerOpen = $state(false);
+  terminalOpen = $state(false);
+  terminalHeight = $state(260);
   /** Touch selection mode: taps toggle selection instead of opening. */
   selecting = $state(false);
 

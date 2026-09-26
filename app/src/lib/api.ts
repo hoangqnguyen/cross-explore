@@ -417,3 +417,14 @@ export type AppEvent =
 export async function subscribe(onEvent: (e: AppEvent) => void): Promise<void> {
   await invoke<void>("subscribe", { onEvent: channel(onEvent) });
 }
+
+// ---------- terminal ----------
+
+export type TermEvent = { kind: "output"; data: string } | { kind: "exit"; code: number | null };
+export async function termOpen(uri: string, cols: number, rows: number, onEvent: (e: TermEvent) => void): Promise<number> {
+  return invoke<number>("term_open", { uri, cols, rows, onEvent: channel(onEvent) });
+}
+export const termWrite = (id: number, data: string) => invoke<void>("term_write", { id, data });
+export const termResize = (id: number, cols: number, rows: number) => invoke<void>("term_resize", { id, cols, rows });
+export const termClose = (id: number) => invoke<void>("term_close", { id });
+export const termCwd = (id: number) => invoke<string | null>("term_cwd", { id });

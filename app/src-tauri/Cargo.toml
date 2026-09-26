@@ -25,6 +25,7 @@ cx-smb = { path = "../../crates/cx-smb" }
 cx-webdav = { path = "../../crates/cx-webdav" }
 cx-sftp = { path = "../../crates/cx-sftp" }
 cx-ftp = { path = "../../crates/cx-ftp" }
+cx-term = { path = "../../crates/cx-term" }
 tokio-util = "0.7"
 mime_guess = "2"
 percent-encoding = "2"

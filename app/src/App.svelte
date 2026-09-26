@@ -17,6 +17,7 @@
   import TransferFlyout from "./lib/components/TransferFlyout.svelte";
   import Dialogs from "./lib/dialogs/Dialogs.svelte";
   import MobileBar from "./lib/components/MobileBar.svelte";
+  import TerminalPanel from "./lib/components/TerminalPanel.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { isTextInput } from "./lib/keys";
   import { dropDestAt, dropElementAt, dropIsMove, nativeDrag } from "./lib/listing";
@@ -147,6 +148,7 @@
       </div>
       {#if settings.data.previewPane}<PreviewPane />{/if}
     </div>
+    {#if ui.terminalOpen}<TerminalPanel />{/if}
     <StatusBar />
   </div>
   <QuickLook />

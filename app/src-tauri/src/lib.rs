@@ -20,6 +20,7 @@ pub fn run() {
     builder
         .manage(cmd::files::Watches::default())
         .manage(cmd::files::RecentListings::default())
+        .manage(cx_term::Terminals::new())
         .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
         .register_asynchronous_uri_scheme_protocol("cxthumb", protocols::thumb_protocol)
         .invoke_handler(tauri::generate_handler![
@@ -70,6 +71,11 @@ pub fn run() {
             cmd::tags::tags_get,
             cmd::tags::tags_set,
             cmd::tags::tags_find,
+            cmd::term::term_open,
+            cmd::term::term_write,
+            cmd::term::term_resize,
+            cmd::term::term_close,
+            cmd::term::term_cwd,
             places::places,
             cmd::selftest::selftest_config,
             cmd::selftest::selftest_touch,
