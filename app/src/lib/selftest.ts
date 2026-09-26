@@ -164,6 +164,19 @@ export async function selftest() {
     await termClose(id);
   });
 
+  await check("settings: every section opens", async () => {
+    void dialogs.ask("settings");
+    await until("settings dialog", () => document.querySelector(".modal nav"));
+    for (const name of ["Sharing & devices", "Servers", "About", "General", "Servers"]) {
+      const btn = [...document.querySelectorAll<HTMLButtonElement>(".modal nav button")].find((b) => b.textContent?.includes(name));
+      if (!btn) throw new Error(`no ${name} button`);
+      btn.click();
+      await until(`${name} section`, () => document.querySelector(".modal nav button.active")?.textContent?.includes(name), 3000);
+      await sleep(200);
+    }
+    dialogs.close(null);
+  });
+
   await check("peer service and discovery respond", async () => {
     const p = await peerStatus();
     if (!p.deviceId) throw new Error("no device id");
