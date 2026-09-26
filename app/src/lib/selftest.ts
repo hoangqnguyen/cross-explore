@@ -178,10 +178,12 @@ export async function selftest() {
       { name: "WebDAV (rclone)", uri: "dav://127.0.0.1:8088/", mode: "polling" },
       { name: "FTP (Pure-FTPd)", uri: "ftp://127.0.0.1:2121/", mode: "polling" },
       { name: "FTPS (Pure-FTPd)", uri: "ftps://127.0.0.1:2121/", mode: "polling" },
+      { name: "S3 (MinIO)", uri: "s3://127.0.0.1:9900/cx-test", mode: "polling", user: "cxadmin", password: "cxsecret123" },
     ];
     for (const srv of servers) {
       await check(`${srv.name}: sign in, browse, upload, preview, rename, delete`, async () => {
-        const creds = { user: "cx", secret: { type: "password" as const, password: "cxpass" } };
+        const s = srv as { user?: string; password?: string };
+        const creds = { user: s.user ?? "cx", secret: { type: "password" as const, password: s.password ?? "cxpass" } };
         for (let i = 0; ; i++) {
           try {
             await connectServer(srv.uri, creds, false);

@@ -42,6 +42,7 @@ export const PROTOCOLS = [
   { scheme: "ftps", label: "FTPS (FTP over TLS)", port: 21 },
   { scheme: "davs", label: "WebDAV (HTTPS)", port: 443 },
   { scheme: "dav", label: "WebDAV (HTTP)", port: 80 },
+  { scheme: "s3", label: "S3 / object storage (AWS, R2, B2, MinIO…)", port: 443 },
   { scheme: "peer", label: "Cross Explore device", port: 47470 },
 ] as const;
 

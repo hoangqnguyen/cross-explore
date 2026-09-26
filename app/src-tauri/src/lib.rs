@@ -124,6 +124,7 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     vfs.register(Arc::new(cx_smb::SmbConnector::new()));
     vfs.register(Arc::new(cx_webdav::DavConnector::http()));
     vfs.register(Arc::new(cx_webdav::DavConnector::https()));
+    vfs.register(Arc::new(cx_s3::S3Connector));
     sftp::register(&vfs, &data_dir);
     cx_archive::ArchiveProvider::install(&vfs, cache_dir.join("archives"));
 

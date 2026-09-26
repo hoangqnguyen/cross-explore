@@ -1116,6 +1116,7 @@ dependencies = [
  "cx-ftp",
  "cx-local",
  "cx-peer",
+ "cx-s3",
  "cx-search",
  "cx-sftp",
  "cx-smb",

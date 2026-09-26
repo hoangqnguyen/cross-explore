@@ -64,16 +64,16 @@
     </select>
   </label>
   <div class="row">
-    <label class="field" style:flex="3">Server<input type="text" bind:value={host} placeholder="nas.local, 192.168.1.20, host.tailnet.ts.net or a full URI" spellcheck="false" /></label>
+    <label class="field" style:flex="3">Server<input type="text" bind:value={host} placeholder={scheme === "s3" ? "s3.eu-west-1.amazonaws.com, <account>.r2.cloudflarestorage.com" : "nas.local, 192.168.1.20, host.tailnet.ts.net or a full URI"} spellcheck="false" /></label>
     <label class="field" style:flex="1">Port<input type="text" bind:value={port} placeholder={String(defaultPort)} inputmode="numeric" /></label>
   </div>
-  <label class="field">Folder (optional)<input type="text" bind:value={path} placeholder={scheme === "smb" ? "Share/folder" : "/home/me"} spellcheck="false" /></label>
+  <label class="field">{scheme === "s3" ? "Bucket (optional)" : "Folder (optional)"}<input type="text" bind:value={path} placeholder={scheme === "smb" ? "Share/folder" : scheme === "s3" ? "my-bucket/photos" : "/home/me"} spellcheck="false" /></label>
   {#if scheme !== "peer"}
     <label class="check"><input type="checkbox" bind:checked={anonymous} /> Connect as guest</label>
     {#if !anonymous}
       <div class="row">
-        <label class="field">User<input type="text" bind:value={user} autocomplete="username" spellcheck="false" /></label>
-        <label class="field">{keyPath ? "Key passphrase" : "Password"}<input type="password" bind:value={password} autocomplete="current-password" /></label>
+        <label class="field">{scheme === "s3" ? "Access key ID" : "User"}<input type="text" bind:value={user} autocomplete="username" spellcheck="false" /></label>
+        <label class="field">{scheme === "s3" ? "Secret access key" : keyPath ? "Key passphrase" : "Password"}<input type="password" bind:value={password} autocomplete="current-password" /></label>
       </div>
       {#if scheme === "sftp"}
         <label class="field">Private key file (optional — ssh-agent and ~/.ssh keys are tried automatically)<input type="text" bind:value={keyPath} placeholder="~/.ssh/id_ed25519" spellcheck="false" /></label>
