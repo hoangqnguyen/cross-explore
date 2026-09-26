@@ -36,6 +36,8 @@ pub fn run() {
             cmd::system::open_entry,
             cmd::system::reveal_entry,
             cmd::system::open_terminal,
+            cmd::system::os_clipboard_set,
+            cmd::system::os_clipboard_get,
             cmd::jobs::transfer_submit,
             cmd::jobs::transfer_pause,
             cmd::jobs::transfer_resume,

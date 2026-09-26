@@ -138,3 +138,47 @@ fn ssh_terminal(cmd: &str) -> Result<()> {
     }
     Err(CxError::Unsupported("no terminal emulator found".into()))
 }
+
+/// Put local files on the system clipboard, so Finder / Explorer can paste them.
+#[tauri::command]
+pub fn os_clipboard_set(uris: Vec<String>) -> Result<()> {
+    let paths: Vec<String> = uris.iter().filter_map(|u| Location::parse(u).ok()?.local_path().map(|p| p.to_string_lossy().into_owned())).collect();
+    if paths.is_empty() {
+        return Ok(());
+    }
+    os_clipboard::set(paths)
+}
+
+/// Files another app copied (as URIs), if any.
+#[tauri::command]
+pub fn os_clipboard_get() -> Vec<String> {
+    os_clipboard::get().into_iter().map(|p| Location::local(p).uri()).collect()
+}
+
+#[cfg(any(target_os = "macos", windows, all(target_os = "linux", not(target_os = "android"))))]
+mod os_clipboard {
+    use clipboard_rs::{Clipboard, ClipboardContext};
+    use cx_core::{CxError, Result};
+
+    pub fn set(paths: Vec<String>) -> Result<()> {
+        let ctx = ClipboardContext::new().map_err(|e| CxError::Io(format!("clipboard unavailable: {e}")))?;
+        ctx.set_files(paths).map_err(|e| CxError::Io(format!("couldn't copy to the clipboard: {e}")))
+    }
+
+    pub fn get() -> Vec<String> {
+        ClipboardContext::new().ok().and_then(|c| c.get_files().ok()).unwrap_or_default().into_iter().map(|f| f.strip_prefix("file://").map(str::to_owned).unwrap_or(f)).collect()
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows, all(target_os = "linux", not(target_os = "android")))))]
+mod os_clipboard {
+    use cx_core::Result;
+
+    pub fn set(_paths: Vec<String>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn get() -> Vec<String> {
+        Vec::new()
+    }
+}

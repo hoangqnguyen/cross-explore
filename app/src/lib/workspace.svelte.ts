@@ -3,6 +3,8 @@ import {
   childUri,
   createFolder,
   errorText,
+  osClipboardGet,
+  osClipboardSet,
   inTauri,
   openEntry,
   places as loadPlaces,
@@ -565,10 +567,20 @@ export class Workspace {
     const uris = t.targets().map((e) => t.uriOf(e));
     if (!uris.length) return;
     clipboard.set(uris, cut ? "cut" : "copy");
+    // Local files also go on the system clipboard for Finder / Explorer.
+    void osClipboardSet(uris).catch(() => {});
     toasts.show(`${cut ? "Cut" : "Copied"} ${uris.length === 1 ? `“${uriName(uris[0])}”` : `${uris.length} items`}`);
   }
 
   async paste(dest = this.activeTab.dirUri) {
+    // Files copied in another app (Finder, Explorer) win when they differ
+    // from what we copied ourselves.
+    const os = await osClipboardGet().catch(() => [] as string[]);
+    const ours = clipboard.uris.filter((u) => u.startsWith("file:"));
+    if (os.length && (os.length !== ours.length || os.some((u) => !ours.includes(u)))) {
+      await transfers.submit({ kind: "copy", sources: os, dest });
+      return;
+    }
     if (!clipboard.uris.length) return;
     const move = clipboard.mode === "cut";
     await transfers.submit({ kind: move ? "move" : "copy", sources: clipboard.uris, dest });

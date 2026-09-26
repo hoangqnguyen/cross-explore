@@ -76,7 +76,7 @@ export const commands: Command[] = [
   { id: "file.delete", label: "Delete permanently…", group: "File", icon: "trash", keys: { both: [m("Mod+Alt+Backspace", "Shift+Delete")], commander: ["Shift+F8"] }, list: true, when: hasTargets, run: () => tab().deletePermanently() },
   { id: "edit.copy", label: "Copy", group: "Edit", icon: "copy", keys: { both: ["Mod+C"] }, list: true, when: hasTargets, run: () => ws.copy(false) },
   { id: "edit.cut", label: "Cut", group: "Edit", icon: "cut", keys: { both: ["Mod+X"] }, list: true, when: hasTargets, run: () => ws.copy(true) },
-  { id: "edit.paste", label: "Paste", group: "Edit", icon: "paste", keys: { both: ["Mod+V"] }, list: true, when: () => clipboard.uris.length > 0 && writable(), run: () => ws.paste() },
+  { id: "edit.paste", label: "Paste", group: "Edit", icon: "paste", keys: { both: ["Mod+V"] }, list: true, when: writable, run: () => ws.paste() },
   { id: "edit.duplicate", label: "Duplicate", group: "Edit", icon: "copy", keys: { both: [m("Mod+D", "Mod+Shift+D")] }, list: true, when: () => hasTargets() && writable(), run: () => ws.duplicate() },
   { id: "edit.undo", label: "Undo", group: "Edit", icon: "undo", keys: { both: ["Mod+Z"] }, list: true, when: () => transfers.undoStack.length > 0, run: () => transfers.undo() },
   { id: "file.copyOther", label: "Copy to other pane", group: "Panes", icon: "copy", keys: { commander: ["F5"], explorer: ["Mod+Shift+5"] }, list: true, when: () => ws.dual && hasTargets(), run: () => ws.toOtherPane(false) },

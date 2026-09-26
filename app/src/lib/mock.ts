@@ -377,6 +377,8 @@ const handlers: Record<string, (a: Args) => unknown> = {
     return names.map((n: string) => ({ original: uri + "/" + encodeURIComponent(n), trashed: null }));
   },
   open_entry: () => undefined,
+  os_clipboard_set: () => undefined,
+  os_clipboard_get: () => [],
   reveal_entry: () => undefined,
   open_terminal: () => undefined,
   async dir_size({ uri, onProgress }: Args) {

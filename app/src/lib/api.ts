@@ -153,6 +153,8 @@ export const trashEntries = (uri: string, names: string[]) => invoke<TrashedItem
 export const openEntry = (uri: string) => invoke<void>("open_entry", { uri });
 export const revealEntry = (uri: string) => invoke<void>("reveal_entry", { uri });
 export const openTerminal = (uri: string) => invoke<void>("open_terminal", { uri });
+export const osClipboardSet = (uris: string[]) => invoke<void>("os_clipboard_set", { uris });
+export const osClipboardGet = () => invoke<string[]>("os_clipboard_get");
 export const statEntry = (uri: string) => invoke<Entry>("stat_entry", { uri });
 export const places = () => invoke<Places>("places");
 export const freeSpace = (uri: string) => invoke<{ free: number; total: number } | null>("free_space", { uri });

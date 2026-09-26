@@ -41,6 +41,9 @@ url.workspace = true
 [target.'cfg(any(target_os = "macos", target_os = "ios", windows, all(target_os = "linux", not(target_os = "android"))))'.dependencies]
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
+[target.'cfg(any(target_os = "macos", windows, all(target_os = "linux", not(target_os = "android"))))'.dependencies.clipboard-rs]
+version = "0.3"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 xattr = "1"
 plist = "1"
