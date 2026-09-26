@@ -133,8 +133,8 @@ fn on_peer_event(app: &Arc<App>, e: PeerEvent) {
             app.events.emit("offer", serde_json::json!({ "offer": { "id": offer_id, "from": { "id": from.device_id, "name": from.name }, "files": files, "total": total } }));
         }
         PeerEvent::OfferProgress { offer_id, direction, peer, state, bytes, total, file, error, .. } => {
-            let state = serde_json::to_value(&state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
-            let outgoing = serde_json::to_value(&direction).ok().and_then(|v| v.as_str().map(|s| s == "outgoing")).unwrap_or(false);
+            let state = serde_json::to_value(state).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
+            let outgoing = serde_json::to_value(direction).ok().and_then(|v| v.as_str().map(|s| s == "outgoing")).unwrap_or(false);
             let id = *offer_jobs().lock().unwrap().entry(offer_id).or_insert_with(|| {
                 let (id, _) = app.task();
                 app.finish_task(id);

@@ -106,7 +106,7 @@ pub async fn search_start(root: String, query: UiQuery, on_event: Channel<Search
             }
         };
         let (scanned, truncated) = stats.as_ref().map(|s| (s.entries_scanned, s.truncated)).unwrap_or((0, false));
-        let _ = on_event.send(SearchEvent::Done { scanned: scanned as u64, elapsed_ms: started.elapsed().as_secs_f64() * 1e3, truncated });
+        let _ = on_event.send(SearchEvent::Done { scanned, elapsed_ms: started.elapsed().as_secs_f64() * 1e3, truncated });
         app.finish_task(id);
     });
     Ok(id)
