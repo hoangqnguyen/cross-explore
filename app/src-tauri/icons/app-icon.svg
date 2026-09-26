@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3aa0ff"/>
+      <stop offset="1" stop-color="#1a4fd6"/>
+    </linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd970"/>
+      <stop offset="1" stop-color="#f3b33d"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1c2"/>
+      <stop offset="1" stop-color="#ffcf5a"/>
+    </linearGradient>
+  </defs>
+  <rect x="80" y="80" width="864" height="864" rx="200" fill="url(#bg)"/>
+  <!-- back folder (left pane) -->
+  <path d="M220 330a40 40 0 0 1 40-40h150l50 50h200a40 40 0 0 1 40 40v250a40 40 0 0 1-40 40H260a40 40 0 0 1-40-40z" fill="url(#back)" opacity=".95"/>
+  <!-- front folder (right pane), offset: two places, one view -->
+  <path d="M364 450a40 40 0 0 1 40-40h150l50 50h160a40 40 0 0 1 40 40v214a40 40 0 0 1-40 40H404a40 40 0 0 1-40-40z" fill="url(#front)"/>
+  <!-- live pulse -->
+  <circle cx="742" cy="330" r="46" fill="#5ef0a0"/>
+  <circle cx="742" cy="330" r="80" fill="none" stroke="#5ef0a0" stroke-width="18" opacity=".45"/>
+</svg>

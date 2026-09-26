@@ -1,0 +1,164 @@
+/* Design tokens. Fluent-inspired, adapted per platform via classes on <html>:
+   .platform-macos / .platform-windows / .platform-linux and .translucent when
+   the window has a native material (vibrancy or Mica) behind the web view. */
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter,
+    Cantarell, "Noto Sans", sans-serif;
+  --font-size: 13px;
+  --row-h: 30px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --titlebar-h: 44px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  --accent: #0067c0;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(0, 103, 192, 0.1);
+  --live: #10a35a;
+
+  --window-solid: #eef1f6;
+  --chrome: rgba(243, 243, 243, 0.6);
+  --layer: #fbfbfb;
+  --layer-2: #ffffff;
+  --flyout: rgba(252, 252, 252, 0.96);
+  --text: #1b1b1b;
+  --text-2: #5c5c5c;
+  --text-3: #8e8e8e;
+  --stroke: rgba(0, 0, 0, 0.08);
+  --stroke-strong: rgba(0, 0, 0, 0.14);
+  --hover: rgba(0, 0, 0, 0.045);
+  --pressed: rgba(0, 0, 0, 0.075);
+  --sel: #d8eaf9;
+  --sel-hover: #cce4f7;
+  --sel-stroke: rgba(0, 103, 192, 0.22);
+  --fresh: rgba(16, 163, 90, 0.22);
+  --shadow-flyout: 0 8px 24px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --danger: #c42b1c;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #4cc2ff;
+    --accent-text: #00121f;
+    --accent-soft: rgba(76, 194, 255, 0.14);
+    --live: #3ddc84;
+
+    --window-solid: #1c1e22;
+    --chrome: rgba(32, 32, 32, 0.55);
+    --layer: #1d1d1d;
+    --layer-2: #262626;
+    --flyout: rgba(44, 44, 44, 0.97);
+    --text: #f3f3f3;
+    --text-2: #c5c5c5;
+    --text-3: #8b8b8b;
+    --stroke: rgba(255, 255, 255, 0.075);
+    --stroke-strong: rgba(255, 255, 255, 0.13);
+    --hover: rgba(255, 255, 255, 0.06);
+    --pressed: rgba(255, 255, 255, 0.09);
+    --sel: rgba(76, 194, 255, 0.17);
+    --sel-hover: rgba(76, 194, 255, 0.22);
+    --sel-stroke: rgba(76, 194, 255, 0.3);
+    --fresh: rgba(61, 220, 132, 0.2);
+    --shadow-flyout: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --danger: #ff99a4;
+  }
+}
+
+.platform-macos {
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
+  --sel-stroke: rgba(0, 122, 255, 0.22);
+}
+@media (prefers-color-scheme: dark) {
+  .platform-macos {
+    --accent: #0a84ff;
+    --accent-text: #ffffff;
+  }
+}
+
+.compact {
+  --row-h: 24px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--font-size);
+  color: var(--text);
+  background: var(--window-solid);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+:root {
+  --sidebar-bg: var(--layer);
+}
+
+/* With a native material the window background shows through the chrome and
+   the navigation pane, like Finder's sidebar and Windows 11 Mica. */
+.translucent body {
+  background: transparent;
+}
+.translucent {
+  --sidebar-bg: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--stroke-strong);
+  border: 4px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-3);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
