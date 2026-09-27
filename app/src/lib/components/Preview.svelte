@@ -6,6 +6,7 @@
   import { renderMarkdown } from "../markdown";
   import { isArchive } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
+  import PdfView from "./PdfView.svelte";
   import ZoomImage from "./ZoomImage.svelte";
 
   let { entry, uri, large = false }: { entry: Item; uri: string; large?: boolean } = $props();
@@ -35,6 +36,7 @@
   let fontFamily = $state<string | null>(null);
   let imageFailed = $state(false);
   let office = $state<OfficeView | null>(null);
+  let pdfFailed = $state(false);
   let officeFailed = $state(false);
 
   $effect(() => {
@@ -47,6 +49,7 @@
     imageFailed = false;
     office = null;
     officeFailed = false;
+    pdfFailed = false;
     let stale = false;
     if (k === "text") {
       previewText(u, large ? 1024 * 1024 : 64 * 1024)
@@ -92,7 +95,9 @@
       <audio src={fileUrl(uri)} controls autoplay={large}></audio>
     </div>
   {:else if kind === "pdf"}
-    {#if large}
+    {#if large && !pdfFailed}
+      <div class="pdfwrap"><PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} /></div>
+    {:else if large}
       <iframe src={fileUrl(uri)} title={entry.name}></iframe>
     {:else}
       <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={(e) => ((e.currentTarget as HTMLElement).style.display = "none")} />
@@ -101,7 +106,7 @@
     <!-- Script-free HTML from cx-office; the empty sandbox also blocks scripts, forms and navigation. -->
     <iframe class="office" class:small={!large} sandbox="" srcdoc={office.html} title={office.title ?? entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "pdf"}
-    <iframe src={fileUrl(office.uri)} title={entry.name}></iframe>
+    <div class="pdfwrap"><PdfView src={fileUrl(office.uri)} /></div>
   {:else if kind === "office" && !officeFailed}
     <div class="loading muted">Rendering {entry.name}…</div>
   {:else if kind === "font" && fontFamily}
@@ -309,6 +314,14 @@
   .child span {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .pdfwrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--pdf-bg, rgb(128 128 128 / 0.18));
   }
   iframe.office {
     box-shadow: 0 0 0 1px var(--border);

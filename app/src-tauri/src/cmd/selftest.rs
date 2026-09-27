@@ -15,6 +15,31 @@ const PNG: &[u8] = &[
     0xAE, 0x42, 0x60, 0x82,
 ];
 
+/// A one-page PDF with a line of text, xref offsets computed.
+fn tiny_pdf() -> Vec<u8> {
+    let text = "BT /F1 24 Tf 72 700 Td (Cross Explore self test) Tj ET";
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{text}\nendstream", text.len()),
+    ];
+    let mut out = String::from("%PDF-1.4\n");
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out += &format!("{} 0 obj\n{o}\nendobj\n", i + 1);
+    }
+    let xref = out.len();
+    out += &format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1);
+    for o in offsets {
+        out += &format!("{o:010} 00000 n \n");
+    }
+    out += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1);
+    out.into_bytes()
+}
+
 fn dir() -> &'static Option<PathBuf> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(|| {
@@ -25,6 +50,7 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("alpha.txt"), "hello cross explore\nline two\n").ok()?;
         std::fs::write(base.join("beta.md"), "# Beta\n\nSome *markdown*.\n").ok()?;
         std::fs::write(base.join("photo.png"), PNG).ok()?;
+        std::fs::write(base.join("doc.pdf"), tiny_pdf()).ok()?;
         std::fs::write(base.join("sheet.csv"), "Fruit,Qty\nApples,3\nPears,5\n").ok()?;
         std::fs::write(base.join("sub").join("nested.txt"), "deep inside\n").ok()?;
         Some(base.canonicalize().unwrap_or(base))

@@ -64,6 +64,43 @@ try {
   check("Quick Look renders a Word document", await t.eval(`(() => { const f = document.querySelector('.ql iframe.office'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('Resume.docx'); })()`));
   await t.key("Escape");
 
+  // PDFs: drawn with pdf.js, so pinch/scroll/keys work like images.
+  await t.open("?path=~/Documents/Invoices");
+  await t.focusList();
+  await t.key("Home");
+  await t.key(" ");
+  const pdfReady = async () => {
+    for (let i = 0; i < 60; i++) {
+      if (await t.eval(`(() => { const c = document.querySelector('.ql .pdf canvas'); return !!c && c.width > 0; })()`)) return true;
+      await sleep(100);
+    }
+    return false;
+  };
+  check("Quick Look draws the PDF with pdf.js", await pdfReady());
+  check("all pages laid out, with a page counter", (await t.eval(`document.querySelectorAll('.ql .pdf canvas').length`)) === 3 && (await t.eval(`document.querySelector('.ql .pageno')?.textContent`)) === "1 / 3");
+  const cssW = () => t.eval(`parseFloat(document.querySelector('.ql .pdf canvas').style.width)`);
+  const pxW = () => t.eval(`document.querySelector('.ql .pdf canvas').width`);
+  const w0 = await cssW();
+  const px0 = await pxW();
+  const pc = await t.eval(`(() => { const r = document.querySelector('.ql .pdf').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; })()`);
+  for (let k = 0; k < 5; k++) await t.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: pc.x, y: pc.y, deltaX: 0, deltaY: -40, modifiers: 2 });
+  await sleep(500);
+  check("pinch (ctrl+wheel) zooms the PDF", (await cssW()) > w0 * 1.5, `${w0} -> ${await cssW()}`);
+  check("pages re-render sharp after zooming", (await pxW()) > px0 * 1.5, `${px0} -> ${await pxW()}`);
+  const sx = await t.eval(`document.querySelector('.ql .pdf').scrollLeft`);
+  check("zoom keeps the point under the cursor (scrolls sideways)", sx > 0, String(sx));
+  await t.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: pc.x, y: pc.y, deltaX: 0, deltaY: 400 });
+  await sleep(200);
+  check("two-finger scroll pans the PDF", (await t.eval(`document.querySelector('.ql .pdf').scrollTop`)) > 0);
+  await t.key("0");
+  await sleep(300);
+  check("0 fits the page again", Math.abs((await cssW()) - w0) < 1, `${w0} vs ${await cssW()}`);
+  await t.key("+");
+  await sleep(300);
+  check("+ zooms the PDF", (await cssW()) > w0 * 1.2);
+  await t.key("Escape");
+  await sleep(150);
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

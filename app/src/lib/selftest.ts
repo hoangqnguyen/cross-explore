@@ -131,6 +131,32 @@ export async function selftest() {
     }
   });
 
+  await check("PDF Quick Look draws pages with pdf.js and zooms", async () => {
+    let blocked = "";
+    const onViolation = (e: SecurityPolicyViolationEvent) => (blocked = `${e.violatedDirective} ${e.blockedURI}`);
+    document.addEventListener("securitypolicyviolation", onViolation);
+    try {
+      await until("listing", () => tab().folder.status === "ready" && has("doc.pdf"));
+      tab().selectOnly(keyOf(tab().folder.items.find((e) => e.name === "doc.pdf")!));
+      quicklook.open = true;
+      const canvas = await until("pdf page", () => document.querySelector<HTMLCanvasElement>(".ql .pdf canvas[data-page='1']")?.width ? document.querySelector<HTMLCanvasElement>(".ql .pdf canvas")! : null, 8000);
+      // Something other than white was drawn (the text).
+      const ctx = canvas!.getContext("2d")!;
+      const px = ctx.getImageData(0, 0, canvas!.width, Math.floor(canvas!.height / 4)).data;
+      let ink = 0;
+      for (let i = 0; i < px.length; i += 4) if (px[i] < 128) ink++;
+      if (!ink) throw new Error("page is blank");
+      const w0 = parseFloat(canvas!.style.width);
+      const box = document.querySelector(".ql .pdf")!.getBoundingClientRect();
+      document.querySelector(".ql .pdf")!.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, ctrlKey: true, clientX: box.left + 50, clientY: box.top + 50, bubbles: true, cancelable: true }));
+      await until("zoomed", () => parseFloat(canvas!.style.width) > w0 * 1.5);
+      if (blocked) throw new Error(`CSP blocked: ${blocked}`);
+    } finally {
+      quicklook.close();
+      document.removeEventListener("securitypolicyviolation", onViolation);
+    }
+  });
+
   await check("recursive name and content search", async () => {
     const byName: string[] = [];
     await search(dir, { text: "nested" }, (e) => e.type === "hits" && byName.push(...e.hits.map((h) => h.entry.name)));

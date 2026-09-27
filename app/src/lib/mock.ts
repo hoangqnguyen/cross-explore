@@ -246,7 +246,30 @@ function fakeImage(uri: string, size: number) {
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
+/** A small valid 3-page PDF (so the pdf.js viewer has something real to draw). */
+function fakePdf(uri: string) {
+  const title = decodeURIComponent(uri.split("/").pop() ?? "").replace(/[()\\]/g, "");
+  const n = 3;
+  const objs: string[] = ["<< /Type /Catalog /Pages 2 0 R >>", `<< /Type /Pages /Kids [${Array.from({ length: n }, (_, i) => `${4 + i * 2} 0 R`).join(" ")}] /Count ${n} >>`, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
+  for (let i = 0; i < n; i++) {
+    const text = `BT /F1 28 Tf 72 700 Td (${title}) Tj 0 -40 Td /F1 18 Tf (Page ${i + 1} of ${n}) Tj ET 0.2 0.5 0.9 rg 72 200 468 300 re f`;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`);
+    objs.push(`<< /Length ${text.length} >>\nstream\n${text}\nendstream`);
+  }
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objs.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return "data:application/pdf;base64," + btoa(out);
+}
+
 export function fileUrl(uri: string) {
+  if (/\.pdf$/i.test(uri)) return fakePdf(uri);
   return /\.(png|jpe?g|heic|gif|webp)$/i.test(uri) ? fakeImage(uri, 800) : "data:text/plain,preview";
 }
 
