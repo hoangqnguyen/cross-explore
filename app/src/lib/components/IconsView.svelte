@@ -21,7 +21,8 @@
 
   let icon = $derived(settings.data.iconSize);
   let cellW = $derived(icon + 36);
-  let cellH = $derived(icon + 48);
+  // Icon + gap + two 16px lines of name + padding, with a little air.
+  let cellH = $derived(icon + 62);
   let cols = $derived(Math.max(1, Math.floor((width - 24) / cellW)));
   let rows = $derived(tab.visible);
   let rowCount = $derived(Math.ceil(rows.length / cols));
@@ -193,7 +194,10 @@
     border-radius: var(--radius);
     contain: layout style;
   }
-  .cell:hover {
+  .cell > :global(.thumb) {
+    flex: none;
+  }
+    .cell:hover {
     background: var(--hover);
   }
   .cell.selected {
@@ -218,6 +222,7 @@
     box-shadow: inset 0 0 0 1.5px var(--accent);
   }
   .name {
+    flex: none;
     max-width: 100%;
     text-align: center;
     font-size: 12px;

@@ -244,6 +244,16 @@ try {
     check("permanent delete removes the row", !(await t.rows()).includes(victim), victim);
   }
 
+  // Icons view: two-line names are never cut off, at any icon size.
+  await t.open("?path=~/Downloads");
+  await t.eval(`window.__cx.ws.activeTab.view = "icons"`);
+  for (const size of [48, 64, 96, 128, 256]) {
+    await t.eval(`window.__cx.settings.data.iconSize = ${size}`);
+    await sleep(200);
+    const clipped = await t.eval(`[...document.querySelectorAll(".pane.active .cell")].filter((c) => { const n = c.querySelector(".name"); return n.getBoundingClientRect().bottom > c.getBoundingClientRect().bottom + 0.5 || (n.scrollHeight > 20 && n.clientHeight < 31); }).length`);
+    check(`icons view names fit at ${size}px`, clipped === 0, `${clipped} clipped`);
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);
