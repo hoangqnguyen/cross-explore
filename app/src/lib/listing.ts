@@ -159,6 +159,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("file.sendTo"),
     { separator: true },
     cmd("file.trash", undefined, true),
+    cmd("file.delete", undefined, true),
   ];
   menu.show(items, e.clientX, e.clientY);
 }

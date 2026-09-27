@@ -229,6 +229,21 @@ try {
   check("move to trash removes the row", !(await t.rows()).includes("cross-explore-0.1.0.dmg"));
   check("toast confirms", (await t.eval(`document.querySelector('.toast')?.textContent ?? ''`)).includes("Moved"));
 
+  // Right-click → Delete permanently… → confirm.
+  {
+    const victim = (await t.rows())[1];
+    await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')].find(r => r.querySelector('.text')?.textContent === ${JSON.stringify(victim)}); r.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 })); })()`);
+    await sleep(150);
+    const labels = await t.eval(`[...document.querySelectorAll('.menu [role=menuitem], .menu button')].map(b => b.textContent.trim())`);
+    check("context menu offers Delete permanently", labels.some((l) => l.startsWith("Delete permanently")), JSON.stringify(labels));
+    await t.clickText(".menu button, .menu [role=menuitem]", "Delete permanently");
+    await sleep(200);
+    check("permanent delete asks first", (await t.eval(`document.querySelector('.modal')?.textContent ?? ''`)).includes("can't undo"));
+    await t.clickText(".modal button", "Delete");
+    await sleep(400);
+    check("permanent delete removes the row", !(await t.rows()).includes(victim), victim);
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

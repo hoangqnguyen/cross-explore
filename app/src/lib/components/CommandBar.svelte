@@ -57,6 +57,7 @@
         { separator: true },
         item("file.copyTo"),
         item("file.moveTo"),
+        item("file.delete"),
         { separator: true },
         item("file.multiRename"),
         item("file.compress"),
