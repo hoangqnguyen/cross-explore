@@ -19,6 +19,7 @@ pub struct Tags {
     db: Mutex<HashMap<String, Vec<String>>>,
     /// Use Finder tags for local files (macOS). Off in tests so they don't
     /// depend on the file system supporting extended attributes.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     finder: bool,
 }
 
