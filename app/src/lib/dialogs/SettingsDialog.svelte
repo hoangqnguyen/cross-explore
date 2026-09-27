@@ -138,6 +138,7 @@
           <p class="muted">No saved servers.</p>
         {/each}
         <button type="button" class="btn" onclick={() => dialogs.ask("connect")}>Connect to server…</button>
+        <button type="button" class="btn" onclick={() => dialogs.ask("cloud")}>Add cloud account…</button>
       {:else}
         <div class="about">
           <img src="/app-icon.svg" alt="" width="72" height="72" />

@@ -127,6 +127,7 @@ export const commands: Command[] = [
   // ---- bookmarks, network, app ----
   { id: "bookmark.toggle", label: "Add to / remove from Favorites", group: "Go", icon: "star", keys: { finder: ["Mod+Ctrl+T"], explorer: ["Mod+B"], commander: ["Mod+D"] }, when: () => tab().folder.kind === "folder", run: () => toggleBookmark() },
   { id: "net.connect", label: "Connect to server…", group: "Network", icon: "server", keys: { all: ["Mod+K"] }, run: () => dialogs.ask("connect") },
+  { id: "net.cloud", label: "Add cloud account (Google Drive, Dropbox, OneDrive)…", group: "Network", icon: "cloud", run: () => dialogs.ask("cloud") },
   { id: "net.pair", label: "Pair a device…", group: "Network", icon: "link", run: () => dialogs.ask("pair") },
   { id: "net.scan", label: "Scan for nearby devices", group: "Network", icon: "radar", run: () => import("./stores/devices.svelte").then((d) => d.devices.scan()) },
   { id: "transfers.show", label: "Show transfers", group: "App", icon: "transfer", keys: { finder: ["Mod+Alt+L"], explorer: ["Mod+J"] }, run: () => (transfers.flyoutOpen = !transfers.flyoutOpen) },

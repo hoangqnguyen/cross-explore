@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dialogs } from "../stores/dialogs.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
+  import CloudDialog from "./CloudDialog.svelte";
   import ConnectDialog from "./ConnectDialog.svelte";
   import DiffDialog from "./DiffDialog.svelte";
   import DestinationDialog from "./DestinationDialog.svelte";
@@ -32,6 +33,7 @@
     pair: PairDialog,
     tags: TagsDialog,
     destination: DestinationDialog,
+    cloud: CloudDialog,
   } as const;
 </script>
 

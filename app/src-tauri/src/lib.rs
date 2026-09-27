@@ -26,6 +26,10 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
         .register_asynchronous_uri_scheme_protocol("cxthumb", protocols::thumb_protocol)
         .invoke_handler(tauri::generate_handler![
+            cmd::cloud::cloud_services,
+            cmd::cloud::cloud_set_client,
+            cmd::cloud::cloud_sign_in,
+            cmd::cloud::open_web_page,
             cmd::files::list_dir,
             cmd::files::watch_dir,
             cmd::files::unwatch_dir,
@@ -135,6 +139,7 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     vfs.register(Arc::new(cx_webdav::DavConnector::http()));
     vfs.register(Arc::new(cx_webdav::DavConnector::https()));
     vfs.register(Arc::new(cx_s3::S3Connector));
+    cmd::cloud::register(&vfs, &data_dir);
     sftp::register(&vfs, &data_dir);
     cx_archive::ArchiveProvider::install(&vfs, cache_dir.join("archives"));
 

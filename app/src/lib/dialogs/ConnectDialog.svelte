@@ -3,6 +3,7 @@
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
   import { ws } from "../workspace.svelte";
+  import Icon from "../components/Icon.svelte";
   import Modal from "./Modal.svelte";
 
   let { host: initialHost = "", scheme: initialScheme = "smb" }: { host?: string; scheme?: string } = $props();
@@ -57,6 +58,12 @@
 </script>
 
 <Modal title="Connect to server" width={480} onsubmit={submit}>
+  <div class="cloud">
+    <span class="muted">Cloud:</span>
+    {#each [["gdrive", "Google Drive"], ["dropbox", "Dropbox"], ["onedrive", "OneDrive"]] as [id, label]}
+      <button type="button" class="btn" onclick={() => (dialogs.close(null), void dialogs.ask("cloud", { service: id }))}><Icon name="cloud" size={14} /> {label}</button>
+    {/each}
+  </div>
   <label class="field">
     Protocol
     <select bind:value={scheme}>
@@ -89,3 +96,20 @@
     <button type="submit" class="btn primary" disabled={!uri || busy}>{busy ? "Connecting…" : "Connect"}</button>
   {/snippet}
 </Modal>
+
+<style>
+  .cloud {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cloud .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+</style>

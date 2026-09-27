@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { disconnectServer, errorText, type Device } from "../api";
+  import { disconnectServer, errorText, isCloudUri, type Device } from "../api";
   import { formatSize } from "../format";
   import { dropTarget } from "../listing";
   import { menu } from "../menu.svelte";
@@ -132,10 +132,10 @@
     {#if !collapsed.net}
       <div class="group">
         {#each settings.data.servers as s (s.uri)}
-          {@render item(s.name, s.uri, "server", { title: s.uri, menu: (e) => serverMenu(e, s.uri, true) })}
+          {@render item(s.name, s.uri, isCloudUri(s.uri) ? "cloud" : "server", { title: s.uri, menu: (e) => serverMenu(e, s.uri, true) })}
         {/each}
         {#each loose as c (c)}
-          {@render item(c.replace(/^\w+:\/\//, ""), c, "server", { title: c, menu: (e) => serverMenu(e, c, false) })}
+          {@render item(c.replace(/^\w+:\/\//, ""), c, isCloudUri(c) ? "cloud" : "server", { title: c, menu: (e) => serverMenu(e, c, false) })}
         {/each}
         {#each devices.nearby as d (d.id)}
           {@const target = deviceTarget(d)}

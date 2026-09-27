@@ -168,6 +168,22 @@ export const fullDiskAccess = () => invoke<boolean>("full_disk_access");
 export const openFullDiskAccessSettings = () => invoke<void>("open_full_disk_access_settings");
 export const statEntry = (uri: string) => invoke<Entry>("stat_entry", { uri });
 export const places = () => invoke<Places>("places");
+
+export interface CloudService {
+  service: "gdrive" | "dropbox" | "onedrive";
+  label: string;
+  configured: boolean;
+  clientId: string | null;
+  hasSecret: boolean;
+  env: [string, string | null];
+}
+export const CLOUD_SCHEMES = ["gdrive", "dropbox", "onedrive"];
+export const isCloudUri = (uri: string) => CLOUD_SCHEMES.some((s) => uri.startsWith(s + "://"));
+export const cloudServices = () => invoke<CloudService[]>("cloud_services");
+export const cloudSetClient = (service: string, clientId: string, clientSecret: string | null) => invoke<void>("cloud_set_client", { service, clientId, clientSecret });
+/** Browser sign-in; resolves with the account's root URI. */
+export const cloudSignIn = (service: string) => invoke<string>("cloud_sign_in", { service });
+export const openWebPage = (url: string) => invoke<void>("open_web_page", { url });
 export const freeSpace = (uri: string) => invoke<{ free: number; total: number } | null>("free_space", { uri });
 
 export interface TrashedItem {

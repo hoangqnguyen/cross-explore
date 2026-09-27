@@ -1,5 +1,6 @@
 //! IPC surface for the UI, one module per area.
 
+pub mod cloud;
 pub mod files;
 pub mod jobs;
 pub mod net;

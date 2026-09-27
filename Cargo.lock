@@ -1112,6 +1112,7 @@ dependencies = [
  "block2",
  "clipboard-rs",
  "cx-archive",
+ "cx-cloud",
  "cx-core",
  "cx-discovery",
  "cx-ftp",

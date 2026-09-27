@@ -305,6 +305,7 @@ const tags = new Map<string, string[]>([["file://" + HOME + "/Documents/Budget%2
 // ---------- handlers ----------
 
 type Args = any;
+const mockCloud = { gdrive: false, dropbox: false, onedrive: false };
 const handlers: Record<string, (a: Args) => unknown> = {
   subscribe({ onEvent }: Args) {
     emit = onEvent;
@@ -522,6 +523,17 @@ const handlers: Record<string, (a: Args) => unknown> = {
     nasSignedIn = false;
   },
   trust_host_key: () => undefined,
+  cloud_services: () => [
+    { service: "gdrive", label: "Google Drive", configured: mockCloud.gdrive, clientId: mockCloud.gdrive ? "demo.apps.googleusercontent.com" : null, hasSecret: true, env: ["CX_GDRIVE_CLIENT_ID", "CX_GDRIVE_CLIENT_SECRET"] },
+    { service: "dropbox", label: "Dropbox", configured: mockCloud.dropbox, clientId: null, hasSecret: false, env: ["CX_DROPBOX_APP_KEY", "CX_DROPBOX_APP_SECRET"] },
+    { service: "onedrive", label: "OneDrive", configured: mockCloud.onedrive, clientId: null, hasSecret: false, env: ["CX_ONEDRIVE_CLIENT_ID", null] },
+  ],
+  cloud_set_client: ({ service, clientId }: { service: keyof typeof mockCloud; clientId: string }) => void (mockCloud[service] = !!clientId),
+  async cloud_sign_in({ service }: { service: string }) {
+    await sleep(300);
+    return `${service}://demo@example.com/`;
+  },
+  open_web_page: () => undefined,
   connections: () => (nasSignedIn ? ["smb://nas.local"] : []),
   discovery_devices: () => fakeDevices,
   discovery_refresh: () => undefined,

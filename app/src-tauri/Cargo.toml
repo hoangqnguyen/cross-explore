@@ -27,6 +27,7 @@ cx-sftp = { path = "../../crates/cx-sftp" }
 cx-ftp = { path = "../../crates/cx-ftp" }
 cx-term = { path = "../../crates/cx-term" }
 cx-s3 = { path = "../../crates/cx-s3" }
+cx-cloud = { path = "../../crates/cx-cloud" }
 tokio-util = "0.7"
 mime_guess = "2"
 percent-encoding = "2"

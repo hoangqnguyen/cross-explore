@@ -36,6 +36,12 @@ pub enum Scheme {
     /// S3-compatible object storage (AWS, MinIO, R2, B2, Wasabi…). The host
     /// is the service endpoint and the first path segment the bucket.
     S3,
+    /// Google Drive (`gdrive://me@gmail.com/My Drive/…`); served by cx-cloud.
+    GDrive,
+    /// Dropbox (`dropbox://me@example.com/…`); served by cx-cloud.
+    Dropbox,
+    /// OneDrive personal/business via Microsoft Graph; served by cx-cloud.
+    OneDrive,
 }
 
 impl Scheme {
@@ -49,6 +55,9 @@ impl Scheme {
             Scheme::Davs => "davs",
             Scheme::Peer => "peer",
             Scheme::S3 => "s3",
+            Scheme::GDrive => "gdrive",
+            Scheme::Dropbox => "dropbox",
+            Scheme::OneDrive => "onedrive",
         }
     }
 
@@ -62,6 +71,9 @@ impl Scheme {
             "davs" | "webdavs" | "https" => Scheme::Davs,
             "peer" | "cx" => Scheme::Peer,
             "s3" => Scheme::S3,
+            "gdrive" | "googledrive" => Scheme::GDrive,
+            "dropbox" => Scheme::Dropbox,
+            "onedrive" => Scheme::OneDrive,
             _ => return None,
         })
     }
@@ -74,8 +86,13 @@ impl Scheme {
             Scheme::Dav => 80,
             Scheme::Davs => 443,
             Scheme::Peer => 47470,
-            Scheme::S3 => 443,
+            Scheme::S3 | Scheme::GDrive | Scheme::Dropbox | Scheme::OneDrive => 443,
         }
+    }
+
+    /// Google Drive, Dropbox or OneDrive (signed in through the browser).
+    pub fn is_cloud(self) -> bool {
+        matches!(self, Scheme::GDrive | Scheme::Dropbox | Scheme::OneDrive)
     }
 
     pub fn label(self) -> &'static str {
@@ -87,6 +104,9 @@ impl Scheme {
             Scheme::Dav | Scheme::Davs => "WebDAV",
             Scheme::Peer => "Cross Explore",
             Scheme::S3 => "S3",
+            Scheme::GDrive => "Google Drive",
+            Scheme::Dropbox => "Dropbox",
+            Scheme::OneDrive => "OneDrive",
         }
     }
 }
@@ -175,7 +195,7 @@ pub enum Location {
 pub struct Crumb {
     pub label: String,
     pub uri: String,
-    /// Icon hint for the UI: "home", "drive", "server", "share", "archive" or "folder".
+    /// Icon hint for the UI: "home", "drive", "server", "cloud", "share", "archive" or "folder".
     pub icon: &'static str,
 }
 
@@ -469,11 +489,12 @@ fn remote_info(endpoint: &Endpoint, path: &str) -> LocationInfo {
         Some(u) if endpoint.scheme != Scheme::Peer => format!("{u}@{}", endpoint.host),
         _ => endpoint.host.clone(),
     };
-    let mut crumbs = vec![Crumb { label: host_label.clone(), uri: Location::remote(endpoint.clone(), "/").uri(), icon: "server" }];
+    let cloud = endpoint.scheme.is_cloud();
+    let mut crumbs = vec![Crumb { label: host_label.clone(), uri: Location::remote(endpoint.clone(), "/").uri(), icon: if cloud { "cloud" } else { "server" } }];
     let mut acc = String::new();
     for (i, seg) in path.split('/').filter(|s| !s.is_empty()).enumerate() {
         acc = join_posix(&acc, seg);
-        let icon = if i == 0 && matches!(endpoint.scheme, Scheme::Smb | Scheme::S3) { "share" } else { "folder" };
+        let icon = if i == 0 && matches!(endpoint.scheme, Scheme::Smb | Scheme::S3 | Scheme::GDrive) { "share" } else { "folder" };
         crumbs.push(Crumb { label: seg.to_string(), uri: Location::remote(endpoint.clone(), acc.clone()).uri(), icon });
     }
     LocationInfo {

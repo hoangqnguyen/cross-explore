@@ -210,6 +210,16 @@ try {
   check("Explorer: F2 renames", await t.eval(`!!document.activeElement?.classList.contains('rename')`));
   await t.key("Escape");
 
+  // Cloud account: paste a client ID, sign in through the (mock) browser, lands in the sidebar.
+  await t.eval(`void window.__cx.dialogs.ask("cloud", { service: "dropbox", navigate: false })`);
+  await sleep(300);
+  check("cloud dialog asks for the App key", (await t.eval(`document.querySelector('.modal')?.textContent ?? ''`)).includes("App key"));
+  await t.eval(`(() => { const i = document.querySelector('.modal input[type=text]'); i.value = 'demo-key'; i.dispatchEvent(new Event('input')); })()`);
+  await t.clickText(".modal button", "Sign in with browser");
+  await sleep(900);
+  check("signed-in account is added to the sidebar", (await t.eval(`[...document.querySelectorAll('.sidebar .item .label')].map(e => e.textContent).join('|')`)).includes("Dropbox (demo@example.com)"));
+  check("cloud dialog closes after sign-in", !(await t.eval(`!!document.querySelector('.modal')`)));
+
   // Trash.
   await t.open("?path=~/Downloads");
   await t.focusList();

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Loading skeleton, errors (with sign-in / trust actions) and empty states,
   // shared by all views.
-  import { errorText, trustHostKey } from "../api";
+  import { errorText, isCloudUri, trustHostKey } from "../api";
   import { dialogs } from "../stores/dialogs.svelte";
   import { toasts } from "../toasts.svelte";
   import type { Tab } from "../workspace.svelte";
@@ -25,7 +25,11 @@
 
   async function signIn() {
     if (detail?.kind === "authRequired") {
-      const ok = await dialogs.ask("signIn", { uri: detail.message.uri, user: detail.message.user, reason: detail.message.reason });
+      const u = detail.message.uri;
+      const cloud = isCloudUri(u);
+      const ok = cloud
+        ? await dialogs.ask("cloud", { service: u.slice(0, u.indexOf(":")), navigate: false })
+        : await dialogs.ask("signIn", { uri: u, user: detail.message.user, reason: detail.message.reason });
       if (ok) tab.reload();
     } else if (detail?.kind === "hostKeyUnknown") {
       const key = detail.message;
