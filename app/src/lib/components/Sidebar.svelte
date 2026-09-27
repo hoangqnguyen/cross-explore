@@ -4,7 +4,7 @@
   import { dropTarget } from "../listing";
   import { menu } from "../menu.svelte";
   import { tagUri } from "../search.svelte";
-  import { devices } from "../stores/devices.svelte";
+  import { deviceTarget, devices } from "../stores/devices.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
   import { ui } from "../stores/ui.svelte";
@@ -68,10 +68,6 @@
     }
   }
 
-  function deviceTarget(d: Device): string | null {
-    const order = ["peer", "smb", "sftp", "davs", "dav", "ftps", "ftp"];
-    return [...d.services].sort((a, b) => order.indexOf(a.scheme) - order.indexOf(b.scheme))[0]?.uri ?? null;
-  }
 
   let savedUris = $derived(new Set(settings.data.servers.map((s) => norm(s.uri))));
   let loose = $derived(devices.connected.filter((c) => !savedUris.has(norm(c)) && !devices.nearby.some((d) => d.services.some((s) => norm(s.uri) === norm(c)))));

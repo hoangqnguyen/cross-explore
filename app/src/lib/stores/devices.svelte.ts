@@ -48,3 +48,9 @@ class Devices {
 }
 
 export const devices = new Devices();
+
+/** The best way to browse a device: peer, then SMB, SFTP, WebDAV, FTP. */
+export function deviceTarget(d: Device): string | null {
+  const order = ["peer", "smb", "sftp", "davs", "dav", "ftps", "ftp"];
+  return [...d.services].sort((a, b) => order.indexOf(a.scheme) - order.indexOf(b.scheme))[0]?.uri ?? null;
+}

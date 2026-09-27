@@ -2,10 +2,11 @@
   // "Copy to…" / "Move to…": pick destinations from everywhere the app knows
   // about (other pane, tabs, favorites, recents, servers, devices) or browse
   // to one. Copy can go to several places at once; one job per destination.
-  import { errorText, listDir, uriName, type ConflictPolicy, type Entry } from "../api";
+  import { asCxError, connectServer, errorText, isCloudUri, listDir, trustHostKey, type CxError, uriName, type ConflictPolicy, type Device, type Entry } from "../api";
   import FileIcon from "../components/FileIcon.svelte";
   import Icon, { type IconName } from "../components/Icon.svelte";
-  import { devices } from "../stores/devices.svelte";
+  import { deviceTarget, devices } from "../stores/devices.svelte";
+  import DeviceIcon from "../components/DeviceIcon.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
   import { transfers } from "../stores/transfers.svelte";
@@ -81,19 +82,60 @@
   let browseUri = $state(ws.activeTab.folder.kind === "folder" ? ws.activeTab.dirUri : (ws.places?.home.uri ?? "~"));
   let browseDirs = $state<Entry[] | null>(null);
   let browseError = $state<string | null>(null);
+  let browseProblem = $state<CxError | null>(null);
+  let retry = $state(0);
+  let signUser = $state("");
+  let signPass = $state("");
+  let signing = $state(false);
   let pathInput = $state("");
 
   /** Pseudo location: the list of drives (plus home and cloud folders). */
   const DRIVES = "cx:drives";
-  let drives = $derived([
-    ...(ws.places ? [{ uri: ws.places.home.uri, label: ws.places.home.name, detail: "Home", icon: "home" as IconName }] : []),
-    ...(ws.places?.volumes ?? []).map((v) => ({ uri: v.uri, label: v.name, detail: pretty(v.uri), icon: (v.removable ? "external" : "drive") as IconName })),
-    ...(ws.places?.cloud ?? []).map((c) => ({ uri: c.uri, label: c.name, detail: c.account ?? "Cloud", icon: "cloud" as IconName })),
-  ]);
+  interface Spot {
+    uri: string | null;
+    label: string;
+    detail: string;
+    icon?: IconName;
+    device?: Device;
+    offline?: boolean;
+  }
+  let drives = $derived.by(() => {
+    const sections: { title: string; spots: Spot[] }[] = [];
+    const local: Spot[] = [
+      ...(ws.places ? [{ uri: ws.places.home.uri, label: ws.places.home.name, detail: "Home", icon: "home" as IconName }] : []),
+      ...(ws.places?.volumes ?? []).map((v) => ({ uri: v.uri, label: v.name, detail: pretty(v.uri), icon: (v.removable ? "external" : "drive") as IconName })),
+    ];
+    sections.push({ title: "Drives", spots: local });
+    const cloud = (ws.places?.cloud ?? []).map((c) => ({ uri: c.uri, label: c.name, detail: c.account ?? "Synced folder", icon: "cloud" as IconName }));
+    if (cloud.length) sections.push({ title: "Cloud", spots: cloud });
+    // Everything the sidebar's Network section shows: saved servers, other
+    // connected servers, nearby and tailnet devices (and their shares).
+    const seen = new Set<string>();
+    const net: Spot[] = [];
+    const add = (s: Spot) => {
+      const k = s.uri ? norm(s.uri) : s.label;
+      if (seen.has(k)) return;
+      seen.add(k);
+      net.push(s);
+    };
+    for (const srv of settings.data.servers) add({ uri: srv.uri, label: srv.name, detail: srv.uri.replace(/^(\w+):\/\/.*/, "$1").toUpperCase(), icon: isCloudUri(srv.uri) ? "cloud" : "server" });
+    for (const c of devices.connected) add({ uri: c, label: c.replace(/^\w+:\/\//, "").replace(/\/$/, ""), detail: "Connected", icon: "server" });
+    for (const d of devices.nearby) {
+      const target = deviceTarget(d);
+      const offline = !!d.tailnet && !d.tailnet.online;
+      const svc = d.services.find((s) => s.uri === target);
+      add({ uri: target, label: d.name, detail: offline ? "Offline" : (svc?.label ?? "No file sharing found"), device: d, offline: offline || !target });
+      for (const sh of d.shares) add({ uri: sh.uri, label: `${d.name} › ${sh.name}`, detail: "Share", icon: "folder" });
+    }
+    sections.push({ title: "Network", spots: net });
+    return sections;
+  });
 
   $effect(() => {
     if (!browsing) return;
+    void retry;
     const uri = browseUri;
+    browseProblem = null;
     if (uri === DRIVES) {
       browseDirs = [];
       browseError = null;
@@ -107,8 +149,33 @@
       else if (ev.type === "batch") dirs.push(...ev.entries.filter((e) => e.isDir && (settings.data.showHidden || !e.hidden)));
     })
       .then(() => (browseDirs = dirs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))))
-      .catch((e) => (browseError = errorText(e)));
+      .catch((e) => {
+        browseError = errorText(e);
+        browseProblem = asCxError(e);
+        if (browseProblem?.kind === "authRequired") signUser = browseProblem.message.user ?? "";
+      });
   });
+
+  /** Sign in (or trust the SSH key) right here, then list again. */
+  async function fixAccess() {
+    const p = browseProblem;
+    if (!p || signing) return;
+    signing = true;
+    try {
+      if (p.kind === "authRequired") {
+        await connectServer(p.message.uri, { user: signUser, secret: signPass ? { type: "password", password: signPass } : { type: "none" } }, true);
+        signPass = "";
+      } else if (p.kind === "hostKeyUnknown") {
+        await trustHostKey(p.message.uri, p.message.keyType, p.message.fingerprint);
+      }
+      retry++;
+    } catch (e) {
+      browseError = errorText(e);
+      browseProblem = asCxError(e) ?? p;
+    } finally {
+      signing = false;
+    }
+  }
 
   const upOf = (uri: string) => {
     if (uri === DRIVES) return null;
@@ -171,14 +238,35 @@
       </div>
       <div class="blist">
         {#if browseUri === DRIVES}
-          {#each drives as d (d.uri)}
-            <button type="button" class="dir" onclick={() => (browseUri = d.uri)}>
-              <Icon name={d.icon} size={16} />
-              <span>{d.label}</span>
-              <span class="muted ddetail">{d.detail}</span>
-              <Icon name="chevronRight" size={11} />
-            </button>
+          {#each drives as sec (sec.title)}
+            <div class="bsection">{sec.title}</div>
+            {#each sec.spots as d, i (d.uri ?? `${d.label}-${i}`)}
+              <button type="button" class="dir" disabled={!d.uri || d.offline} onclick={() => d.uri && (browseUri = d.uri)} title={d.uri ?? d.label}>
+                {#if d.device}<DeviceIcon kind={d.device.kind} size={16} />{:else}<Icon name={d.icon ?? "folder"} size={16} />{/if}
+                <span>{d.label}</span>
+                <span class="muted ddetail">{d.detail}</span>
+                <Icon name="chevronRight" size={11} />
+              </button>
+            {/each}
+            {#if sec.title === "Network" && !sec.spots.length}
+              <p class="muted">No servers or devices yet — type a server URL above, or connect with ⌘K.</p>
+            {/if}
           {/each}
+        {:else if browseProblem?.kind === "authRequired"}
+          <div class="signin">
+            <p>{browseError}</p>
+            <div class="row">
+              <label class="field">User<input type="text" bind:value={signUser} autocomplete="username" spellcheck="false" /></label>
+              <label class="field">Password<input type="password" bind:value={signPass} autocomplete="current-password" onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), fixAccess())} /></label>
+            </div>
+            <button type="button" class="btn primary" disabled={signing} onclick={fixAccess}>{signing ? "Signing in…" : "Sign in"}</button>
+          </div>
+        {:else if browseProblem?.kind === "hostKeyUnknown"}
+          <div class="signin">
+            <p>{browseProblem.message.changed ? "⚠️ This server's key has CHANGED since you last connected." : "First connection to this server."} Key {browseProblem.message.keyType}:</p>
+            <code>{browseProblem.message.fingerprint}</code>
+            <button type="button" class="btn primary" disabled={signing} onclick={fixAccess}>Trust and connect</button>
+          </div>
         {:else if browseError}
           <p class="error">{browseError}</p>
         {:else if !browseDirs}
@@ -354,6 +442,35 @@
   }
   .dir span {
     flex: 1;
+  }
+  .signin {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px;
+  }
+  .signin .row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .signin .field {
+    flex: 1;
+  }
+  .signin code {
+    font-size: 12px;
+    word-break: break-all;
+  }
+  .bsection {
+    padding: 8px 8px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-2, inherit);
+    opacity: 0.7;
+  }
+  .dir:disabled {
+    opacity: 0.45;
   }
   .dir .ddetail {
     flex: none;

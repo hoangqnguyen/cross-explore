@@ -254,6 +254,30 @@ try {
     check(`icons view names fit at ${size}px`, clipped === 0, `${clipped} clipped`);
   }
 
+  // Copy to… → browse → Drives lists network devices; sign in inline and browse a share.
+  await t.open("?path=~");
+  await sleep(1000);
+  await t.eval(`void window.__cx.dialogs.ask("destination", { uris: ["file:///Users/demo/Downloads"], mode: "copy" })`);
+  await sleep(300);
+  await t.clickText(".modal button", "Choose another folder");
+  await sleep(300);
+  await t.click('.modal [aria-label="Drives"]');
+  await sleep(300);
+  {
+    const sections = await t.eval(`[...document.querySelectorAll('.modal .bsection')].map(e => e.textContent)`);
+    check("browser Drives view has Drives, Cloud and Network", JSON.stringify(sections) === '["Drives","Cloud","Network"]', JSON.stringify(sections));
+    check("network devices are listed", (await t.eval(`[...document.querySelectorAll('.modal .dir')].map(e => e.textContent).join('|')`)).includes("synology"));
+    await t.clickText(".modal .dir", "synology");
+    await sleep(600);
+    check("server that needs a password asks inline", await t.eval(`!!document.querySelector('.modal .signin input[type=password]')`));
+    await t.eval(`(() => { const [u, p] = document.querySelectorAll('.modal .signin input'); u.value = 'demo'; u.dispatchEvent(new Event('input')); p.value = 'demo'; p.dispatchEvent(new Event('input')); })()`);
+    await t.clickText(".modal .signin button", "Sign in");
+    await sleep(900);
+    const listed = await t.eval(`[...document.querySelectorAll('.modal .blist .dir')].map(e => e.textContent.trim())`);
+    check("after signing in, the server's folders list", listed.includes("Media"), JSON.stringify(listed));
+    await t.eval(`window.__cx.dialogs.close(null)`);
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

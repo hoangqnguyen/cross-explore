@@ -175,8 +175,15 @@ fn provider_of(name: &str) -> Option<(&'static str, &'static str)> {
 
 /// `GoogleDrive-me@example.com` → `me@example.com`; `OneDrive-Personal` → `Personal`.
 fn account_of(dir_name: &str) -> Option<String> {
-    let (_, rest) = dir_name.split_once(['-', ' '])?;
-    let rest = rest.trim().trim_start_matches("- ").trim();
+    // Drop the service's own name first ("Google Drive", "iCloud Drive"), so
+    // only what follows it can be an account.
+    let lower = dir_name.to_ascii_lowercase();
+    let service = ["googledrive", "google drive", "icloud drive", "iclouddrive", "onedrive", "dropbox", "pclouddrive", "nextcloud", "mega", "box"]
+        .into_iter()
+        .find(|p| lower.starts_with(p))?;
+    let rest = &dir_name[service.len()..];
+    let rest = rest.trim_start_matches([' ', '-', '(']).trim_end_matches(')');
+    let rest = rest.trim();
     (!rest.is_empty()).then(|| rest.to_string())
 }
 
@@ -188,7 +195,9 @@ fn cloud_places(home: &Path) -> Vec<CloudPlace> {
     let mut found: Found = Vec::new();
     fn add(found: &mut Found, path: PathBuf, dir_name: &str, fixed: Option<(&'static str, &'static str)>) {
         let Some((provider, label)) = fixed.or_else(|| provider_of(dir_name)) else { return };
-        if !path.is_dir() || found.iter().any(|f| f.0 == path) {
+        // `~/Google Drive` is often a link to the CloudStorage folder: list it once.
+        let real = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        if !path.is_dir() || found.iter().any(|f| f.0 == path || std::fs::canonicalize(&f.0).map(|r| r == real).unwrap_or(false)) {
             return;
         }
         found.push((path, provider, label.to_string(), account_of(dir_name)));
@@ -272,6 +281,9 @@ mod tests {
         assert_eq!(account_of("OneDrive - Contoso").as_deref(), Some("Contoso"));
         assert_eq!(provider_of("Dropbox").unwrap().0, "dropbox");
         assert_eq!(account_of("Dropbox"), None);
+        assert_eq!(account_of("Google Drive"), None);
+        assert_eq!(account_of("Dropbox (Work)").as_deref(), Some("Work"));
+        assert_eq!(account_of("OneDrive-Personal").as_deref(), Some("Personal"));
         assert!(provider_of("Documents").is_none());
         assert!(provider_of("MegaProject").is_none() && provider_of("Boxes").is_none());
     }
@@ -285,7 +297,15 @@ mod tests {
             std::fs::create_dir_all(home.path().join("Library/CloudStorage/GoogleDrive-me@example.com")).unwrap();
             std::fs::create_dir_all(home.path().join("Library/CloudStorage/OneDrive-Personal")).unwrap();
         }
+        #[cfg(unix)]
+        if cfg!(target_os = "macos") {
+            // A home link to the CloudStorage folder is the same place.
+            std::os::unix::fs::symlink(home.path().join("Library/CloudStorage/GoogleDrive-me@example.com"), home.path().join("Google Drive")).unwrap();
+        }
         let got = cloud_places(home.path());
+        if cfg!(target_os = "macos") {
+            assert_eq!(got.iter().filter(|c| c.provider == "google").count(), 1, "{:?}", got.iter().map(|c| &c.name).collect::<Vec<_>>());
+        }
         let names: Vec<&str> = got.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"Dropbox"), "{names:?}");
         assert!(!names.contains(&"Documents"));
