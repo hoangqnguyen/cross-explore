@@ -699,6 +699,17 @@ impl App {
                 }
             }
             PromptKind::Filter => self.tab_mut().filter = value,
+            PromptKind::SaveWorkspace => {
+                let name = value.trim().to_string();
+                if name.is_empty() {
+                    return;
+                }
+                let session = self.session();
+                self.settings.workspaces.retain(|w| w.name != name);
+                self.settings.workspaces.push(crate::settings::Workspace { name: name.clone(), session });
+                self.save_settings();
+                self.toast(format!("Saved workspace “{name}”"));
+            }
         }
     }
 
@@ -734,6 +745,10 @@ impl App {
         for t in cx_engine::tags::TAG_COLORS {
             items.push(MenuItem::new(format!("Tag: {t}"), "", MenuAction::Navigate { uri: super::sources::tag_uri(t), pane: None }));
         }
+        for w in &self.settings.workspaces {
+            let n: usize = w.session.panes.iter().map(|p| p.tabs.len()).sum();
+            items.push(MenuItem::new(format!("Workspace: {}", w.name), format!("{n} tabs"), MenuAction::Workspace(w.name.clone())));
+        }
         for r in &self.settings.recent {
             items.push(MenuItem::new(crate::util::display(r), "recent folder", MenuAction::Navigate { uri: r.clone(), pane: None }));
         }
@@ -767,6 +782,26 @@ pub fn rank_palette(p: &mut Palette) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn palette_ranks_fuzzily_and_offers_typed_paths() {
+        let items = ["Copy", "Copy to…", "Move to…", "Connect to server…", "Toggle dual pane"].iter().map(|l| MenuItem::new(*l, "", MenuAction::None)).collect();
+        let mut p = Palette { input: TextInput::new("cpyto"), items, results: vec![], cursor: 0 };
+        rank_palette(&mut p);
+        assert_eq!(p.items[p.results[0].0].label, "Copy to…");
+        assert_eq!(p.results[0].1, vec![0, 2, 3, 5, 6], "matched characters to highlight");
+        p.input.set("dual");
+        rank_palette(&mut p);
+        assert_eq!(p.items[p.results[0].0].label, "Toggle dual pane");
+        assert_eq!(p.results.len(), 1);
+        p.input.set("sftp://nas/home");
+        rank_palette(&mut p);
+        assert_eq!(p.items[p.results[0].0].label, "Go to “sftp://nas/home”");
+        assert_eq!(p.items[p.results[0].0].action, MenuAction::Navigate { uri: "sftp://nas/home".into(), pane: None });
+        p.input.set("");
+        rank_palette(&mut p);
+        assert_eq!(p.results.len(), 5, "empty query lists everything, no stale Go to");
+    }
 
     #[test]
     fn completion_prefix() {

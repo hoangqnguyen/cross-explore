@@ -325,6 +325,10 @@ fn status(f: &mut Frame, app: &App, theme: &Theme, pr: &PaneRects, t: &Tab, acti
     let n = t.rows().len();
     let loading = t.folder.status == Status::Loading;
     let mut text = if loading && n > 0 { format!("Loading… {}", format::count(t.folder.loaded.max(n))) } else { format::plural(n, "item", "items") };
+    if matches!(t.source, Source::Compare { .. }) {
+        let km = app.settings.keymap;
+        text.push_str(if km == crate::settings::Keymap::Commander { " · Enter diff · F5 sync → · F6 sync ← · palette: both ways" } else { " · Enter diff · palette: Sync" });
+    }
     if let Source::Search { scanned, truncated, task, .. } = &t.source {
         if task.is_none() {
             text.push_str(&format!(" · {} scanned{}", format::count(*scanned as usize), if *truncated { " (stopped at the limit)" } else { "" }));

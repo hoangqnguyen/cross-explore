@@ -33,6 +33,18 @@ impl App {
     /// Enter: folders and archives navigate (several open in tabs), files
     /// open in their default apps.
     pub(crate) fn open_targets(&mut self, new_tab: bool) {
+        // Compare view: rows are relative paths; Enter diffs a changed file.
+        if let Source::Compare { left, right, .. } = &self.tab().source {
+            let Some(item) = self.tab().cursor_item() else { return };
+            if item.entry.is_dir {
+                self.toast("Folders: use sync (F5 / F6 in Commander keys, or the palette)");
+                return;
+            }
+            let rel = item.entry.name.clone();
+            let (l, r) = (join_rel(left, &rel), join_rel(right, &rel));
+            self.show_diff(l, r);
+            return;
+        }
         let t = self.tab();
         let targets: Vec<(String, bool, bool)> = t
             .targets()
@@ -56,17 +68,8 @@ impl App {
                     let p = self.active;
                     self.open_tab(p, &t, !new_tab || navigable == 1);
                 }
-                Some(t) => {
-                    // Compare view: Enter on a changed file shows the diff.
-                    self.navigate(&t);
-                }
+                Some(t) => self.navigate(&t),
                 None => {
-                    if let Source::Compare { left, right, .. } = &self.tab().source {
-                        let rel = self.tab().cursor_item().map(|i| i.entry.name.clone()).unwrap_or_default();
-                        let (l, r) = (join_rel(left, &rel), join_rel(right, &rel));
-                        self.show_diff(l, r);
-                        return;
-                    }
                     self.spawn(move |engine| async move {
                         let r = engine.open_entry(&uri).await;
                         Box::new(move |app: &mut App| {
@@ -602,6 +605,19 @@ impl App {
             self.settings.add_recent_destination(&uri);
             self.submit(kind, sources.clone(), Some(uri), ConflictPolicy::Ask);
         }
+    }
+
+    /// Search results and tag lists: open the folder holding the item,
+    /// with the item selected.
+    pub(crate) fn show_in_folder(&mut self) {
+        let t = self.tab();
+        let Some(r) = t.cursor_row() else { return };
+        let parent = t.parent_of(r);
+        let name = t.item(r).name().to_string();
+        if parent == t.dir_uri() && t.is_folder() {
+            return;
+        }
+        self.navigate_select(&parent, Some(name));
     }
 
     pub(crate) fn copy_path(&mut self) {

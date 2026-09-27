@@ -255,6 +255,10 @@ impl App {
         self.sync_watches();
     }
 
+    pub(crate) fn dispose_tab_public(&mut self, tab: Tab) {
+        self.dispose_tab(tab);
+    }
+
     fn dispose_tab(&mut self, tab: Tab) {
         for f in tab.folders() {
             if let Some((id, _)) = f.watch {

@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 pub use input::MouseHit;
+pub use sources::{compare_uri, search_uri, tag_uri};
 
 pub struct Pane {
     pub tabs: Vec<Tab>,
@@ -197,16 +198,7 @@ impl App {
                 self.settings.dual = true;
             }
         } else if let Some(s) = session {
-            for (i, p) in s.panes.iter().enumerate().take(2) {
-                for (j, t) in p.tabs.iter().enumerate() {
-                    let id = self.open_tab(i, &t.uri, j == p.active);
-                    if let Some(tab) = self.tab_by_id_mut(id) {
-                        tab.view = t.view;
-                    }
-                }
-            }
-            self.settings.dual = s.dual;
-            self.active = if s.dual { s.active_pane.min(1) } else { 0 };
+            self.open_session(&s);
         }
         if self.panes[0].tabs.is_empty() {
             self.open_tab(0, &home, true);
@@ -214,6 +206,42 @@ impl App {
         if self.panes[1].tabs.is_empty() {
             let uri = self.panes[0].tab().uri().to_string();
             self.open_tab(1, &uri, true);
+        }
+        self.sync_watches();
+        if !self.settings.fda_tip_shown && !cx_engine::system::full_disk_access() {
+            self.settings.fda_tip_shown = true;
+            self.toast("Tip: give your terminal Full Disk Access (System Settings → Privacy & Security) to browse every folder");
+        }
+    }
+
+    fn open_session(&mut self, s: &Session) {
+        for (i, p) in s.panes.iter().enumerate().take(2) {
+            for (j, t) in p.tabs.iter().enumerate() {
+                let id = self.open_tab(i, &t.uri, j == p.active);
+                if let Some(tab) = self.tab_by_id_mut(id) {
+                    tab.view = t.view;
+                }
+            }
+        }
+        self.settings.dual = s.dual;
+        self.active = if s.dual { s.active_pane.min(1) } else { 0 };
+    }
+
+    /// Replace every tab with a saved workspace's.
+    pub fn restore_session(&mut self, s: &Session) {
+        for p in 0..2 {
+            let tabs = std::mem::take(&mut self.panes[p].tabs);
+            for t in tabs {
+                self.dispose_tab_public(t);
+            }
+            self.panes[p].active = 0;
+        }
+        self.open_session(s);
+        for p in 0..2 {
+            if self.panes[p].tabs.is_empty() {
+                let uri = cx_core::location::home_dir().map(|h| cx_core::Location::local(h).uri()).unwrap_or_else(|| HOME_URI.into());
+                self.open_tab(p, &uri, true);
+            }
         }
         self.sync_watches();
     }

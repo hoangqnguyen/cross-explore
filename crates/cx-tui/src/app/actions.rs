@@ -159,6 +159,12 @@ impl App {
             Action::CopyToOther | Action::MoveToOther => self.send_to_other_pane(a == Action::MoveToOther),
             Action::CopyTo | Action::MoveTo => self.destination_picker(a == Action::MoveTo),
             Action::CopyPath => self.copy_path(),
+            Action::ShowInFolder => {
+                if self.tab().is_folder() && self.tab().cursor_row().is_some_and(|r| r.depth == 0) {
+                    return false;
+                }
+                self.show_in_folder();
+            }
             Action::Reveal => self.reveal(),
             Action::Shell => self.shell(),
             Action::TerminalWindow => {
@@ -296,6 +302,10 @@ impl App {
                 self.toast(format!("{} keys", self.settings.keymap.label()));
                 self.save_settings();
             }
+            Action::SaveWorkspace => {
+                let n = self.settings.workspaces.len() + 1;
+                self.dialogs.push(Dialog::Prompt(Prompt { title: "Save workspace".into(), label: "Name (reopen it from the palette)".into(), input: TextInput::new(format!("Workspace {n}")), ok: "Save".into(), kind: PromptKind::SaveWorkspace, completions: Vec::new() }));
+            }
             Action::CycleTheme => {
                 self.settings.theme = self.settings.theme.next();
                 self.toast(format!("Theme: {}", self.settings.theme.label()));
@@ -385,6 +395,12 @@ impl App {
             }
             MenuAction::ConnectTo { scheme, host } => self.dialogs.push(Dialog::Connect(ConnectForm::new(&scheme, &host))),
             MenuAction::SendTo(device) => self.send_to(device),
+            MenuAction::Workspace(name) => {
+                if let Some(w) = self.settings.workspaces.iter().find(|w| w.name == name).cloned() {
+                    self.restore_session(&w.session);
+                    self.toast(format!("Opened workspace “{name}”"));
+                }
+            }
             MenuAction::None => {}
         }
     }

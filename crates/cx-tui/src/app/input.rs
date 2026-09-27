@@ -359,7 +359,11 @@ impl App {
         let is_archive = self.tab().cursor_item().is_some_and(|i| cx_archive::is_archive(i.name()));
         let title = self.tab().cursor_item().map(|i| i.name().to_string()).unwrap_or_default();
         let km = self.settings.keymap;
+        let located = self.tab().cursor_row().is_some_and(|r| r.depth > 0 || self.tab().cursor_item().is_some_and(|i| i.parent.is_some()));
         let mut actions = vec![Action::Open];
+        if located {
+            actions.push(Action::ShowInFolder);
+        }
         if is_dir || is_archive {
             actions.push(Action::OpenInNewTab);
         }

@@ -20,6 +20,8 @@ pub enum MenuAction {
     Sort(SortKey),
     Sync(SyncDirection),
     ActivateTab { pane: usize, id: u64 },
+    /// Reopen a saved workspace (its tabs in both panes).
+    Workspace(String),
     /// Offer the files picked for "Send to device" to this device.
     SendTo(String),
     /// Connect dialog prefilled with a host.
@@ -130,6 +132,7 @@ pub enum PromptKind {
     SelectPattern { select: bool },
     GoTo,
     Filter,
+    SaveWorkspace,
 }
 
 #[derive(Debug, Clone)]

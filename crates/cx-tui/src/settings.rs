@@ -96,6 +96,13 @@ pub struct Session {
     pub active_pane: usize,
 }
 
+/// A named set of tabs, reopened from the palette.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Workspace {
+    pub name: String,
+    pub session: Session,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -118,11 +125,14 @@ pub struct Settings {
     /// Where "Copy to…" / "Move to…" last sent things, newest first.
     pub recent_destinations: Vec<String>,
     pub session: Option<Session>,
+    pub workspaces: Vec<Workspace>,
     pub restore_session: bool,
     pub mouse: bool,
     /// Also put copied local files on the system clipboard (and paste
     /// files copied in Finder / Explorer).
     pub os_clipboard: bool,
+    /// The macOS Full Disk Access tip was shown.
+    pub fda_tip_shown: bool,
 }
 
 impl Default for Settings {
@@ -145,9 +155,11 @@ impl Default for Settings {
             recent: Vec::new(),
             recent_destinations: Vec::new(),
             session: None,
+            workspaces: Vec::new(),
             restore_session: true,
             mouse: true,
             os_clipboard: true,
+            fda_tip_shown: false,
         }
     }
 }

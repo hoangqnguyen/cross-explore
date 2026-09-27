@@ -63,7 +63,8 @@ impl Harness {
         Harness::with_settings(Settings::default()).await
     }
 
-    pub async fn with_settings(settings: Settings) -> Harness {
+    pub async fn with_settings(mut settings: Settings) -> Harness {
+        settings.fda_tip_shown = true;
         home();
         let state = tempfile::tempdir().unwrap();
         let mut cfg = EngineConfig::isolated(state.path());

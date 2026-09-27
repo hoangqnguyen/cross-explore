@@ -345,6 +345,24 @@ async fn navigation_history_filter_tabs_bookmarks() {
     let s = h.app.session();
     assert!(s.panes[0].tabs.len() >= 2);
 
+    // Save a workspace, change tabs, reopen it.
+    h.app.run(Action::SaveWorkspace);
+    set_prompt(&mut h, "Nav");
+    h.key(KeyCode::Enter);
+    let saved: usize = h.app.settings.workspaces[0].session.panes[0].tabs.len();
+    h.key_mod(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    h.key_mod(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    assert_eq!(h.app.panes[0].tabs.len(), saved + 2);
+    h.app.menu_action(cx_tui::dialog::MenuAction::Workspace("Nav".into()));
+    assert_eq!(h.app.panes[0].tabs.len(), saved);
+
+    // A search hit: "Show in enclosing folder" opens its folder with it selected.
+    h.open(&cx_tui::app::search_uri(&uri(&dir), "deeper", false, false)).await;
+    h.until("hit", |a| a.tab().rows().len() == 1).await;
+    h.app.run(Action::ShowInFolder);
+    h.until("enclosing folder", |a| a.tab().dir_uri() == uri(&dir.join("inner")) && a.tab().folder.is_ready()).await;
+    assert_eq!(h.app.tab().cursor_item().unwrap().name(), "deeper");
+
     // Home page opens with our favorite on it.
     h.app.run(Action::HomePage);
     h.app.prepare();
