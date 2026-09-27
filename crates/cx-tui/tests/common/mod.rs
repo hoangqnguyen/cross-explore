@@ -91,6 +91,18 @@ impl Harness {
         }
     }
 
+    /// Wait until every folder on screen is listed and watched live (the
+    /// header's "● live"), so snapshots don't depend on timing.
+    pub async fn wait_live(&mut self) {
+        self.until("live watches", |a| {
+            a.visible_panes().iter().all(|&p| {
+                let t = a.panes[p].tab();
+                !t.is_folder() || t.folders().all(|f| f.is_ready() && !f.is_listing() && f.watch.is_some())
+            })
+        })
+        .await;
+    }
+
     /// Wait until the active tab finished listing `n` rows.
     pub async fn listed(&mut self, n: usize) {
         self.until(&format!("{n} rows listed"), move |a| a.tab().folder.is_ready() && a.tab().rows().len() == n).await;

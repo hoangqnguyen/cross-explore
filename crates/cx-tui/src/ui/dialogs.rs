@@ -40,7 +40,7 @@ fn field(theme: &Theme, label: &str, label_w: usize, input: &TextInput, focused:
     let avail = width.saturating_sub(label_w + 1).max(1);
     let chars: Vec<char> = text.chars().collect();
     // Scroll so the cursor stays visible.
-    let start = if input.cursor + 1 > avail { input.cursor + 1 - avail } else { 0 };
+    let start = (input.cursor + 1).saturating_sub(avail);
     let visible: String = chars.iter().skip(start).take(avail).collect();
     let bg = if theme.rich { theme.header_bg } else { theme.bg };
     let base = Style::default().fg(theme.fg).bg(bg);

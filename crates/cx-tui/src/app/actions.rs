@@ -156,7 +156,7 @@ impl App {
             Action::Paste => self.paste(),
             Action::Duplicate => self.duplicate(),
             Action::Undo => self.undo_last(),
-            Action::CopyToOther | Action::MoveToOther => self.to_other_pane(a == Action::MoveToOther),
+            Action::CopyToOther | Action::MoveToOther => self.send_to_other_pane(a == Action::MoveToOther),
             Action::CopyTo | Action::MoveTo => self.destination_picker(a == Action::MoveTo),
             Action::CopyPath => self.copy_path(),
             Action::Reveal => self.reveal(),

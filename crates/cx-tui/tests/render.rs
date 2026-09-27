@@ -26,6 +26,7 @@ async fn sample(h: &mut Harness, name: &str) -> std::path::PathBuf {
     }
     h.app.start(&[uri(&dir)]);
     h.until("listing", |a| a.tab().folder.is_ready() && a.tab().rows().len() == 6).await;
+    h.wait_live().await;
     dir
 }
 
@@ -34,8 +35,8 @@ async fn details_view() {
     let mut h = Harness::new().await;
     sample(&mut h, "details").await;
     h.key(KeyCode::Down);
-    h.key(KeyCode::Right); // expand Photos? (cursor on Photos after Down)
-    h.settle(std::time::Duration::from_millis(200)).await;
+    h.key(KeyCode::Right); // expands Photos (empty) in place
+    h.wait_live().await;
     let s = h.screen(100, 16);
     println!("{s}");
     assert!(s.contains("Name ▲"));
@@ -54,6 +55,7 @@ async fn outline_and_brief() {
     // Cursor on Documents; → expands it in place.
     h.key(KeyCode::Right);
     h.until("expanded", |a| a.tab().rows().len() == 7).await;
+    h.wait_live().await;
     let s = h.screen(90, 14);
     println!("{s}");
     assert!(s.contains("▾ Documents"));
@@ -75,7 +77,7 @@ async fn dual_pane_commander() {
     h.app.navigate_in(1, &uri(&dir.join("Documents")), None);
     h.until("right pane", |a| a.panes[1].tab().folder.is_ready() && a.panes[1].tab().rows().len() == 1).await;
     h.app.run(Action::NewTab);
-    h.settle(std::time::Duration::from_millis(200)).await;
+    h.wait_live().await;
     let s = h.screen(120, 14);
     println!("{s}");
     assert!(s.contains("report.pdf"));
@@ -185,7 +187,11 @@ async fn transfers_panel_and_preview() {
     h.app.run(Action::TogglePreview);
     h.until("preview", |a| a.preview.as_ref().is_some_and(|p| matches!(p.content, cx_tui::preview::Content::Text { .. }))).await;
     // Birth times depend on the file system; keep them out of the snapshot.
-    let s: String = h.screen(120, 24).lines().filter(|l| !l.contains("Created")).map(|l| format!("{l}\n")).collect();
+    if let Some(p) = h.app.preview.as_mut() {
+        p.entry.created = None;
+    }
+    h.wait_live().await;
+    let s = h.screen(120, 24);
     println!("{s}");
     assert!(s.contains("Transfers"));
     assert!(s.contains("50%"));

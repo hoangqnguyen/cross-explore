@@ -497,7 +497,7 @@ impl App {
     }
 
     /// F5 / F6: copy or move the selection to the other pane.
-    pub(crate) fn to_other_pane(&mut self, moving: bool) {
+    pub(crate) fn send_to_other_pane(&mut self, moving: bool) {
         let uris = self.tab().target_uris();
         if uris.is_empty() || matches!(self.tab().source, Source::Home) {
             return;

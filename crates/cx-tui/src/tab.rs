@@ -192,6 +192,9 @@ impl Tab {
 
     /// Recompute rows if anything they depend on changed. Cheap when not.
     pub fn refresh_rows(&mut self, show_hidden: bool) {
+        for f in self.folders_mut() {
+            f.settle();
+        }
         let gens = self.expanded.iter().fold(self.folder.generation.wrapping_mul(31), |a, e| a.wrapping_mul(31).wrapping_add(e.folder.generation).wrapping_add(e.uri.len() as u64));
         let sig = (gens.wrapping_add(self.expanded.len() as u64), self.filter.clone(), show_hidden);
         if self.rows_sig.as_ref() == Some(&sig) {

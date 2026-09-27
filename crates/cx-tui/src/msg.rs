@@ -9,6 +9,9 @@ use cx_engine::{EngineEvent, ListEvent, SearchEvent, WatchInfo};
 
 pub type Update = Box<dyn FnOnce(&mut App) + Send>;
 
+// Messages are moved straight into `handle_msg`; boxing the listing event
+// would add an allocation per batch for nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum Msg {
     List { token: u64, seq: u64, event: ListEvent },
     ListFailed { token: u64, seq: u64, error: CxError },

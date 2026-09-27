@@ -1,4 +1,4 @@
-╭ cx-tui-render › outline ───────────────────────────────────────────────────────────────╮
+╭ cx-tui-render › outline ─────────────────────────────────────────────────────── ● live ╮
 │ 1 outline                                                                              │
 │ Name ▲                                         Modified         Kind               Size│
 │ ▾ Documents                                   2021-03-04       Folder                 —│

@@ -213,8 +213,7 @@ mod tests {
     fn round_trip_and_tolerant_loading() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sub/tui.json");
-        let mut s = Settings::default();
-        s.keymap = Keymap::Commander;
+        let mut s = Settings { keymap: Keymap::Commander, ..Default::default() };
         assert!(s.toggle_bookmark("Docs", "file:///docs"));
         s.add_recent("file:///a");
         s.add_recent("file:///b");

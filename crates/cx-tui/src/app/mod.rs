@@ -498,7 +498,7 @@ impl App {
         }
         let uri = tab.uri_of(row);
         let entry = tab.item(row).entry.clone();
-        if self.preview.as_ref().is_some_and(|p| p.uri == uri && p.entry == entry) {
+        if self.preview.as_ref().is_some_and(|p| p.uri == uri && p.entry.modified == entry.modified && p.entry.size == entry.size) {
             return;
         }
         self.preview = Some(Preview { uri: uri.clone(), entry: entry.clone(), content: Content::Loading, scroll: 0 });

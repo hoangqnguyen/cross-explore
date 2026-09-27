@@ -1,4 +1,4 @@
-╭ cx-tui-render › outline ───────────────────────────────────────────────────────────────╮
+╭ cx-tui-render › outline ─────────────────────────────────────────────────────── ● live ╮
 │ 1 outline                                                                              │
 │ Documents                   │ photo.jpg                  │                             │
 │ Photos                      │                            │                             │

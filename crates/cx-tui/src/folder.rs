@@ -100,6 +100,11 @@ pub struct Folder {
     /// Patches that arrived mid-listing (the listing may already have
     /// passed those names), applied when it completes.
     queued: Vec<(Change, bool)>,
+    /// Streamed entries not merged into `items` yet. Batches arrive much
+    /// faster than frames are drawn; merging once per frame (see
+    /// [`Folder::settle`]) instead of once per batch keeps a 100 000-row
+    /// listing linear instead of quadratic.
+    unmerged: Vec<Item>,
     pub watch: Option<(u64, WatchMode)>,
     pub watch_pending: bool,
     pub fresh: HashMap<String, Instant>,
@@ -124,6 +129,7 @@ impl Folder {
             keep_order: false,
             reloading: None,
             queued: Vec::new(),
+            unmerged: Vec::new(),
             watch: None,
             watch_pending: false,
             fresh: HashMap::new(),
@@ -183,6 +189,7 @@ impl Folder {
     /// Start listing again; returns the new listing's sequence number.
     pub fn begin_load(&mut self, keep: bool) -> u64 {
         self.load_seq += 1;
+        self.unmerged.clear();
         self.loaded = 0;
         if keep && self.status == Status::Ready {
             self.reloading = Some(Vec::new());
@@ -209,6 +216,17 @@ impl Folder {
             r.append(&mut batch);
             return;
         }
+        self.unmerged.append(&mut batch);
+        self.bump();
+    }
+
+    /// Merge streamed entries into the sorted rows (sort the new ones,
+    /// then one linear merge). Cheap when there is nothing to merge.
+    pub fn settle(&mut self) {
+        if self.unmerged.is_empty() {
+            return;
+        }
+        let mut batch = std::mem::take(&mut self.unmerged);
         self.sort_items(&mut batch);
         if self.items.is_empty() || self.keep_order {
             self.items.append(&mut batch);
@@ -239,6 +257,7 @@ impl Folder {
     /// The listing finished. Returns names that are new compared with the
     /// rows shown before a reload (they get highlighted).
     pub fn finish_load(&mut self, elapsed_ms: f64) -> usize {
+        self.settle();
         self.elapsed_ms = Some(elapsed_ms);
         self.status = Status::Ready;
         let mut added = 0;
@@ -267,6 +286,7 @@ impl Folder {
 
     pub fn fail(&mut self, e: CxError) {
         self.reloading = None;
+        self.unmerged.clear();
         self.queued.clear();
         self.status = Status::Error(e);
         self.bump();
@@ -283,6 +303,7 @@ impl Folder {
     /// Insert or replace an entry, keeping the order. New names are
     /// highlighted when `mark_fresh`.
     pub fn upsert(&mut self, entry: Entry, mark_fresh: bool) {
+        self.settle();
         let existed = match self.index_of(&entry.name) {
             Some(i) => {
                 if self.items[i].entry == entry {
@@ -308,6 +329,7 @@ impl Folder {
     }
 
     pub fn remove(&mut self, name: &str) -> bool {
+        self.settle();
         match self.index_of(name) {
             Some(i) => {
                 self.items.remove(i);
@@ -387,6 +409,7 @@ impl Folder {
     }
 
     pub fn set_sort(&mut self, sort: SortSpec) {
+        self.settle();
         if self.sort == sort {
             return;
         }
@@ -438,6 +461,8 @@ pub(crate) mod tests {
         let mut f = Folder::new(1, "file:///x", SortSpec::default());
         f.add_batch(vec![file("b10", 1, 0), dir("zdir"), file("a", 1, 0)]);
         f.add_batch(vec![file("b2", 1, 0), dir("adir")]);
+        f.settle();
+        assert_eq!(f.items.len(), 5, "merged on settle");
         f.finish_load(1.0);
         assert_eq!(names(&f), vec!["adir", "zdir", "a", "b2", "b10"]);
         f.set_sort(SortSpec { key: SortKey::Size, desc: true });
