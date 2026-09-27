@@ -59,7 +59,7 @@ async fn run(keymap: Keymap, seed: u64) {
     let mut rng = Lcg(seed);
     let area = Rect::new(0, 0, 100, 30);
     for step in 0..2500 {
-        if rng.next() % 12 == 0 {
+        if rng.next().is_multiple_of(12) {
             let l = layout::compute(area, &h.app);
             let kind = match rng.next() % 4 {
                 0 => MouseEventKind::ScrollDown,

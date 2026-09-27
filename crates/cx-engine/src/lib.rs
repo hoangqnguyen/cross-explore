@@ -6,7 +6,7 @@
 //! * a [`Vfs`] with every connector (local, SMB, SFTP with known_hosts
 //!   trust, FTP/FTPS with certificate trust, WebDAV over http and https,
 //!   S3, and peer once [`Engine::start_peer`] ran) and the archive provider;
-//! * a keychain-backed [`CredentialStore`](cx_core::CredentialStore)
+//! * a keychain-backed [`cx_core::CredentialStore`]
 //!   ([`credentials::KeychainCredentials`]);
 //! * the [`TransferManager`] (jobs interrupted by a quit come back paused),
 //!   plus compress/extract tasks, folded into [`jobs::JobView`]s;
