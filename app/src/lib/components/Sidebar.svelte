@@ -182,6 +182,17 @@
       </div>
     {/if}
 
+    {#if ws.places.cloud?.length}
+      {@render section("cloud", "Cloud")}
+      {#if !collapsed.cloud}
+        <div class="group">
+          {#each ws.places.cloud as c (c.uri)}
+            {@render item(c.name, c.uri, "cloud", { title: c.account ? `${c.name} — ${c.account}` : c.name })}
+          {/each}
+        </div>
+      {/if}
+    {/if}
+
     {@render section("drives", "Drives")}
     {#if !collapsed.drives}
       <div class="group">

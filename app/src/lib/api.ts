@@ -82,12 +82,21 @@ export interface Volume {
   removable: boolean;
 }
 
+export interface CloudPlace {
+  name: string;
+  uri: string;
+  provider: "google" | "dropbox" | "onedrive" | "icloud" | "box" | "other";
+  account: string | null;
+}
+
 export interface Places {
   platform: string;
   translucent: boolean;
   home: Place;
   favorites: Place[];
   volumes: Volume[];
+  /** Folders synced by cloud apps (Google Drive, Dropbox, OneDrive, iCloud…). */
+  cloud: CloudPlace[];
 }
 
 export type CxError =

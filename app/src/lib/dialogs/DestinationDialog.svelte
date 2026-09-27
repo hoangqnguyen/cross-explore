@@ -61,6 +61,7 @@
       ...settings.data.servers.map((s) => ({ uri: s.uri, label: s.name, detail: s.uri, icon: "server" as IconName })),
       ...devices.nearby.flatMap((d) => d.services.filter((s) => s.scheme === "peer" || s.scheme === "smb").map((s) => ({ uri: s.uri, label: `${d.name}`, detail: s.label, icon: "server" as IconName }))),
     ]);
+    group("Cloud", (ws.places?.cloud ?? []).map((c) => ({ uri: c.uri, label: c.name, detail: c.account ?? pretty(c.uri), icon: "cloud" as IconName })));
     group("Drives", (ws.places?.volumes ?? []).map((v) => ({ uri: v.uri, label: v.name, detail: pretty(v.uri), icon: "drive" as IconName })));
     return out;
   });

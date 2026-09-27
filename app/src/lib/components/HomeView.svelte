@@ -88,6 +88,13 @@
           <span class="sub">{formatSize(v.free)} free of {formatSize(v.total)}</span>
         </button>
       {/each}
+      {#each ws.places?.cloud ?? [] as c (c.uri)}
+        <button class="tile device" onclick={(e) => open(c.uri, e)} title={c.account ?? c.name}>
+          <span class="dicon"><Icon name="cloud" size={22} /></span>
+          <span class="name">{c.name}</span>
+          <span class="sub">{c.account ?? "Synced folder"}</span>
+        </button>
+      {/each}
       {#each devices.nearby as d (d.id)}
         {@const offline = d.tailnet && !d.tailnet.online}
         <div class="tile device" class:offline>

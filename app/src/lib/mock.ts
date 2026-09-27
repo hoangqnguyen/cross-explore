@@ -323,6 +323,10 @@ const handlers: Record<string, (a: Args) => unknown> = {
       { name: "Macintosh HD", uri: "file:///", total: 994e9, free: 212e9, removable: false },
       { name: "Data", uri: "file:///Volumes/Data", total: 2e12, free: 1.31e12, removable: true },
     ],
+    cloud: [
+      { name: "Google Drive", uri: `file://${HOME}/Documents`, provider: "google", account: "demo@example.com" },
+      { name: "iCloud Drive", uri: `file://${HOME}/Desktop`, provider: "icloud", account: null },
+    ],
   }),
   free_space: () => ({ free: 212e9, total: 994e9 }),
   async list_dir({ uri, onEvent }: { uri: string; onEvent: (e: ListEvent) => void }) {

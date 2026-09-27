@@ -51,6 +51,7 @@
     for (const f of ws.places?.favorites ?? []) out.push({ label: f.name, detail: pretty(f.uri), icon: f.icon as IconName, kind: "Favorite", run: go(f.uri) });
     for (const b of settings.data.bookmarks) out.push({ label: b.name, detail: pretty(b.uri), icon: "star", kind: "Favorite", run: go(b.uri) });
     for (const r of settings.data.recent) out.push({ label: uriName(r) || r, detail: pretty(r), icon: "folder", kind: "Recent", run: go(r) });
+    for (const c of ws.places?.cloud ?? []) out.push({ label: c.name, detail: c.account ?? pretty(c.uri), icon: "cloud", kind: "Cloud", run: go(c.uri) });
     for (const v of ws.places?.volumes ?? []) out.push({ label: v.name, detail: pretty(v.uri), icon: "drive", kind: "Drive", run: go(v.uri) });
     for (const d of devices.nearby) for (const s of d.services) out.push({ label: `${d.name} — ${s.label}`, detail: s.uri, icon: "server", kind: "Device", run: go(s.uri) });
     for (const s of settings.data.servers) out.push({ label: s.name, detail: s.uri, icon: "server", kind: "Server", run: go(s.uri) });
