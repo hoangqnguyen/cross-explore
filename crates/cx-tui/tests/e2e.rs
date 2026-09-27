@@ -379,3 +379,50 @@ async fn compare_and_sync_panes() {
     let Some(Dialog::Diff(d)) = h.app.dialogs.last() else { unreachable!() };
     assert_eq!((d.added, d.removed), (2, 1));
 }
+
+/// Going to an SFTP folder: host-key review, then sign-in, then the
+/// listing (polled). Needs `CX_TEST_SFTP=1` and docker/sftp running.
+#[tokio::test(flavor = "multi_thread")]
+async fn sftp_host_key_and_sign_in_prompts() {
+    if std::env::var("CX_TEST_SFTP").map(|v| v != "1").unwrap_or(true) {
+        eprintln!("skipped: set CX_TEST_SFTP=1 with docker/sftp running");
+        return;
+    }
+    let mut h = Harness::with_settings(settings()).await;
+    let local = folder("e2e-sftp");
+    h.app.start(&[uri(&local)]);
+    h.listed(0).await;
+    // Ctrl+L, type the URI.
+    h.key_mod(KeyCode::Char('l'), KeyModifiers::CONTROL);
+    set_prompt(&mut h, "sftp://cx@127.0.0.1:2222/upload");
+    h.key(KeyCode::Enter);
+    h.until("host key prompt", |a| matches!(a.dialogs.last(), Some(Dialog::HostKey(_)))).await;
+    let s = h.screen(100, 24);
+    assert!(s.contains("Fingerprint") && s.contains("SHA256:"), "{s}");
+    h.key(KeyCode::Enter); // Trust and connect
+    h.until("sign-in prompt", |a| matches!(a.dialogs.last(), Some(Dialog::SignIn(_)))).await;
+    if let Some(Dialog::SignIn(s)) = h.app.dialogs.last() {
+        assert_eq!(s.user.text, "cx", "user taken from the URI");
+        assert_eq!(s.focus, 1, "password field focused");
+    }
+    h.typ("cxpass");
+    h.key(KeyCode::Enter);
+    h.until("listing over SFTP", |a| a.dialogs.is_empty() && a.tab().folder.is_ready()).await;
+    h.wait_live().await;
+    assert_eq!(h.app.tab().folder.watch.map(|w| w.1), Some(cx_engine::WatchMode::Polling));
+    // Make a folder there and see it (our own change shows right away).
+    h.key(KeyCode::F(7));
+    let name = format!("tui-{}", std::process::id());
+    set_prompt(&mut h, &name);
+    h.key(KeyCode::Enter);
+    h.until("remote folder row", |a| a.tab().rows().iter().any(|r| a.tab().item(r).name() == name)).await;
+    h.select(&name);
+    h.app.settings.confirm_permanent_delete = false;
+    h.app.run(Action::Trash); // SFTP has no trash: asks to delete permanently
+    assert!(matches!(h.app.dialogs.last(), Some(Dialog::Confirm(c)) if c.danger));
+    if let Some(Dialog::Confirm(c)) = h.app.dialogs.last_mut() {
+        c.on_cancel = false;
+    }
+    h.key(KeyCode::Enter);
+    h.until("remote folder gone", |a| a.tab().rows().iter().all(|r| a.tab().item(r).name() != name)).await;
+}
