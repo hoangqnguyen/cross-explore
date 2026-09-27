@@ -1109,6 +1109,7 @@ name = "cross-explore"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "block2",
  "clipboard-rs",
  "cx-archive",
  "cx-core",
@@ -1127,6 +1128,7 @@ dependencies = [
  "dirs",
  "keyring",
  "mime_guess",
+ "objc2-app-kit",
  "percent-encoding",
  "plist",
  "serde",

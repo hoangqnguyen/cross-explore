@@ -107,14 +107,21 @@
     handleKey(e);
   }
 
-  // Mouse back/forward buttons.
-  function onmouseup(e: MouseEvent) {
+  // Mouse back/forward buttons (Windows / Linux web views deliver them as
+  // buttons 3 and 4; macOS is handled natively, see mousenav.rs). Acting on
+  // press also stops the web view's own history navigation.
+  function onpointerdown(e: PointerEvent) {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault();
     if (e.button === 3) ws.activeTab?.back();
-    if (e.button === 4) ws.activeTab?.forward();
+    else ws.activeTab?.forward();
+  }
+  function onmouseup(e: MouseEvent) {
+    if (e.button === 3 || e.button === 4) e.preventDefault();
   }
 </script>
 
-<svelte:window {onkeydown} {onmouseup} oncontextmenu={(e) => !isTextInput(e.target) && e.preventDefault()} />
+<svelte:window {onkeydown} {onmouseup} {onpointerdown} oncontextmenu={(e) => !isTextInput(e.target) && e.preventDefault()} />
 
 {#if ws.ready && ws.activeTab && ui.mobile}
   <div class="window phone">

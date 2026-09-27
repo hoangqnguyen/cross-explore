@@ -175,6 +175,22 @@ export async function selftest() {
     await termClose(id);
   });
 
+  await check("back / forward from menu commands (what Logi Options+ keystrokes reach)", async () => {
+    const { run } = await import("./commands.svelte");
+    tab().navigate(dir);
+    await until("dir", () => tab().folder.status === "ready");
+    tab().navigate(childUri(dir, "sub"));
+    await until("sub", () => tab().folder.status === "ready" && tab().folder.info?.name === "sub");
+    run("nav.back", true);
+    await until("back", () => tab().folder.info?.uri.replace(/\/$/, "") === dir.replace(/\/$/, ""));
+    run("nav.forward", true);
+    run("nav.forward", true); // a duplicate within 250 ms is ignored
+    await until("forward", () => tab().folder.info?.name === "sub");
+    if (tab().index !== tab().history.length - 1) throw new Error("ran twice");
+    run("nav.up", true);
+    await until("up", () => tab().folder.info?.uri.replace(/\/$/, "") === dir.replace(/\/$/, ""));
+  });
+
   await check("settings: every section opens", async () => {
     void dialogs.ask("settings");
     await until("settings dialog", () => document.querySelector(".modal nav"));

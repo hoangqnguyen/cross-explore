@@ -519,6 +519,11 @@ export class Workspace {
           devices.addOffer(e.offer);
           void dialogs.ask("offer", { offer: e.offer });
         } else if (e.type === "peer") devices.peer = e.status;
+        else if (e.type === "nav") {
+          // Mouse side buttons / swipes, caught natively (macOS).
+          if (e.dir === "back") this.activeTab?.back();
+          else this.activeTab?.forward();
+        } else if (e.type === "command") void import("./commands.svelte").then((c) => c.run(e.id, true));
       });
     } catch {
       /* events unavailable */

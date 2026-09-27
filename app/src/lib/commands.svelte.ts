@@ -49,8 +49,8 @@ export function focusList() {
 
 export const commands: Command[] = [
   // ---- navigate ----
-  { id: "nav.back", label: "Back", group: "Navigate", icon: "back", keys: { both: [m("Mod+[", "Alt+Left"), "BrowserBack"], explorer: isMac ? [] : ["Backspace"] }, when: () => tab().canBack, run: () => tab().back() },
-  { id: "nav.forward", label: "Forward", group: "Navigate", icon: "forward", keys: { both: [m("Mod+]", "Alt+Right"), "BrowserForward"] }, when: () => tab().canForward, run: () => tab().forward() },
+  { id: "nav.back", label: "Back", group: "Navigate", icon: "back", keys: { both: [m("Mod+[", "Alt+Left"), "BrowserBack", ...(isMac ? ["Mod+Left"] : [])], explorer: isMac ? [] : ["Backspace"] }, when: () => tab().canBack, run: () => tab().back() },
+  { id: "nav.forward", label: "Forward", group: "Navigate", icon: "forward", keys: { both: [m("Mod+]", "Alt+Right"), "BrowserForward", ...(isMac ? ["Mod+Right"] : [])] }, when: () => tab().canForward, run: () => tab().forward() },
   { id: "nav.up", label: "Enclosing folder", group: "Navigate", icon: "up", keys: { both: [m("Mod+Up", "Alt+Up")], commander: ["Backspace"] }, list: false, when: () => !!tab().folder.info?.parent, run: () => tab().up() },
   { id: "nav.home", label: "Go to Home page", group: "Go", icon: "home", keys: { both: [m("Mod+Shift+H", "Alt+Home")] }, run: () => tab().navigate(HOME_URI) },
   { id: "nav.userHome", label: "Go to your home folder", group: "Go", icon: "home", run: () => ws.places && tab().navigate(ws.places.home.uri) },
@@ -134,7 +134,17 @@ export const commands: Command[] = [
 
 export const byId = new Map(commands.map((c) => [c.id, c]));
 
-export function run(id: string) {
+let lastRun = { id: "", at: 0 };
+
+/**
+ * Run a command. A menu item and a page shortcut can both fire for one key
+ * press (macOS menu key equivalents), so an identical command within 250 ms
+ * is ignored.
+ */
+export function run(id: string, fromMenu = false) {
+  const now = performance.now();
+  if (fromMenu && lastRun.id === id && now - lastRun.at < 250) return;
+  lastRun = { id, at: now };
   const c = byId.get(id);
   if (c && (!c.when || c.when())) void c.run();
 }
@@ -170,9 +180,10 @@ export function handleKey(e: KeyboardEvent): boolean {
     if (c.list && !inList) continue;
     // In a text field only modifier shortcuts and F-keys apply.
     if (inText && !/^(Mod|Ctrl|Alt)\+|^F\d+$/.test(combo)) continue;
-    if (inText && ["Mod+A", "Mod+C", "Mod+V", "Mod+X", "Mod+Z", "Mod+Backspace"].includes(combo)) continue;
+    if (inText && ["Mod+A", "Mod+C", "Mod+V", "Mod+X", "Mod+Z", "Mod+Backspace", "Mod+Left", "Mod+Right"].includes(combo)) continue;
     if (c.when && !c.when()) continue;
     e.preventDefault();
+    lastRun = { id: c.id, at: performance.now() };
     void c.run();
     return true;
   }

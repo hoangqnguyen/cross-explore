@@ -2,6 +2,8 @@ mod cmd;
 mod credentials;
 mod events;
 mod jobs;
+mod menu;
+mod mousenav;
 mod places;
 mod protocols;
 mod sftp;
@@ -86,6 +88,8 @@ pub fn run() {
         .setup(|app| {
             let state = build_state(app)?;
             app.manage(state.clone());
+            mousenav::install(state.events.clone());
+            menu::install(app, state.events.clone())?;
             cmd::peer::start_discovery(state.clone());
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = cmd::peer::start_peer(state).await {

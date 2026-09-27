@@ -414,6 +414,8 @@ export type AppEvent =
   | { type: "devices"; devices: Device[] }
   | { type: "offer"; offer: IncomingOffer }
   | { type: "peer"; status: PeerStatus }
+  | { type: "nav"; dir: "back" | "forward" }
+  | { type: "command"; id: string }
   | { type: "task"; id: number; label: string; progress: number; done: boolean; error: string | null };
 
 export async function subscribe(onEvent: (e: AppEvent) => void): Promise<void> {
