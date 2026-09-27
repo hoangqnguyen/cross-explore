@@ -1138,6 +1138,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-drag",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
  "tokio-util",
  "url",
