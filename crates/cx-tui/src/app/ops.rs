@@ -70,6 +70,9 @@ impl App {
                 }
                 Some(t) => self.navigate(&t),
                 None => {
+                    if !self.may_launch("the default app") {
+                        continue;
+                    }
                     self.spawn(move |engine| async move {
                         let r = engine.open_entry(&uri).await;
                         Box::new(move |app: &mut App| {
@@ -82,6 +85,9 @@ impl App {
     }
 
     pub(crate) fn open_external(&mut self) {
+        if !self.may_launch("the default app") {
+            return;
+        }
         let uris = self.tab().target_uris();
         for uri in uris {
             self.spawn(move |engine| async move {
@@ -631,6 +637,9 @@ impl App {
     pub(crate) fn reveal(&mut self) {
         let t = self.tab();
         let uri = t.cursor_row().map(|r| t.uri_of(r)).unwrap_or_else(|| t.dir_uri().to_string());
+        if !self.may_launch("the file manager") {
+            return;
+        }
         let r = cx_engine::system::reveal_entry(&uri);
         self.report(r);
     }

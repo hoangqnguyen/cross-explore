@@ -19,6 +19,30 @@
 //! front-end types. Build it inside a tokio runtime: the transfer manager
 //! and background tasks spawn onto the runtime current at construction.
 //!
+//! # From the desktop app's commands
+//!
+//! | Tauri command | Engine |
+//! |---|---|
+//! | `list_dir(uri, channel)` | [`Engine::list_dir`]`(uri, \|e\| channel.send(e).is_ok())` ([`ListEvent`] serializes the same) |
+//! | `watch_dir` / `unwatch_dir` | [`Engine::watch_dir`] (a [`cx_core::WatchSink`]) / [`Engine::unwatch_dir`]; [`WatchInfo`] serializes as `{id, mode: "live"\|"polling"}` |
+//! | `stat_entry`, `create_folder`, `rename_entry`, `trash_entries`, `free_space` | [`Engine::stat`], [`Engine::create_folder`], [`Engine::rename`], [`Engine::trash`], [`Engine::free_space`] |
+//! | `dir_size(uri, channel)` | [`Engine::dir_size`]`(uri, \|p\| channel.send(p).is_ok())` |
+//! | `preview_text` | [`Engine::preview_text`] |
+//! | `subscribe(channel)` | `engine.events.set(Arc::new(move \|e\| { channel.send(serde_json::to_value(e)) }))` |
+//! | `transfer_submit(req)` | [`Engine::submit`] ([`SubmitRequest`] deserializes the UI's `{kind, sources, dest, conflict, verify}`) |
+//! | `transfer_pause/resume/cancel/resolve/list/clear` | [`Engine::pause`], [`Engine::resume`], [`Engine::cancel`], [`Engine::resolve`], [`Engine::job_list`], [`Engine::clear_finished`] |
+//! | `undo`, `compare_dirs` | [`Engine::undo`], [`Engine::compare_dirs`] (and [`Engine::sync_dirs`] for the plan) |
+//! | `search_start(root, query, channel)`, `cancel_task` | [`Engine::search_start`] ([`SearchRequest`], [`SearchEvent`]), [`Engine::cancel_task`] |
+//! | `connect_server`, `disconnect_server`, `connections`, `trust_host_key` | [`Engine::connect_server`], [`Engine::disconnect_server`], [`Engine::connections`], [`Engine::trust_host_key`] |
+//! | `peer_*`, `discovery_devices`, `discovery_refresh` | [`Engine::peer_status`], [`Engine::peer_set_enabled`], [`Engine::peer_set_shares`], [`Engine::peer_set_auto_trust`], [`Engine::peer_pair_code`], [`Engine::peer_pair`], [`Engine::peer_forget`], [`Engine::peer_send`], [`Engine::peer_respond`], [`Engine::devices`], [`Engine::refresh_discovery`] |
+//! | `tags_get/set/find` | `engine.tags.get_many`, `engine.tags.set`, [`Engine::tags_find`] |
+//! | `open_entry`, `reveal_entry`, `open_terminal` | [`Engine::local_copy`] then the Tauri opener (or [`Engine::open_entry`]); [`system::reveal_entry`]; [`system::open_terminal`] |
+//! | `os_clipboard_set/get`, `full_disk_access`, `open_full_disk_access_settings` | [`system::os_clipboard_set`], [`system::os_clipboard_get`], [`system::full_disk_access`], [`system::open_full_disk_access_settings`] |
+//! | `term_*` | `engine.terminals` ([`cx_term::Terminals`]) |
+//! | `places` | [`Engine::places`] ([`places::set_translucent`] for the window material flag) |
+//! | `build_state` / setup | [`Engine::new`]`(`[`EngineConfig`]`::new(app_data_dir, app_cache_dir))` then [`Engine::start_background`] |
+//! | protocols (`cxfile://`, `cxthumb://`) | `engine.vfs` for bytes, [`Engine::thumbnail`] |
+//!
 //! ```no_run
 //! # async fn demo() -> cx_core::Result<()> {
 //! let engine = cx_engine::Engine::new(cx_engine::EngineConfig::standard()?)?;

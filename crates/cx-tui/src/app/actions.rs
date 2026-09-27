@@ -168,6 +168,9 @@ impl App {
             Action::Reveal => self.reveal(),
             Action::Shell => self.shell(),
             Action::TerminalWindow => {
+                if !self.may_launch("a terminal") {
+                    return true;
+                }
                 let uri = self.tab().dir_uri().to_string();
                 let r = cx_engine::system::open_terminal(&uri);
                 self.report(r);

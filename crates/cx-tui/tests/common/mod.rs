@@ -70,7 +70,8 @@ impl Harness {
         let mut cfg = EngineConfig::isolated(state.path());
         cfg.poll = PollConfig { min: Duration::from_millis(100), max: Duration::from_millis(400) };
         let engine = Engine::new(cfg).unwrap();
-        let (app, rx) = App::new(engine, settings, None);
+        let (mut app, rx) = App::new(engine, settings, None);
+        app.no_launch = true;
         Harness { state, app, rx }
     }
 

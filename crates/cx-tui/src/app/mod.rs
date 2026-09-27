@@ -128,6 +128,9 @@ pub struct App {
     pub(crate) last_click: Option<(u16, u16, Instant)>,
     /// Files waiting for "Send to device" to pick a device.
     pub(crate) pending_send: Option<Vec<String>>,
+    /// Don't start other programs (default apps, file manager, terminal
+    /// windows): tests set this so they never pop up windows.
+    pub no_launch: bool,
 }
 
 impl App {
@@ -177,6 +180,7 @@ impl App {
             size_limit: Arc::new(tokio::sync::Semaphore::new(4)),
             last_click: None,
             pending_send: None,
+            no_launch: false,
         };
         // Jobs restored from a previous run (paused), and current devices.
         app.jobs = app.engine.job_list();
@@ -574,6 +578,14 @@ impl App {
     /// The job shown in the status bar: the running one, else the newest.
     pub fn active_jobs(&self) -> Vec<&JobView> {
         self.jobs.iter().filter(|j| !j.is_finished()).collect()
+    }
+
+    /// Whether launching another program is allowed (see `no_launch`).
+    pub(crate) fn may_launch(&mut self, what: &str) -> bool {
+        if self.no_launch {
+            self.toast(format!("(not launching {what})"));
+        }
+        !self.no_launch
     }
 
     pub(crate) fn report<T>(&mut self, r: Result<T, CxError>) -> Option<T> {
