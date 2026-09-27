@@ -1153,6 +1153,7 @@ dependencies = [
  "cx-discovery",
  "cx-ftp",
  "cx-local",
+ "cx-office",
  "cx-peer",
  "cx-s3",
  "cx-search",

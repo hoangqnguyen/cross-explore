@@ -25,6 +25,7 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("alpha.txt"), "hello cross explore\nline two\n").ok()?;
         std::fs::write(base.join("beta.md"), "# Beta\n\nSome *markdown*.\n").ok()?;
         std::fs::write(base.join("photo.png"), PNG).ok()?;
+        std::fs::write(base.join("sheet.csv"), "Fruit,Qty\nApples,3\nPears,5\n").ok()?;
         std::fs::write(base.join("sub").join("nested.txt"), "deep inside\n").ok()?;
         Some(base.canonicalize().unwrap_or(base))
     })

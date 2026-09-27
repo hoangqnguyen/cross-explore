@@ -51,6 +51,19 @@ try {
   await t.key("Escape");
   await sleep(150);
   check("Escape closes Quick Look", !(await t.eval(`!!document.querySelector('.ql')`)));
+  // Office documents render in a sandboxed frame.
+  await t.open("?path=~/Documents");
+  await t.focusList();
+  {
+    const rows = await t.rows();
+    await t.key("Home");
+    for (let k = 0; k < rows.indexOf("Resume.docx"); k++) await t.key("ArrowDown");
+  }
+  await t.key(" ");
+  await sleep(500);
+  check("Quick Look renders a Word document", await t.eval(`(() => { const f = document.querySelector('.ql iframe.office'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('Resume.docx'); })()`));
+  await t.key("Escape");
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

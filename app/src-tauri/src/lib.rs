@@ -40,6 +40,8 @@ pub fn run() {
             cmd::files::free_space,
             cmd::files::dir_size,
             cmd::files::preview_text,
+            cmd::office::preview_office,
+            cmd::office::office_has_libreoffice,
             cmd::files::ui_log,
             cmd::files::subscribe,
             cmd::system::open_entry,
@@ -142,6 +144,7 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     cmd::cloud::register(&vfs, &data_dir);
     sftp::register(&vfs, &data_dir);
     cx_archive::ArchiveProvider::install(&vfs, cache_dir.join("archives"));
+    cmd::office::init(&cache_dir);
 
     let events = Arc::new(events::Events::default());
     let jobs = jobs::Jobs::new(events.clone());

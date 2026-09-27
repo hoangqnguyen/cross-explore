@@ -1,6 +1,6 @@
 <script lang="ts">
   // Renders a file for Quick Look, the preview pane and the gallery.
-  import { fileUrl, listDir, previewText, thumbUrl, type Entry, type Item, type TextPreview } from "../api";
+  import { fileUrl, listDir, previewOffice, previewText, thumbUrl, type Entry, type Item, type OfficeView, type TextPreview } from "../api";
   import { categoryOf, extOf } from "../format";
   import { highlight } from "../highlight";
   import { renderMarkdown } from "../markdown";
@@ -12,6 +12,8 @@
 
   const textExts = new Set("txt md markdown log csv tsv json yaml yml toml xml ini cfg conf env sh zsh bash ps1 bat js mjs cjs ts tsx jsx rs go py rb java kt swift c h cc cpp hpp cs php lua dart scala svelte vue html css scss sql gradle gitignore dockerfile makefile".split(" "));
 
+  const officeExts = new Set("docx docm dotx dotm doc xlsx xlsm xltx xlsb xls ods pptx pptm potx ppsx ppt odt ott odp otp rtf csv tsv".split(" "));
+
   let cat = $derived(categoryOf(entry));
   let ext = $derived(extOf(entry.name));
   let kind = $derived.by(() => {
@@ -22,6 +24,7 @@
     if (cat === "audio") return "audio";
     if (cat === "pdf") return "pdf";
     if (cat === "font") return "font";
+    if (officeExts.has(ext)) return "office";
     if (textExts.has(ext) || cat === "code" || cat === "text" || !ext) return "text";
     return "other";
   });
@@ -31,6 +34,8 @@
   let children = $state<Entry[] | null>(null);
   let fontFamily = $state<string | null>(null);
   let imageFailed = $state(false);
+  let office = $state<OfficeView | null>(null);
+  let officeFailed = $state(false);
 
   $effect(() => {
     const u = uri;
@@ -40,6 +45,8 @@
     children = null;
     fontFamily = null;
     imageFailed = false;
+    office = null;
+    officeFailed = false;
     let stale = false;
     if (k === "text") {
       previewText(u, large ? 1024 * 1024 : 64 * 1024)
@@ -51,6 +58,10 @@
       listDir(target, (ev) => ev.type === "batch" && list.push(...ev.entries))
         .then(() => !stale && (children = list.sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))))
         .catch(() => !stale && (children = []));
+    } else if (k === "office") {
+      previewOffice(u)
+        .then((o) => !stale && (office = o))
+        .catch(() => !stale && (officeFailed = true));
     } else if (k === "font") {
       const family = `cx-preview-${Math.random().toString(36).slice(2)}`;
       new FontFace(family, `url("${fileUrl(u)}")`)
@@ -86,6 +97,13 @@
     {:else}
       <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={(e) => ((e.currentTarget as HTMLElement).style.display = "none")} />
     {/if}
+  {:else if kind === "office" && office?.kind === "html"}
+    <!-- Script-free HTML from cx-office; the empty sandbox also blocks scripts, forms and navigation. -->
+    <iframe class="office" class:small={!large} sandbox="" srcdoc={office.html} title={office.title ?? entry.name}></iframe>
+  {:else if kind === "office" && office?.kind === "pdf"}
+    <iframe src={fileUrl(office.uri)} title={entry.name}></iframe>
+  {:else if kind === "office" && !officeFailed}
+    <div class="loading muted">Rendering {entry.name}…</div>
   {:else if kind === "font" && fontFamily}
     <div class="font" style:font-family={fontFamily}>
       <div class="big">Aa Bb Cc</div>
@@ -291,6 +309,20 @@
   .child span {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  iframe.office {
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  /* The preview pane shows a zoomed-out page, like a thumbnail you can scroll. */
+  iframe.office.small {
+    width: 200%;
+    height: 200%;
+    flex: none;
+    transform: scale(0.5);
+    transform-origin: center;
+  }
+  .loading {
+    font-size: 13px;
   }
   .fallback {
     display: flex;

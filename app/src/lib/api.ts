@@ -183,6 +183,9 @@ export const cloudServices = () => invoke<CloudService[]>("cloud_services");
 export const cloudSetClient = (service: string, clientId: string, clientSecret: string | null) => invoke<void>("cloud_set_client", { service, clientId, clientSecret });
 /** Browser sign-in; resolves with the account's root URI. */
 export const cloudSignIn = (service: string) => invoke<string>("cloud_sign_in", { service });
+export type OfficeView = { kind: "html"; html: string; title: string | null; pages: number | null } | { kind: "pdf"; uri: string };
+/** Word, Excel, PowerPoint, OpenDocument, RTF and CSV previews (HTML, or a PDF made by LibreOffice). */
+export const previewOffice = (uri: string, preferPdf = false) => invoke<OfficeView>("preview_office", { uri, preferPdf });
 export const openWebPage = (url: string) => invoke<void>("open_web_page", { url });
 export const freeSpace = (uri: string) => invoke<{ free: number; total: number } | null>("free_space", { uri });
 

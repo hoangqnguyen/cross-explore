@@ -4,6 +4,7 @@ pub mod cloud;
 pub mod files;
 pub mod jobs;
 pub mod net;
+pub mod office;
 pub mod peer;
 pub mod search;
 pub mod selftest;

@@ -534,6 +534,11 @@ const handlers: Record<string, (a: Args) => unknown> = {
     return `${service}://demo@example.com/`;
   },
   open_web_page: () => undefined,
+  async preview_office({ uri }: { uri: string }) {
+    await sleep(80);
+    const name = decodeURIComponent(uri.split("/").pop() ?? "");
+    return { kind: "html", title: name, pages: 1, html: `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><body style="font:14px system-ui;padding:24px"><h1>${name.replace(/[<&]/g, "")}</h1><p>Office preview (demo)</p><table border=1><tr><td>A1</td><td>B1</td></tr></table></body>` };
+  },
   connections: () => (nasSignedIn ? ["smb://nas.local"] : []),
   discovery_devices: () => fakeDevices,
   discovery_refresh: () => undefined,

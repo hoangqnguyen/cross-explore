@@ -2,9 +2,10 @@
 // started with CX_SELFTEST=1: drives the UI state layer through a realistic
 // session and reports each check to the terminal, then exits.
 import { invoke } from "@tauri-apps/api/core";
-import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
+import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewOffice, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
+import { quicklook } from "./stores/quicklook.svelte";
 import { ws } from "./workspace.svelte";
 import { dialogs } from "./stores/dialogs.svelte";
 
@@ -105,6 +106,29 @@ export async function selftest() {
   await check("cxthumb:// renders an image thumbnail", async () => {
     const r = await fetch(thumbUrl(childUri(dir, "photo.png"), 64, 1));
     if (!r.ok || !(r.headers.get("content-type") ?? "").startsWith("image/")) throw new Error(`${r.status} ${r.headers.get("content-type")}`);
+  });
+
+  await check("Office preview: CSV renders as a table in a sandboxed frame", async () => {
+    const view = await previewOffice(childUri(dir, "sheet.csv"));
+    if (view.kind !== "html" || !view.html.includes("Apples") || !view.html.includes("<table")) throw new Error(JSON.stringify(view).slice(0, 200));
+    let blocked = "";
+    const onViolation = (e: SecurityPolicyViolationEvent) => (blocked = `${e.violatedDirective} ${e.blockedURI}`);
+    document.addEventListener("securitypolicyviolation", onViolation);
+    try {
+      tab().navigate(dir);
+      await until("listing", () => tab().folder.status === "ready" && has("sheet.csv"));
+      const entry = tab().folder.items.find((e) => e.name === "sheet.csv")!;
+      tab().selectOnly(keyOf(entry));
+      quicklook.open = true;
+      const frame = await until("office frame", () => document.querySelector<HTMLIFrameElement>(".ql iframe.office"), 5000);
+      await new Promise((r) => setTimeout(r, 400));
+      if (!frame!.srcdoc.includes("Pears")) throw new Error("frame has no table");
+      if (frame!.getAttribute("sandbox") !== "") throw new Error("frame not sandboxed");
+      if (blocked) throw new Error(`CSP blocked the preview: ${blocked}`);
+    } finally {
+      quicklook.close();
+      document.removeEventListener("securitypolicyviolation", onViolation);
+    }
   });
 
   await check("recursive name and content search", async () => {
