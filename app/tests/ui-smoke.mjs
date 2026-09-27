@@ -181,6 +181,35 @@ try {
   check("share lists after sign in", (await t.rows()).includes("Movies"), JSON.stringify(await t.rows()));
   check("remote folder shows auto-refresh", (await t.eval(`document.querySelector('.state.polling')?.textContent ?? ''`)).includes("Auto"));
 
+  // Drag a selection rectangle across row whitespace.
+  await t.open("?path=~/Downloads");
+  {
+    const pts = await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')]; const a = r[1].getBoundingClientRect(), b = r[4].getBoundingClientRect(); return { x: a.right - 20, y1: a.top + a.height / 2, y2: b.top + b.height / 2 }; })()`);
+    await t.send("Input.dispatchMouseEvent", { type: "mousePressed", x: pts.x, y: pts.y1, button: "left", buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 6; i++) await t.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pts.x - i * 30, y: pts.y1 + ((pts.y2 - pts.y1) * i) / 6, button: "left", buttons: 1 });
+    check("marquee is drawn while dragging", await t.eval(`!!document.querySelector('.pane.active .marquee')`));
+    await t.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: pts.x - 180, y: pts.y2, button: "left", buttons: 0, clickCount: 1 });
+    await sleep(100);
+    const sel = await t.selected();
+    check("marquee selects the rows it crosses", sel.length === 4, JSON.stringify(sel));
+    check("marquee disappears on release", !(await t.eval(`!!document.querySelector('.pane.active .marquee')`)));
+  }
+
+  // Finder and Explorer keymaps differ: Enter renames in Finder, opens in Explorer.
+  await t.eval(`window.__cx.settings.data.keymap = 'finder'`);
+  await t.focusList();
+  await t.key("Home");
+  await t.key("Enter");
+  await sleep(150);
+  check("Finder: Enter renames", await t.eval(`!!document.activeElement?.classList.contains('rename')`));
+  await t.key("Escape");
+  await t.eval(`window.__cx.settings.data.keymap = 'explorer'`);
+  await t.focusList();
+  await t.key("F2");
+  await sleep(150);
+  check("Explorer: F2 renames", await t.eval(`!!document.activeElement?.classList.contains('rename')`));
+  await t.key("Escape");
+
   // Trash.
   await t.open("?path=~/Downloads");
   await t.focusList();

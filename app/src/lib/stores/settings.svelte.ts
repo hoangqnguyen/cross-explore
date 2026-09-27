@@ -3,7 +3,7 @@
 import type { SortSpec } from "../sort";
 
 export type ViewMode = "details" | "icons" | "columns" | "gallery";
-export type Keymap = "explorer" | "commander";
+export type Keymap = "finder" | "explorer" | "commander";
 export type Theme = "system" | "light" | "dark";
 
 export interface Bookmark {
@@ -52,6 +52,7 @@ export interface SettingsData {
   groupBy: "none" | "date" | "kind";
   /** Destinations recently used with Copy to… / Move to…. */
   recentDestinations: string[];
+  keymapV2?: boolean;
   /** Alternating row colors in the Details view. */
   stripes: boolean;
   /** Path of the selected item in the status bar (Finder's path bar). */
@@ -70,7 +71,7 @@ const defaults: SettingsData = {
   previewWidth: 300,
   defaultView: "details",
   iconSize: 96,
-  keymap: "explorer",
+  keymap: /Mac|iPhone|iPad/.test(typeof navigator === "undefined" ? "" : navigator.platform) ? "finder" : "explorer",
   theme: "system",
   previewPane: false,
   dual: false,
@@ -92,7 +93,11 @@ const defaults: SettingsData = {
 
 function load(): SettingsData {
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    // Before Finder got its own keymap, "explorer" meant Finder keys on a Mac.
+    if (saved.keymap === "explorer" && !saved.keymapV2 && defaults.keymap === "finder") saved.keymap = "finder";
+    saved.keymapV2 = true;
+    return { ...defaults, ...saved };
   } catch {
     return { ...defaults };
   }

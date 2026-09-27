@@ -327,3 +327,84 @@ export function dropTarget(node: HTMLElement, opts: { dest: () => string | null;
 export function dropDestAt(x: number, y: number): string | null {
   return dropElementAt(x, y)?.cxDropDest?.() ?? null;
 }
+
+// ---------------- rubber-band (marquee) selection ----------------
+
+export interface MarqueeRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Drag a selection rectangle over `scroller`. `hitTest` maps a rectangle in
+ * content coordinates to row keys. A press without movement falls back to
+ * `onClick`. ⌘/Ctrl or Shift adds to the existing selection.
+ */
+export function startMarquee(
+  e: PointerEvent,
+  scroller: HTMLElement,
+  tab: Tab,
+  hitTest: (r: MarqueeRect) => string[],
+  onRect: (r: MarqueeRect | null) => void,
+  onClick: () => void,
+) {
+  if (e.button !== 0 || e.pointerType === "touch") return;
+  const box = () => scroller.getBoundingClientRect();
+  const at = (cx: number, cy: number) => ({ x: cx - box().left + scroller.scrollLeft, y: cy - box().top + scroller.scrollTop });
+  const start = at(e.clientX, e.clientY);
+  const additive = primary(e) || e.shiftKey;
+  const base = additive ? new Set(tab.selection) : new Set<string>();
+  let last = { cx: e.clientX, cy: e.clientY };
+  let moved = false;
+  let raf = 0;
+
+  const update = () => {
+    const p = at(last.cx, last.cy);
+    const r = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) };
+    onRect(r);
+    const hits = hitTest(r);
+    const next = new Set(base);
+    for (const k of hits) next.add(k);
+    tab.selection = next;
+    if (hits.length) tab.cursor = hits[hits.length - 1];
+  };
+
+  // Keep scrolling while the pointer rests near an edge.
+  const autoscroll = () => {
+    const b = box();
+    const edge = 28;
+    let dy = 0;
+    if (last.cy < b.top + edge) dy = -Math.ceil((b.top + edge - last.cy) / 2);
+    else if (last.cy > b.bottom - edge) dy = Math.ceil((last.cy - (b.bottom - edge)) / 2);
+    if (dy) {
+      scroller.scrollTop += dy;
+      update();
+    }
+    raf = requestAnimationFrame(autoscroll);
+  };
+
+  const move = (ev: PointerEvent) => {
+    last = { cx: ev.clientX, cy: ev.clientY };
+    if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return;
+    if (!moved) {
+      moved = true;
+      raf = requestAnimationFrame(autoscroll);
+    }
+    update();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    cancelAnimationFrame(raf);
+    onRect(null);
+    if (!moved) onClick();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  e.preventDefault();
+}
+
+/** Whether a press on a row began on its name (drag-the-file) rather than its whitespace (marquee). */
+export const pressedOnName = (e: Event) => !!(e.target as HTMLElement | null)?.closest?.(".cell.name .text, .cell.name svg, .cell.name .rename, .cell.name .disclosure, .thumb, .cell .name");

@@ -87,7 +87,7 @@
     </nav>
     <span class="spacer"></span>
   {/if}
-  {#if settings.data.keymap === "commander"}<span class="badge" title="Total Commander-style keys: F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane">Commander keys</span>{/if}
+  {#if settings.data.keymap !== (ws.platform === "macos" ? "finder" : "explorer")}<span class="badge" title={settings.data.keymap === "commander" ? "Total Commander-style keys: F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane" : `${settings.data.keymap === "finder" ? "Finder" : "Explorer"} keys`}>{settings.data.keymap === "commander" ? "Commander" : settings.data.keymap === "finder" ? "Finder" : "Explorer"} keys</span>{/if}
   {#if folder?.info && !folder.info.local}<span class="muted">{folder.info.scheme.toUpperCase()}</span>{/if}
   {#if space}<span class="muted">{formatSize(space.free)} free</span>{/if}
 </footer>

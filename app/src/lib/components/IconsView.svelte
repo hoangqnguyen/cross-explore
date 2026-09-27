@@ -4,7 +4,7 @@
   import type { Item } from "../api";
   import { keyOf } from "../folder.svelte";
   import { stemRange } from "../format";
-  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp } from "../listing";
+  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp, startMarquee, type MarqueeRect } from "../listing";
   import { clipboard } from "../stores/clipboard.svelte";
   import { settings } from "../stores/settings.svelte";
   import { ui } from "../stores/ui.svelte";
@@ -29,6 +29,25 @@
   let lastRow = $derived(Math.min(rowCount, Math.ceil((scrollTop + viewportH) / cellH) + 2));
   let slice = $derived(rows.slice(firstRow * cols, lastRow * cols));
   let folder = $derived(tab.folder);
+
+  let marquee = $state<MarqueeRect | null>(null);
+
+  /** Cells a selection rectangle overlaps. */
+  function cellsIn(r: MarqueeRect) {
+    const keys: string[] = [];
+    const rowFrom = Math.max(0, Math.floor((r.y - 8) / cellH));
+    const rowTo = Math.min(rowCount - 1, Math.floor((r.y + r.h - 8) / cellH));
+    for (let row = rowFrom; row <= rowTo; row++) {
+      for (let col = 0; col < cols; col++) {
+        const i = row * cols + col;
+        if (i >= rows.length) break;
+        const x = 12 + col * cellW;
+        const y = 8 + row * cellH;
+        if (x < r.x + r.w && x + cellW - 8 > r.x && y < r.y + r.h && y + cellH - 8 > r.y) keys.push(keyOf(rows[i]));
+      }
+    }
+    return keys;
+  }
 
   let restoredFor: object | null = null;
   $effect(() => {
@@ -97,7 +116,7 @@
   {onwheel}
   onpointerdown={(e) => {
     ws.focusPane(tab.pane.id);
-    if (e.target === e.currentTarget && e.button === 0) tab.selectOnly(null);
+    if (e.target === e.currentTarget && e.button === 0 && scroller) startMarquee(e, scroller, tab, cellsIn, (r) => (marquee = r), () => tab.selectOnly(null));
   }}
   oncontextmenu={(e) => e.target === e.currentTarget && blankMenu(e, tab)}
   use:dropTarget={{ dest: () => (tab.writable ? tab.dirUri : null) }}
@@ -137,6 +156,7 @@
       {/if}
     </div>
   {/each}
+  {#if marquee}<div class="marquee" style:left="{marquee.x}px" style:top="{marquee.y}px" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>{/if}
   <ViewStates {tab} rowH={cellH} />
 </div>
 
@@ -151,6 +171,14 @@
   }
   .spacer {
     width: 1px;
+    pointer-events: none;
+  }
+  .marquee {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 2px;
     pointer-events: none;
   }
   .cell {

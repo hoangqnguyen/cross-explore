@@ -18,11 +18,11 @@
   {#if step === 0}
     <p>How do you like to work? You can change this any time in Settings.</p>
     <div class="choices">
-      <label class="choice" class:on={s.keymap === "explorer" && !s.dual}>
-        <input type="radio" name="style" onchange={() => ((s.keymap = "explorer"), (s.dual = false))} checked={s.keymap === "explorer" && !s.dual} />
+      <label class="choice" class:on={s.keymap !== "commander" && !s.dual}>
+        <input type="radio" name="style" onchange={() => ((s.keymap = navigator.platform.includes("Mac") ? "finder" : "explorer"), (s.dual = false))} checked={s.keymap !== "commander" && !s.dual} />
         <div class="mock"><div class="bar"></div><div class="one"></div></div>
-        <strong>Explorer-like</strong>
-        <span>One pane with tabs. Familiar Windows and Finder keys.</span>
+        <strong>{navigator.platform.includes("Mac") ? "Finder-like" : "Explorer-like"}</strong>
+        <span>One pane with tabs and the keys you know. Finder and Explorer keys are both in Settings.</span>
       </label>
       <label class="choice" class:on={s.keymap === "commander" || s.dual}>
         <input type="radio" name="style" onchange={() => ((s.keymap = "commander"), (s.dual = true))} checked={s.keymap === "commander"} />

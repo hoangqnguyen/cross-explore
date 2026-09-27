@@ -4,7 +4,7 @@
   import type { Item } from "../api";
   import { keyOf } from "../folder.svelte";
   import { formatDate, formatDateFull, formatSize, stemRange, typeLabel } from "../format";
-  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp } from "../listing";
+  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp, pressedOnName, startMarquee, type MarqueeRect } from "../listing";
   import type { SortKey } from "../sort";
   import { clipboard } from "../stores/clipboard.svelte";
   import { settings } from "../stores/settings.svelte";
@@ -68,6 +68,24 @@
   }
 
   let outline = $derived(tab.folder.kind === "folder");
+  let marquee = $state<MarqueeRect | null>(null);
+  let dragFromName = false;
+
+  /** Rows a selection rectangle touches (any horizontal overlap counts, like Finder's list). */
+  function rowsIn(r: MarqueeRect) {
+    const first = Math.max(0, Math.floor(r.y / rowH));
+    const last = Math.min(rows.length - 1, Math.floor((r.y + r.h) / rowH));
+    const keys: string[] = [];
+    for (let i = first; i <= last; i++) keys.push(keyOf(rows[i]));
+    return keys;
+  }
+
+  function beginMarquee(e: PointerEvent, clickKey: string | null) {
+    if (!scroller) return;
+    ws.focusPane(tab.pane.id);
+    scroller.focus();
+    startMarquee(e, scroller, tab, rowsIn, (r) => (marquee = r), () => tab.selectOnly(clickKey));
+  }
 
   function onkeydown(e: KeyboardEvent) {
     if (e.target !== scroller) return;
@@ -149,7 +167,7 @@
     {onkeydown}
     onpointerdown={(e) => {
       ws.focusPane(tab.pane.id);
-      if (e.target === e.currentTarget && e.button === 0) tab.selectOnly(null);
+      if (e.target === e.currentTarget && e.button === 0) beginMarquee(e, null);
     }}
     oncontextmenu={(e) => e.target === e.currentTarget && blankMenu(e, tab)}
     use:dropTarget={{ dest: () => (tab.writable ? tab.dirUri : null) }}
@@ -173,11 +191,16 @@
         draggable={tab.renaming !== key}
         style:transform="translateY({i * rowH}px)"
         style:height="{rowH}px"
-        onpointerdown={(e) => onItemPointerDown(e, tab, entry)}
-        onpointerup={(e) => onItemPointerUp(e, tab, entry)}
+        onpointerdown={(e) => {
+          dragFromName = pressedOnName(e);
+          // Whitespace of a row starts a selection rectangle (Finder's list view).
+          if (!dragFromName && e.button === 0 && e.pointerType === "mouse" && !e.shiftKey && tab.renaming !== key) beginMarquee(e, key);
+          else onItemPointerDown(e, tab, entry);
+        }}
+        onpointerup={(e) => dragFromName && onItemPointerUp(e, tab, entry)}
         ondblclick={() => !ui.phone && tab.open(entry)}
         oncontextmenu={(e) => itemMenu(e, tab, entry)}
-        ondragstart={(e) => onDragStart(e, tab, entry)}
+        ondragstart={(e) => (dragFromName ? onDragStart(e, tab, entry) : e.preventDefault())}
         ondragend={onDragEnd}
         use:dropTarget={{ dest: () => (entry.isDir ? tab.uriOf(entry) : null), spring: () => tab.open(entry) }}
       >
@@ -221,6 +244,7 @@
       </div>
     {/each}
 
+    {#if marquee}<div class="marquee" style:left="{marquee.x}px" style:top="{marquee.y}px" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>{/if}
     <ViewStates {tab} {rowH} />
   </div>
 </div>
@@ -292,6 +316,14 @@
   }
   .spacer {
     width: 1px;
+    pointer-events: none;
+  }
+  .marquee {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 2px;
     pointer-events: none;
   }
   .row {

@@ -50,15 +50,20 @@
       {#if section === "general"}
         <h3>Keyboard</h3>
         <div class="choices">
+          <label class="choice" class:on={s.keymap === "finder"}>
+            <input type="radio" bind:group={s.keymap} value="finder" />
+            <strong>Finder</strong>
+            <span>↩ renames, ⌘O / ⌘↓ opens, ⌘⌫ to Trash, ⌘[ ⌘] back/forward, ⌘1–4 views, ⌘I Get Info.</span>
+          </label>
           <label class="choice" class:on={s.keymap === "explorer"}>
             <input type="radio" bind:group={s.keymap} value="explorer" />
-            <strong>Explorer / Finder</strong>
-            <span>Enter opens (renames on macOS), F2 renames, Delete trashes, F5 refreshes.</span>
+            <strong>Explorer</strong>
+            <span>Enter opens, F2 renames, Delete / Shift+Delete, Alt+←/→/↑, Backspace back, F5 refresh, Alt+Enter Properties.</span>
           </label>
           <label class="choice" class:on={s.keymap === "commander"}>
             <input type="radio" bind:group={s.keymap} value="commander" />
             <strong>Commander</strong>
-            <span>F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switches panes, Insert selects.</span>
+            <span>Explorer keys plus F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane, Insert select.</span>
           </label>
         </div>
         <h3>Appearance</h3>
@@ -188,7 +193,7 @@
   }
   .choices {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 8px;
   }
   .choice {
