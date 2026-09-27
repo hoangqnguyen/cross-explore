@@ -53,6 +53,10 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("doc.pdf"), tiny_pdf()).ok()?;
         std::fs::write(base.join("sheet.csv"), "Fruit,Qty\nApples,3\nPears,5\n").ok()?;
         std::fs::write(base.join("sub").join("nested.txt"), "deep inside\n").ok()?;
+        // Many folders: a big listing arrives in large channel messages.
+        for i in 0..400 {
+            std::fs::create_dir_all(base.join("sub").join("wide").join(format!("folder number {i:03} with a fairly long name"))).ok()?;
+        }
         Some(base.canonicalize().unwrap_or(base))
     })
 }

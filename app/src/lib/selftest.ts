@@ -157,6 +157,28 @@ export async function selftest() {
     }
   });
 
+  await check("Copy to… folder browser lists subfolders and drives", async () => {
+    tab().navigate(dir);
+    await until("listing", () => tab().folder.status === "ready" && has("sub"));
+    void dialogs.ask("destination", { uris: [childUri(dir, "alpha.txt")], mode: "copy" });
+    try {
+      const browse = await until("browse button", () => [...document.querySelectorAll<HTMLButtonElement>(".modal button")].find((b) => b.textContent?.includes("Choose another folder")));
+      browse!.click();
+      await until("subfolder 'sub' listed", () => [...document.querySelectorAll(".modal .blist .dir")].some((d) => d.textContent?.trim() === "sub"), 5000);
+      // A big folder (large channel messages) lists completely too.
+      const input = document.querySelector<HTMLInputElement>('.modal input[aria-label="Path"]')!;
+      input.value = childUri(childUri(dir, "sub"), "wide");
+      input.dispatchEvent(new Event("input"));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await until("400 folders listed", () => document.querySelectorAll(".modal .blist .dir").length === 400, 5000);
+      if ([...document.querySelectorAll(".modal .blist p")].some((p) => p.textContent?.includes("No subfolders"))) throw new Error("claimed no subfolders");
+      document.querySelector<HTMLButtonElement>('.modal [aria-label="Drives"]')!.click();
+      await until("drives listed", () => document.querySelectorAll(".modal .blist .dir").length >= 2);
+    } finally {
+      dialogs.close(null);
+    }
+  });
+
   await check("recursive name and content search", async () => {
     const byName: string[] = [];
     await search(dir, { text: "nested" }, (e) => e.type === "hits" && byName.push(...e.hits.map((h) => h.entry.name)));

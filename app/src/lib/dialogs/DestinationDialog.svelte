@@ -83,9 +83,22 @@
   let browseError = $state<string | null>(null);
   let pathInput = $state("");
 
+  /** Pseudo location: the list of drives (plus home and cloud folders). */
+  const DRIVES = "cx:drives";
+  let drives = $derived([
+    ...(ws.places ? [{ uri: ws.places.home.uri, label: ws.places.home.name, detail: "Home", icon: "home" as IconName }] : []),
+    ...(ws.places?.volumes ?? []).map((v) => ({ uri: v.uri, label: v.name, detail: pretty(v.uri), icon: (v.removable ? "external" : "drive") as IconName })),
+    ...(ws.places?.cloud ?? []).map((c) => ({ uri: c.uri, label: c.name, detail: c.account ?? "Cloud", icon: "cloud" as IconName })),
+  ]);
+
   $effect(() => {
     if (!browsing) return;
     const uri = browseUri;
+    if (uri === DRIVES) {
+      browseDirs = [];
+      browseError = null;
+      return;
+    }
     browseDirs = null;
     browseError = null;
     const dirs: Entry[] = [];
@@ -98,9 +111,11 @@
   });
 
   const upOf = (uri: string) => {
+    if (uri === DRIVES) return null;
     const n = norm(uri);
     const i = n.lastIndexOf("/");
-    return i > n.indexOf("://") + 2 ? n.slice(0, i) || n : null;
+    // Above a drive's root (or a server's) come the drives.
+    return i > n.indexOf("://") + 2 ? n.slice(0, i) || n : DRIVES;
   };
 
   function addCustom(uri: string) {
@@ -151,10 +166,20 @@
     <div class="browser">
       <div class="bbar">
         <button type="button" class="icon" aria-label="Up" disabled={!upOf(browseUri)} onclick={() => (browseUri = upOf(browseUri)!)}><Icon name="up" size={15} /></button>
-        <input type="text" bind:value={pathInput} placeholder={pretty(browseUri)} onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), goToTyped())} spellcheck="false" aria-label="Path" />
+        <button type="button" class="icon" class:on={browseUri === DRIVES} aria-label="Drives" title="Drives" onclick={() => (browseUri = DRIVES)}><Icon name="drive" size={15} /></button>
+        <input type="text" bind:value={pathInput} placeholder={browseUri === DRIVES ? "Drives — or type a path / server URL" : pretty(browseUri)} onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), goToTyped())} spellcheck="false" aria-label="Path" />
       </div>
       <div class="blist">
-        {#if browseError}
+        {#if browseUri === DRIVES}
+          {#each drives as d (d.uri)}
+            <button type="button" class="dir" onclick={() => (browseUri = d.uri)}>
+              <Icon name={d.icon} size={16} />
+              <span>{d.label}</span>
+              <span class="muted ddetail">{d.detail}</span>
+              <Icon name="chevronRight" size={11} />
+            </button>
+          {/each}
+        {:else if browseError}
           <p class="error">{browseError}</p>
         {:else if !browseDirs}
           <p class="muted">Loading…</p>
@@ -171,9 +196,9 @@
         {/if}
       </div>
       <div class="bfoot">
-        <span class="muted where">{pretty(browseUri)}</span>
+        <span class="muted where">{browseUri === DRIVES ? "Drives" : pretty(browseUri)}</span>
         <button type="button" class="btn" onclick={() => (browsing = false)}>Back</button>
-        <button type="button" class="btn primary" disabled={!!browseError} onclick={() => addCustom(browseUri)}>Choose this folder</button>
+        <button type="button" class="btn primary" disabled={!!browseError || browseUri === DRIVES} onclick={() => addCustom(browseUri)}>Choose this folder</button>
       </div>
     </div>
   {:else}
@@ -329,6 +354,17 @@
   }
   .dir span {
     flex: 1;
+  }
+  .dir .ddetail {
+    flex: none;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .icon.on {
+    background: var(--accent-soft);
   }
   .dir:hover {
     background: var(--hover);

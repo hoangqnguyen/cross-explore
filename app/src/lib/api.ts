@@ -141,9 +141,26 @@ function channel<T>(onMessage: (m: T) => void) {
   return ch;
 }
 
+/**
+ * List a folder, streaming events to `onEvent`. Resolves once every entry has
+ * been delivered: channel messages can arrive after the command itself
+ * returns, so this waits for the "done" event too.
+ */
 export async function listDir(uri: string, onEvent: (ev: ListEvent) => void): Promise<void> {
-  await invoke("list_dir", { uri, onEvent: channel(onEvent) });
+  let finished!: () => void;
+  const done = new Promise<void>((r) => (finished = r));
+  await invoke("list_dir", {
+    uri,
+    onEvent: channel((ev: ListEvent) => {
+      onEvent(ev);
+      if (ev.type === "done") finished();
+    }),
+  });
+  // The backend always sends "done" before returning; the timeout only guards a lost message.
+  await Promise.race([done, sleepMs(3000)]);
 }
+
+const sleepMs = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface WatchInfo {
   id: number;
