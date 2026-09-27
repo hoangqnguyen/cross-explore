@@ -1378,6 +1378,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "cx-cloud"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "cx-core",
+ "futures-util",
+ "getrandom 0.3.4",
+ "http-body-util",
+ "httpdate",
+ "hyper",
+ "hyper-util",
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "cx-core"
 version = "0.1.0"
 dependencies = [
@@ -3121,6 +3146,7 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
