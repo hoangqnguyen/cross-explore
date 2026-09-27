@@ -6,6 +6,7 @@
   import { renderMarkdown } from "../markdown";
   import { isArchive } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
+  import ZoomImage from "./ZoomImage.svelte";
 
   let { entry, uri, large = false }: { entry: Item; uri: string; large?: boolean } = $props();
 
@@ -67,8 +68,10 @@
 </script>
 
 <div class="preview" class:large>
-  {#if kind === "image" && !imageFailed}
-    <img src={large ? fileUrl(uri) : thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={() => (imageFailed = true)} />
+  {#if kind === "image" && !imageFailed && large}
+    <ZoomImage src={fileUrl(uri)} alt={entry.name} onerror={() => (imageFailed = true)} />
+  {:else if kind === "image" && !imageFailed}
+    <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={() => (imageFailed = true)} />
   {:else if kind === "video"}
     <!-- svelte-ignore a11y_media_has_caption -->
     <video src={fileUrl(uri)} controls autoplay={large} preload="metadata" poster={thumbUrl(uri, 640, entry.modified)}></video>
