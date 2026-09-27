@@ -1,0 +1,30 @@
+╭ cx-tui-render › dialogs ─────────────────────────────────────────────────────────────────────────── ● live ╮
+│ ╭ Keyboard shortcuts ────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Keyboard: Explorer style  (switch in Settings or the palette)                                          │e│
+│ │                                                                                                        │—│
+│ │ Lists                                                                                                  │—│
+│ │   ↑ ↓ PgUp PgDn Home End      move the cursor                                                          │B│
+│ │   Shift + arrows / Home / End select a range                                                           │B│
+│✓│   → / ←                       Details: expand / collapse a folder in place (Brief: next / previous col │B│
+│ │   type letters                filter this folder (Esc clears, Backspace edits)                         │B│
+│ │   Esc                         clear the filter, then the selection                                     │ │
+│ │   mouse                       click selects, Ctrl+click toggles, Shift+click extends, double-click ope │ │
+│ │                               wheel scrolls, header click sorts, right click shows actions             │ │
+│ │                                                                                                        │ │
+│ │ Navigate                                                                                               │ │
+│ │   Alt+←                       Back                                                                     │ │
+│ │   Alt+→                       Forward                                                                  │ │
+│ │   Backspace, Alt+↑            Enclosing folder                                                         │ │
+│ │   F5, Ctrl+R                  Refresh                                                                  │ │
+│ │                                                                                                        │ │
+│ │ Go                                                                                                     │ │
+│ │   Alt+Home                    Go to Home page                                                          │ │
+│ │   Ctrl+Home                   Go to your home folder                                                   │ │
+│ │   Ctrl+L, Ctrl+G, Alt+D       Go to folder or path…                                                    │ │
+│ │   Alt+F1                      Places & drives (left pane)…                                             │ │
+│ │   Alt+F2                      Places & drives (right pane)…                                            │ │
+│ │   Ctrl+D                      Favorites (hotlist)…                                                     │ │
+│ │   Alt+↓                       Recent folders…                                                          │ │
+│6│   Ctrl+B                      Add to / remove from Favorites                                           │ │
+╰─╰↑↓ PgUp PgDn scroll  Esc close──────────────────────────────────────────────────────────────────────────╯─╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect  Ctrl+J transfers  F10 quit         Explorer

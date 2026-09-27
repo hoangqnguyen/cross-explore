@@ -1,0 +1,10 @@
+╭ cx-tui-render › outline ─────────────────────────────────────────────────────── ● live ╮
+│ 1 outline                                                                              │
+│ Documents                   │ photo.jpg                  │                             │
+│ Photos                      │                            │                             │
+│ archive.zip                 │                            │                             │
+│ main.rs                     │                            │                             │
+│ notes.md                    │                            │                             │
+│6 items                                                                                 │
+╰────────────────────────────────────────────────────────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect                 Explorer

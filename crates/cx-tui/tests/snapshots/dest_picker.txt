@@ -1,0 +1,24 @@
+╭ cx-tui-render › dialogs ───────────────────────────────────────────────────────────────── ● live ╮
+│ 1 dialogs                                                                                        │
+│ Name ▲╭ Copy “notes.md” to… ─────────────────────────────────────────────────────────────╮   Size│
+│ ▸ Docu│ Destination                                                                      │      —│
+│ ▸ Phot│ ──────────────────────────────────────────────────────────────────────────────── │      —│
+│   arch│ Favorites                                                                        │    2 B│
+│   main│ [ ] Docs                                ~/dialogs/Documents                      │   34 B│
+│✓  note│ → ~/dialogs/Documents                                                            │   27 B│
+│   phot│                                                                                  │ 2.5 MB│
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│       │                                                                                  │       │
+│6 items╰Space tick several  Enter copy  type path or filter  Tab complete  Esc cancel─────╯       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect  Ctrl+J transfers         Explorer

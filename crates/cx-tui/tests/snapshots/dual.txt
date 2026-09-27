@@ -1,0 +1,14 @@
+╭ cx-tui-render › dual ──────────────────────────── ● live ╮╭ cx-tui-render › dual › Documents ──────────────── ● live ╮
+│ 1 dual │ 2 dual                                          ││ 1 Documents                                              │
+│ Name ▲           Modified         Kind               Size││ Name ▲           Modified         Kind               Size│
+│ ▸ Documents     2021-03-04       Folder                 —││   report.pdf    2021-03-04       PDF document      120 KB│
+│ ▸ Photos        2021-03-04       Folder                 —││                                                          │
+│   archive.zip   2021-03-04       ZIP archive          2 B││                                                          │
+│   main.rs       2021-03-04       Rust source         34 B││                                                          │
+│   notes.md      2021-03-04       Markdown            27 B││                                                          │
+│   photo.jpg     2021-03-04       JPG image         2.5 MB││                                                          │
+│                                                          ││                                                          │
+│6 items                                                   ││1 item                                                    │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect  Ctrl+J transfers  F10 quit                  Commander
+1Help       2Rename     3View       4Edit       5Copy       6Move       7MkDir      8Delete     9Dual       10Quit

@@ -101,6 +101,10 @@ crates/
   cx-search     Name and content search, fuzzy ranking
   cx-thumbs     Thumbnails (image crate + QuickLook / shell / CLI), text previews
   cx-term       PTY sessions for the embedded terminal
+  cx-cloud      Google Drive, Dropbox, OneDrive (HTTP APIs, OAuth + PKCE browser sign-in)
+  cx-office     Word/Excel/PowerPoint/OpenDocument/RTF/CSV previews as safe HTML (LibreOffice PDF optional)
+  cx-engine     Everything but the GUI wired together (connectors, transfers, search, peer…)
+  cx-tui        Terminal UI on cx-engine: panes, tabs, transfers, palette, Explorer/Commander keys
   cx-cli        `cx` headless peer server and client
   cx-testkit    In-memory provider for tests
   cx-bench      Performance budget checks
@@ -128,6 +132,10 @@ npm run dev                     # UI only, in a browser, against an in-memory mo
 # Mobile (needs Xcode / Android SDK + NDK; set NDK_HOME)
 npx tauri ios build --debug --target aarch64-sim
 npx tauri android build --debug --target aarch64 --apk
+
+# Terminal UI (same features, keyboard and mouse; F1 lists every key)
+cargo run -p cx-tui --release -- ~/Downloads
+cargo install --path crates/cx-tui          # then just: cx-tui [folder or URI]
 
 # Headless peer server for a NAS or server
 cargo run -p cx-cli --release -- serve --share Media=/srv/media:ro

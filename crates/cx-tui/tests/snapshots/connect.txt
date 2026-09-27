@@ -1,0 +1,26 @@
+╭ cx-tui-render › dialogs ───────────────────────────────────────────────────────────────── ● live ╮
+│ 1 dialogs                                                                                        │
+│ Name ▲                                                   Modified         Kind               Size│
+│ ▸ Documents ╭ Connect to server ───────────────────────────────────────────────────╮            —│
+│ ▸ Photos    │ Protocol        ◂ SFTP (SSH) ▸                                       │            —│
+│   archive.zi│                                                                      │          2 B│
+│   main.rs   │ Server          nas.local                                            │         34 B│
+│✓  notes.md  │ Port (22)       2222                                                 │         27 B│
+│   photo.jpg │ Folder          /home/pi                                             │       2.5 MB│
+│             │                                                                      │             │
+│             │ User            pi                                                   │             │
+│             │ Password                                                             │             │
+│             │ Key file                                                             │             │
+│             │                                                                      │             │
+│             │ [ ] Connect as guest / anonymously                                   │             │
+│             │ [✓] Remember the password in the keychain                            │             │
+│             │ [✓] Add to saved servers                                             │             │
+│             │                                                                      │             │
+│             │  Connect   sftp://pi@nas.local:2222/home/pi                          │             │
+│             │                                                                      │             │
+│             │                                                                      │             │
+│             │                                                                      │             │
+│             ╰Enter connect  Tab next field  ←→ protocol  Space toggle  Esc cancel──╯             │
+│6 items · 1 selected (27 B)                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect  Ctrl+J transfers         Explorer

@@ -1,0 +1,45 @@
+[package]
+name = "cx-engine"
+description = "The Cross Explore engine without a GUI: the VFS with every connector, transfers, archives, search, tags, discovery and peer mode, wired together once for the desktop app and the terminal UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cx-core.workspace = true
+cx-local.workspace = true
+cx-transfer = { path = "../cx-transfer" }
+cx-archive = { path = "../cx-archive" }
+cx-search = { path = "../cx-search" }
+cx-thumbs = { path = "../cx-thumbs" }
+cx-discovery = { path = "../cx-discovery" }
+cx-peer = { path = "../cx-peer" }
+cx-smb = { path = "../cx-smb" }
+cx-webdav = { path = "../cx-webdav" }
+cx-sftp = { path = "../cx-sftp" }
+cx-ftp = { path = "../cx-ftp" }
+cx-term = { path = "../cx-term" }
+cx-s3 = { path = "../cx-s3" }
+cx-cloud = { path = "../cx-cloud" }
+tokio-util = "0.7"
+blake3 = "1"
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "fs", "io-util", "sync", "time", "macros"] }
+dirs.workspace = true
+sysinfo.workspace = true
+
+# Same gating as the desktop app: every platform with an OS keychain.
+[target.'cfg(any(target_os = "macos", target_os = "ios", windows, all(target_os = "linux", not(target_os = "android"))))'.dependencies]
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(any(target_os = "macos", windows, all(target_os = "linux", not(target_os = "android"))))'.dependencies.clipboard-rs]
+version = "0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+xattr = "1"
+plist = "1"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs", "io-util", "time"] }

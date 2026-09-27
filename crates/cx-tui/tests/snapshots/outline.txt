@@ -1,0 +1,14 @@
+╭ cx-tui-render › outline ─────────────────────────────────────────────────────── ● live ╮
+│ 1 outline                                                                              │
+│ Name ▲                                         Modified         Kind               Size│
+│ ▾ Documents                                   2021-03-04       Folder                 —│
+│     report.pdf                                2021-03-04       PDF document      120 KB│
+│ ▸ Photos                                      2021-03-04       Folder                 —│
+│   archive.zip                                 2021-03-04       ZIP archive          2 B│
+│   main.rs                                     2021-03-04       Rust source         34 B│
+│   notes.md                                    2021-03-04       Markdown            27 B│
+│   photo.jpg                                   2021-03-04       JPG image         2.5 MB│
+│                                                                                        │
+│7 items                                                                                 │
+╰────────────────────────────────────────────────────────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect                 Explorer
