@@ -81,6 +81,8 @@ export const commands: Command[] = [
   { id: "edit.paste", label: "Paste", group: "Edit", icon: "paste", keys: { both: ["Mod+V"] }, list: true, when: writable, run: () => ws.paste() },
   { id: "edit.duplicate", label: "Duplicate", group: "Edit", icon: "copy", keys: { both: [m("Mod+D", "Mod+Shift+D")] }, list: true, when: () => hasTargets() && writable(), run: () => ws.duplicate() },
   { id: "edit.undo", label: "Undo", group: "Edit", icon: "undo", keys: { both: ["Mod+Z"] }, list: true, when: () => transfers.undoStack.length > 0, run: () => transfers.undo() },
+  { id: "file.copyTo", label: "Copy to…", group: "File", icon: "copy", keys: { both: ["Shift+F5"] }, list: true, when: hasTargets, run: () => dialogs.ask("destination", { uris: tab().targets().map((e) => tab().uriOf(e)), mode: "copy" }) },
+  { id: "file.moveTo", label: "Move to…", group: "File", icon: "move", keys: { both: ["Shift+F6"] }, list: true, when: () => hasTargets() && writable(), run: () => dialogs.ask("destination", { uris: tab().targets().map((e) => tab().uriOf(e)), mode: "move" }) },
   { id: "file.copyOther", label: "Copy to other pane", group: "Panes", icon: "copy", keys: { commander: ["F5"], explorer: ["Mod+Shift+5"] }, list: true, when: () => ws.dual && hasTargets(), run: () => ws.toOtherPane(false) },
   { id: "file.moveOther", label: "Move to other pane", group: "Panes", icon: "move", keys: { commander: ["F6"], explorer: ["Mod+Shift+6"] }, list: true, when: () => ws.dual && hasTargets(), run: () => ws.toOtherPane(true) },
   { id: "file.copyPath", label: "Copy path", group: "File", icon: "link", keys: { both: [m("Mod+Alt+C", "Mod+Shift+C")] }, run: () => tab().copyPath() },

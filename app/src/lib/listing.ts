@@ -142,6 +142,8 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     { separator: true },
     cmd("edit.cut"),
     cmd("edit.copy"),
+    cmd("file.copyTo"),
+    cmd("file.moveTo"),
     ...(ws.dual ? [cmd("file.copyOther"), cmd("file.moveOther")] : []),
     cmd("edit.duplicate"),
     { separator: true },

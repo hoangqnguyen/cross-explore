@@ -16,7 +16,8 @@ export type DialogKind =
   | "diff"
   | "pair"
   | "tags"
-  | "about";
+  | "about"
+  | "destination";
 
 interface Open {
   kind: DialogKind;

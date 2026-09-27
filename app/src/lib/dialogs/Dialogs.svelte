@@ -3,6 +3,7 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import ConnectDialog from "./ConnectDialog.svelte";
   import DiffDialog from "./DiffDialog.svelte";
+  import DestinationDialog from "./DestinationDialog.svelte";
   import HostKeyDialog from "./HostKeyDialog.svelte";
   import MultiRenameDialog from "./MultiRenameDialog.svelte";
   import OfferDialog from "./OfferDialog.svelte";
@@ -30,6 +31,7 @@
     diff: DiffDialog,
     pair: PairDialog,
     tags: TagsDialog,
+    destination: DestinationDialog,
   } as const;
 </script>
 

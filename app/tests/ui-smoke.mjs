@@ -107,6 +107,39 @@ try {
   await sleep(300);
   check("up selects the folder we came from", JSON.stringify(await t.selected()) === '["Invoices"]', JSON.stringify(await t.selected()));
 
+  // Copy to many destinations, move to one.
+  await t.open("?path=~/Downloads");
+  await t.eval(`(() => { const tab = window.__cx.ws.activeTab; tab.selection = new Set(['dataset.csv', 'setup.sh']); tab.cursor = 'dataset.csv'; })()`);
+  await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .row')].find(r => r.textContent.includes('dataset.csv')).getBoundingClientRect(); [...document.querySelectorAll('.pane.active .row')].find(r => r.textContent.includes('dataset.csv')).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 60, clientY: r.top + 10 })); })()`);
+  await sleep(150);
+  check("context menu has Copy to… and Move to…", await t.eval(`['Copy to…', 'Move to…'].every(l => [...document.querySelectorAll('.menu button')].some(b => b.textContent.includes(l)))`));
+  await t.clickText(".menu button", "Copy to…");
+  await sleep(200);
+  check("destination picker opens", (await t.eval(`document.querySelector('.modal h2')?.textContent ?? ''`)).includes("Copy 2 items to"));
+  await t.clickText(".modal .place", "Documents");
+  await t.clickText(".modal .place", "Desktop");
+  check("button says copy to 2 places", (await t.eval(`document.querySelector('.modal footer .btn.primary').textContent`)).includes("2 places"));
+  await t.clickText(".modal footer .btn.primary", "Copy to 2 places");
+  let both = false;
+  for (let i = 0; i < 60 && !both; i++) {
+    await sleep(200);
+    both = await t.eval(`(async () => { const { listDir } = await import('/src/lib/api.ts'); const names = async (u) => { const n = []; await listDir(u, (e) => e.type === 'batch' && n.push(...e.entries.map(x => x.name))); return n; }; const d = await names('~/Documents'); const k = await names('~/Desktop'); return ['dataset.csv','setup.sh'].every(f => d.includes(f) && k.includes(f)); })()`);
+  }
+  check("both files copied to both destinations", both);
+  await t.eval(`(() => { const tab = window.__cx.ws.activeTab; tab.selectOnly('podcast-ep12.mp3'); })()`);
+  await t.eval(`window.__cx.ws.activeTab && document.dispatchEvent(new CustomEvent('cx:palette'))`);
+  await sleep(100);
+  await t.type("move to");
+  await t.key("Enter");
+  await sleep(200);
+  await t.clickText(".modal .place", "Music");
+  await t.clickText(".modal .place", "Movies");
+  check("move allows a single destination", (await t.eval(`document.querySelectorAll('.modal .place.on').length`)) === 1);
+  await t.clickText(".modal footer .btn.primary", "Move");
+  for (let i = 0; i < 40 && (await t.rows()).includes("podcast-ep12.mp3"); i++) await sleep(200);
+  check("moved file left the folder", !(await t.rows()).includes("podcast-ep12.mp3"));
+  await t.open("?path=~/Documents");
+
   // Finder-style outline: expand folders in place.
   await t.eval(`document.querySelector('.pane.active .row .disclosure').click()`);
   await sleep(300);

@@ -50,6 +50,8 @@ export interface SettingsData {
   recent: string[];
   session: SavedWorkspace | null;
   groupBy: "none" | "date" | "kind";
+  /** Destinations recently used with Copy to… / Move to…. */
+  recentDestinations: string[];
   /** Alternating row colors in the Details view. */
   stripes: boolean;
   /** Path of the selected item in the status bar (Finder's path bar). */
@@ -84,6 +86,7 @@ const defaults: SettingsData = {
   groupBy: "none",
   fdaDismissed: false,
   stripes: true,
+  recentDestinations: [],
   pathBar: true,
 };
 
