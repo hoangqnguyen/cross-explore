@@ -177,15 +177,14 @@ impl App {
                 let is_main = t.is_folder() && t.dir_uri().trim_end_matches('/') == dir;
                 let key = added.as_ref().map(|e| e.name.clone());
                 for f in t.folders_mut() {
-                    if f.dir_uri().trim_end_matches('/') != dir || !f.is_ready() {
+                    if f.dir_uri().trim_end_matches('/') != dir || matches!(f.status, crate::folder::Status::Error(_)) {
                         continue;
                     }
-                    for r in removed {
-                        f.remove(r);
-                    }
+                    let mut changes: Vec<cx_core::Change> = removed.iter().map(|r| cx_core::Change::Remove { name: r.to_string() }).collect();
                     if let Some(e) = &added {
-                        f.upsert(e.clone(), false);
+                        changes.push(cx_core::Change::Upsert { entry: e.clone() });
                     }
+                    f.apply_local(changes);
                 }
                 if is_main && p == self.active {
                     select = key;
@@ -423,11 +422,13 @@ impl App {
             return;
         }
         self.toast(format!("{} {}", if cut { "Cut" } else { "Copied" }, describe(&uris)));
-        let local = uris.clone();
-        // Local files also go on the system clipboard for Finder / Explorer.
-        tokio::task::spawn_blocking(move || {
-            let _ = cx_engine::system::os_clipboard_set(&local);
-        });
+        if self.settings.os_clipboard {
+            let local = uris.clone();
+            // Local files also go on the system clipboard for Finder / Explorer.
+            tokio::task::spawn_blocking(move || {
+                let _ = cx_engine::system::os_clipboard_set(&local);
+            });
+        }
         self.clipboard = Some((uris, cut));
     }
 
@@ -437,9 +438,14 @@ impl App {
         }
         let dest = self.tab().dir_uri().to_string();
         let ours: Vec<String> = self.clipboard.as_ref().map(|c| c.0.iter().filter(|u| u.starts_with("file:")).cloned().collect()).unwrap_or_default();
+        let use_os = self.settings.os_clipboard;
         self.spawn(move |_| async move {
             // Files copied in another app win when they differ from ours.
-            let os = tokio::time::timeout(std::time::Duration::from_millis(500), tokio::task::spawn_blocking(cx_engine::system::os_clipboard_get)).await.ok().and_then(|r| r.ok()).unwrap_or_default();
+            let os = if !use_os {
+                Vec::new()
+            } else {
+                tokio::time::timeout(std::time::Duration::from_millis(500), tokio::task::spawn_blocking(cx_engine::system::os_clipboard_get)).await.ok().and_then(|r| r.ok()).unwrap_or_default()
+            };
             Box::new(move |app: &mut App| {
                 if !os.is_empty() && (os.len() != ours.len() || os.iter().any(|u| !ours.contains(u))) {
                     app.submit("copy", os, Some(dest), ConflictPolicy::Ask);
@@ -819,7 +825,7 @@ impl App {
         self.show_diff(a, b);
     }
 
-    pub(crate) fn show_diff(&mut self, left: String, right: String) {
+    pub fn show_diff(&mut self, left: String, right: String) {
         self.spawn(move |engine| async move {
             const MAX: usize = 4 << 20;
             let (a, b) = tokio::join!(engine.preview_text(&left, MAX), engine.preview_text(&right, MAX));

@@ -82,6 +82,10 @@ pub struct Folder {
     /// Identifies this listing in messages from background tasks; a new
     /// listing of the same URI gets a new token, so stale results are dropped.
     pub token: u64,
+    /// Which listing of this folder is current. A reload bumps it, so
+    /// batches from an older listing still streaming in are ignored instead
+    /// of being mixed in twice.
+    pub load_seq: u64,
     pub uri: String,
     pub info: Option<LocationInfo>,
     pub caps: Option<Capabilities>,
@@ -93,6 +97,9 @@ pub struct Folder {
     /// Set while re-listing a folder that is already shown: the new rows go
     /// here and replace `items` at the end, so the list doesn't flash empty.
     reloading: Option<Vec<Item>>,
+    /// Patches that arrived mid-listing (the listing may already have
+    /// passed those names), applied when it completes.
+    queued: Vec<(Change, bool)>,
     pub watch: Option<(u64, WatchMode)>,
     pub watch_pending: bool,
     pub fresh: HashMap<String, Instant>,
@@ -107,6 +114,7 @@ impl Folder {
     pub fn new(token: u64, uri: impl Into<String>, sort: SortSpec) -> Folder {
         Folder {
             token,
+            load_seq: 0,
             uri: uri.into(),
             info: None,
             caps: None,
@@ -115,6 +123,7 @@ impl Folder {
             sort,
             keep_order: false,
             reloading: None,
+            queued: Vec::new(),
             watch: None,
             watch_pending: false,
             fresh: HashMap::new(),
@@ -137,6 +146,11 @@ impl Folder {
     /// child URIs.
     pub fn dir_uri(&self) -> &str {
         self.info.as_ref().map(|i| i.uri.as_str()).unwrap_or(&self.uri)
+    }
+
+    /// A listing is running (first load or reload).
+    pub fn is_listing(&self) -> bool {
+        self.reloading.is_some() || self.status == Status::Loading
     }
 
     pub fn is_ready(&self) -> bool {
@@ -166,7 +180,9 @@ impl Folder {
 
     /// Start listing again. With `keep` the current rows stay on screen
     /// until the new listing is complete.
-    pub fn begin_load(&mut self, keep: bool) {
+    /// Start listing again; returns the new listing's sequence number.
+    pub fn begin_load(&mut self, keep: bool) -> u64 {
+        self.load_seq += 1;
         self.loaded = 0;
         if keep && self.status == Status::Ready {
             self.reloading = Some(Vec::new());
@@ -176,6 +192,7 @@ impl Folder {
             self.status = Status::Loading;
         }
         self.bump();
+        self.load_seq
     }
 
     pub fn set_meta(&mut self, info: LocationInfo, caps: Capabilities) {
@@ -231,14 +248,18 @@ impl Folder {
             let now = Instant::now();
             let fresh: Vec<String> = new.iter().filter(|i| !before.contains(i.entry.name.as_str())).map(|i| i.entry.name.clone()).collect();
             added = fresh.len();
-            // A reload that replaced everything (first listing after an
-            // error) isn't "new files", just a listing.
-            if !self.items.is_empty() && added < 200 {
+            // Only a reload of a folder that was shown fine gets here; a
+            // flood of new names (a big copy landing) isn't worth flashing.
+            if added < 200 {
                 for n in fresh {
                     self.fresh.insert(n, now);
                 }
             }
             self.items = new;
+        }
+        let queued = std::mem::take(&mut self.queued);
+        for (c, fresh) in queued {
+            self.patch(vec![c], fresh);
         }
         self.bump();
         added
@@ -246,6 +267,7 @@ impl Folder {
 
     pub fn fail(&mut self, e: CxError) {
         self.reloading = None;
+        self.queued.clear();
         self.status = Status::Error(e);
         self.bump();
     }
@@ -297,12 +319,25 @@ impl Folder {
         }
     }
 
-    /// Apply watch patches; returns true when the folder must be re-listed.
+    /// Apply watch patches (new rows get highlighted); returns true when
+    /// the folder must be re-listed.
     pub fn apply(&mut self, changes: Vec<Change>) -> bool {
+        self.patch(changes, true)
+    }
+
+    /// Apply our own changes (a rename, a new folder): no highlight.
+    pub fn apply_local(&mut self, changes: Vec<Change>) -> bool {
+        self.patch(changes, false)
+    }
+
+    fn patch(&mut self, changes: Vec<Change>, mark_fresh: bool) -> bool {
         if self.reloading.is_some() || self.status == Status::Loading {
-            // Mid-listing: the listing will include these; a reset is the
-            // only thing worth remembering.
-            return changes.iter().any(|c| matches!(c, Change::Reset));
+            if changes.iter().any(|c| matches!(c, Change::Reset)) {
+                self.queued.clear();
+                return true;
+            }
+            self.queued.extend(changes.into_iter().map(|c| (c, mark_fresh)));
+            return false;
         }
         let mut reset = false;
         // Large batches (a copy of thousands of files landing): collect the
@@ -326,7 +361,7 @@ impl Folder {
             self.items.retain(|i| !names.contains(&i.entry.name));
             let now = Instant::now();
             for e in &ups {
-                if !before.contains(&e.name) {
+                if mark_fresh && !before.contains(&e.name) {
                     self.fresh.insert(e.name.clone(), now);
                 }
             }
@@ -341,7 +376,7 @@ impl Folder {
         }
         for c in changes {
             match c {
-                Change::Upsert { entry } => self.upsert(entry, true),
+                Change::Upsert { entry } => self.upsert(entry, mark_fresh),
                 Change::Remove { name } => {
                     self.remove(&name);
                 }

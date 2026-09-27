@@ -10,8 +10,8 @@ use cx_engine::{EngineEvent, ListEvent, SearchEvent, WatchInfo};
 pub type Update = Box<dyn FnOnce(&mut App) + Send>;
 
 pub enum Msg {
-    List { token: u64, event: ListEvent },
-    ListFailed { token: u64, error: CxError },
+    List { token: u64, seq: u64, event: ListEvent },
+    ListFailed { token: u64, seq: u64, error: CxError },
     Changes { token: u64, changes: Vec<Change> },
     Watching { token: u64, result: Result<WatchInfo, CxError> },
     Search { token: u64, event: SearchEvent },
@@ -23,7 +23,7 @@ impl std::fmt::Debug for Msg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Msg::List { token, .. } => write!(f, "List({token})"),
-            Msg::ListFailed { token, error } => write!(f, "ListFailed({token}, {error})"),
+            Msg::ListFailed { token, error, .. } => write!(f, "ListFailed({token}, {error})"),
             Msg::Changes { token, changes } => write!(f, "Changes({token}, {})", changes.len()),
             Msg::Watching { token, .. } => write!(f, "Watching({token})"),
             Msg::Search { token, .. } => write!(f, "Search({token})"),

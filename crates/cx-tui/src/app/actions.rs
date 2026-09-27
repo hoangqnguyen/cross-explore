@@ -362,7 +362,7 @@ impl App {
     }
 
     /// Run a menu or palette choice.
-    pub(crate) fn menu_action(&mut self, a: MenuAction) {
+    pub fn menu_action(&mut self, a: MenuAction) {
         match a {
             MenuAction::Navigate { uri, pane } => {
                 let p = pane.unwrap_or(self.active);

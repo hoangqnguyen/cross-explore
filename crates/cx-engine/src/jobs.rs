@@ -156,6 +156,9 @@ impl Jobs {
         match e {
             TransferEvent::JobAdded { job } => self.insert(JobView::from_snapshot(&job)),
             TransferEvent::Progress { id, progress } => self.update(id.0, |j| j.apply_progress(&progress)),
+            // A finished state is reported once, by `Finished` (which the
+            // manager sends right after), complete with errors and undo.
+            TransferEvent::StateChanged { state, .. } if state.is_finished() => {}
             TransferEvent::StateChanged { id, state } => self.update(id.0, |j| {
                 j.state = name_of(&state);
                 if j.state != "waitingForConflict" {

@@ -1,0 +1,24 @@
+╭ cx-tui-render › panels ──────────────────────────────────────────────╮╭ main.rs ─────────────────────────────────────╮
+│ 1 panels                                                             ││    Kind  Rust source                         │
+│ Name ▲                       Modified         Kind               Size││    Size  34 B (34 bytes)                     │
+│ ▸ Documents                 2021-03-04       Folder                 —││Modified  2021-03-04 12:00:00                 │
+│ ▸ Photos                    2021-03-04       Folder                 —││ Created  2021-03-04 12:00:00                 │
+│   archive.zip               2021-03-04       ZIP archive          2 B││   Where  ~/panels                            │
+│✓  main.rs                   2021-03-04       Rust source         34 B││──────────────────────────────────────────────│
+│   notes.md                  2021-03-04       Markdown            27 B││3 lines · utf-8 · rust                        │
+│   photo.jpg                 2021-03-04       JPG image         2.5 MB││1 fn main() {                                 │
+│                                                                      ││2     println!("hi");                         │
+│                                                                      ││3 }                                           │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│6 items · 1 selected (34 B)                                           ││                                              │
+╰──────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────╯
+╭ Transfers ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ↻ Copy photo.jpg → panels-dest                             ██████████████▌──────────────            50% 5.0 MB/s · 1s│
+│ ✓ Copy photo.jpg → panels-dest                             █████████████████████████████                         done│
+╰Space pause/resume  c cancel  Enter resolve conflict  C clear finished  Esc back──────────────────────────────────────╯
+ F1 help  Ctrl+P commands  Ctrl+L go to  F9 dual  Ctrl+K connect                 ⇅ 1 █████───── 50% 5.0 MB/s   Explorer

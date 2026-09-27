@@ -113,8 +113,7 @@ pub fn facts(uri: &str, e: &Entry, tags: &[String], dir_size: Option<u64>) -> Ve
     if e.created.is_some() {
         out.push(("Created".into(), format::date_long(e.created)));
     }
-    let loc = Location::parse(uri).ok();
-    let where_ = loc.as_ref().and_then(|l| l.parent()).map(|p| p.info().display).unwrap_or_default();
+    let where_ = Location::parse(uri).ok().and_then(|l| l.parent()).map(|p| crate::util::display(&p.uri())).unwrap_or_default();
     out.push(("Where".into(), where_));
     if !tags.is_empty() {
         out.push(("Tags".into(), tags.join(", ")));

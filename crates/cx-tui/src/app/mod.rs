@@ -348,8 +348,16 @@ impl App {
 
     pub fn handle_msg(&mut self, msg: Msg) {
         match msg {
-            Msg::List { token, event } => self.on_list(token, event),
-            Msg::ListFailed { token, error } => self.on_list_failed(token, error),
+            Msg::List { token, seq, event } => {
+                if self.folder_mut(token).is_some_and(|f| f.load_seq == seq) {
+                    self.on_list(token, event);
+                }
+            }
+            Msg::ListFailed { token, seq, error } => {
+                if self.folder_mut(token).is_some_and(|f| f.load_seq == seq) {
+                    self.on_list_failed(token, error);
+                }
+            }
             Msg::Changes { token, changes } => {
                 let mut reset = false;
                 if let Some(f) = self.folder_mut(token) {

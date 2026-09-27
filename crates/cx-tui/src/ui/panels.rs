@@ -234,7 +234,11 @@ pub fn footer(f: &mut Frame, app: &App, theme: &Theme, area: Rect) {
             let s = |a| crate::commands::shortcut(a, km).unwrap_or_default();
             use crate::commands::Action as A;
             let pairs = [(s(A::Help), "help"), (s(A::Palette), "commands"), (s(A::GoTo), "go to"), (s(A::ToggleDual), "dual"), (s(A::Connect), "connect"), (s(A::Transfers), "transfers"), (s(A::Quit), "quit")];
-            let pairs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+            let mut pairs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+            // Drop hints from the right until they fit.
+            while pairs.len() > 1 && pairs.iter().map(|(k, v)| k.width() + v.width() + 3).sum::<usize>() + 1 > lw as usize {
+                pairs.pop();
+            }
             let mut l = hints(theme, &pairs);
             l.spans.insert(0, Span::raw(" "));
             l

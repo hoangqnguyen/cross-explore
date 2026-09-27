@@ -120,6 +120,9 @@ pub struct Settings {
     pub session: Option<Session>,
     pub restore_session: bool,
     pub mouse: bool,
+    /// Also put copied local files on the system clipboard (and paste
+    /// files copied in Finder / Explorer).
+    pub os_clipboard: bool,
 }
 
 impl Default for Settings {
@@ -144,6 +147,7 @@ impl Default for Settings {
             session: None,
             restore_session: true,
             mouse: true,
+            os_clipboard: true,
         }
     }
 }

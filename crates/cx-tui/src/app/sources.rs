@@ -91,7 +91,7 @@ impl App {
         let mut f = Folder::new(token, canonical.clone().unwrap_or_else(|_| uri.to_string()), sort);
         match canonical {
             Ok(u) => {
-                self.load(token, &u);
+                self.load(token, 0, &u);
                 if is_local(&u) {
                     // Local watches are live and need no baseline: start now.
                     f.watch_pending = true;
@@ -360,7 +360,7 @@ impl App {
             }
             Source::Compare { left, right, by_content, .. } => {
                 let tab = &mut self.panes[p].tabs[i];
-                tab.folder.begin_load(true);
+                let _ = tab.folder.begin_load(true);
                 let tok = tab.folder.token;
                 self.run_compare(tok, left, right, by_content);
             }
@@ -376,10 +376,10 @@ impl App {
             }
             Source::Folder => {
                 let Some(f) = self.folder_mut(token) else { return };
-                f.begin_load(true);
+                let seq = f.begin_load(true);
                 let uri = f.uri.clone();
                 let watching = f.watch.is_some() || f.watch_pending;
-                self.load(token, &uri);
+                self.load(token, seq, &uri);
                 // A folder that failed before (not signed in) never watched.
                 if !watching && is_local(&uri) && self.is_visible(p, i) {
                     self.start_watch(token, &uri);
@@ -389,15 +389,15 @@ impl App {
     }
 
     /// List `uri` into the folder `token`.
-    pub(crate) fn load(&self, token: u64, uri: &str) {
+    pub(crate) fn load(&self, token: u64, seq: u64, uri: &str) {
         let engine = self.engine.clone();
         let tx = self.tx.clone();
         let uri = uri.to_string();
         tokio::spawn(async move {
             let tx2 = tx.clone();
-            let r = engine.list_dir(&uri, move |event| tx2.send(Msg::List { token, event }).is_ok()).await;
+            let r = engine.list_dir(&uri, move |event| tx2.send(Msg::List { token, seq, event }).is_ok()).await;
             if let Err(error) = r {
-                let _ = tx.send(Msg::ListFailed { token, error });
+                let _ = tx.send(Msg::ListFailed { token, seq, error });
             }
         });
     }
@@ -420,10 +420,16 @@ impl App {
     pub(crate) fn on_watching(&mut self, token: u64, result: Result<WatchInfo, CxError>) {
         let visible = self.locate(token).map(|(p, i, _)| self.is_visible(p, i)).unwrap_or(false);
         let engine = self.engine.clone();
+        let mut relist = false;
         match (self.folder_mut(token), result) {
             (Some(f), Ok(info)) if visible => {
                 f.watch = Some((info.id, info.mode));
                 f.watch_pending = false;
+                // A live watch only reports what happens from now on. If the
+                // listing finished first, anything that changed in between
+                // would be missed: list once more (rows stay on screen, and
+                // patches arriving meanwhile are queued, not lost).
+                relist = info.mode == cx_engine::WatchMode::Live && f.is_ready() && !f.is_listing();
             }
             (f, Ok(info)) => {
                 // Went away or hidden meanwhile.
@@ -434,6 +440,9 @@ impl App {
             }
             (Some(f), Err(_)) => f.watch_pending = false,
             (None, Err(_)) => {}
+        }
+        if relist {
+            self.reload_token(token);
         }
     }
 
@@ -458,8 +467,8 @@ impl App {
                     if visible {
                         if f.watch.is_none() && !f.watch_pending {
                             if self.stale.remove(&f.token) {
-                                f.begin_load(true);
-                                reload.push((f.token, f.uri.clone()));
+                                let seq = f.begin_load(true);
+                                reload.push((f.token, seq, f.uri.clone()));
                             }
                             if f.is_ready() || is_local(&f.uri) {
                                 f.watch_pending = true;
@@ -473,8 +482,8 @@ impl App {
                 }
             }
         }
-        for (t, u) in reload {
-            self.load(t, &u);
+        for (t, seq, u) in reload {
+            self.load(t, seq, &u);
         }
         for (t, u) in start {
             self.start_watch(t, &u);
@@ -620,7 +629,7 @@ impl App {
         if recursive {
             self.expand_recursive.insert(token);
         }
-        self.load(token, &uri);
+        self.load(token, 0, &uri);
         if is_local(&uri) && self.is_visible(p, i) {
             if let Some(f) = self.folder_mut(token) {
                 f.watch_pending = true;
