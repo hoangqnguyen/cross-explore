@@ -199,3 +199,46 @@ async fn transfers_panel_and_preview() {
     assert!(s.contains("println!"));
     snapshot("transfers_preview", &s);
 }
+
+/// Every screen, every dialog, at sizes from tiny to huge: drawing must
+/// never panic or hang (long names in narrow panes once looped forever).
+#[tokio::test(flavor = "multi_thread")]
+async fn renders_at_any_size() {
+    let settings = Settings { dual: true, preview_pane: true, ..Default::default() };
+    let mut h = Harness::with_settings(settings).await;
+    let dir = sample(&mut h, "a-rather-long-folder-name-for-narrow-panes").await;
+    write(&dir.join("an extremely long file name that will never fit in a narrow terminal pane.txt"), b"x");
+    h.app.transfers_open = true;
+    h.typ("n");
+    let dialogs: Vec<Action> = vec![Action::Help, Action::Connect, Action::CopyTo, Action::MultiRename, Action::Search, Action::Settings, Action::Palette, Action::PlacesLeft, Action::SortMenu, Action::Tags, Action::Pair, Action::PeerSettings];
+    let sizes = [(1u16, 1u16), (3, 2), (10, 5), (20, 8), (33, 12), (47, 15), (80, 24), (132, 43), (250, 80)];
+    let mut screens = 0;
+    for step in 0..=dialogs.len() {
+        h.app.dialogs.clear();
+        if step > 0 {
+            h.app.run(dialogs[step - 1]);
+        }
+        for (w, ht) in sizes {
+            h.app.prepare();
+            // A hang fails loudly instead of leaving the test run stuck.
+            let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let d = done.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(20));
+                if !d.load(std::sync::atomic::Ordering::SeqCst) {
+                    eprintln!("render at {w}x{ht} (step {step}) hung");
+                    std::process::exit(101);
+                }
+            });
+            let s = cx_tui::ui::render_to_string(&h.app, w, ht);
+            done.store(true, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(s.lines().count(), ht as usize);
+            screens += 1;
+        }
+    }
+    h.app.quicklook = true;
+    for (w, ht) in sizes {
+        cx_tui::ui::render_to_string(&h.app, w, ht);
+    }
+    assert!(screens > 100);
+}

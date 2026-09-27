@@ -92,7 +92,7 @@ fn tabs(f: &mut Frame, app: &App, theme: &Theme, pr: &PaneRects, active_pane: bo
             spans.push(Span::styled("│", theme.faint()));
         }
         spans.push(Span::styled(label, style));
-        used = r.x + r.width - pr.tabs.x;
+        used = (r.x + r.width).saturating_sub(pr.tabs.x);
     }
     if pr.tab_hits.len() < pane.tabs.len() && used + 2 < pr.tabs.width {
         spans.push(Span::styled(format!(" +{}", pane.tabs.len() - pr.tab_hits.len()), theme.dim()));
@@ -293,7 +293,7 @@ fn brief(f: &mut Frame, app: &App, theme: &Theme, pr: &PaneRects, t: &Tab, focus
         let mut spans = Vec::new();
         for c in 0..cols {
             let i = (scol + c) * rpc + y;
-            let w = if c + 1 == cols { pr.list.width as usize - cw * (cols - 1) } else { cw };
+            let w = if c + 1 == cols { (pr.list.width as usize).saturating_sub(cw * (cols - 1)) } else { cw };
             if c > 0 {
                 spans.push(Span::styled("│", theme.faint()));
             }

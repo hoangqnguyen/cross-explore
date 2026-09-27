@@ -171,7 +171,7 @@ pub fn draw(f: &mut Frame, app: &App, theme: &Theme, d: &Dialog, area: Rect) {
                 };
                 let sel = i == t.cursor && t.input.text.is_empty();
                 let st = if sel { Style::default().fg(theme.cursor_fg).bg(theme.cursor_bg) } else { Style::default().fg(theme.fg) };
-                lines.push(Line::from(vec![Span::styled(format!("{mark} "), st), Span::styled("● ", Style::default().fg(theme.tag(name)).bg(if sel { theme.cursor_bg } else { theme.popup_bg })), Span::styled(fit(name, inner.width as usize - 6), st)]));
+                lines.push(Line::from(vec![Span::styled(format!("{mark} "), st), Span::styled("● ", Style::default().fg(theme.tag(name)).bg(if sel { theme.cursor_bg } else { theme.popup_bg })), Span::styled(fit(name, (inner.width as usize).saturating_sub(6)), st)]));
             }
             lines.push(Line::default());
             lines.push(field(theme, "New tag ", 8, &t.input, true, inner.width as usize));
@@ -208,7 +208,7 @@ pub fn draw(f: &mut Frame, app: &App, theme: &Theme, d: &Dialog, area: Rect) {
                 let st = if sel { Style::default().fg(theme.cursor_fg).bg(theme.cursor_bg) } else { Style::default().fg(theme.fg) };
                 let w = inner.width as usize;
                 let lw = (w / 2).max(20).min(w);
-                lines.push(Line::from(vec![Span::styled(fit(&format!(" {}", it.label), lw), st), Span::styled(fit(&it.detail, w - lw), if sel { st } else { theme.dim() })]));
+                lines.push(Line::from(vec![Span::styled(fit(&format!(" {}", it.label), lw), st), Span::styled(fit(&it.detail, w.saturating_sub(lw)), if sel { st } else { theme.dim() })]));
             }
             f.render_widget(Paragraph::new(lines), inner);
         }
@@ -218,7 +218,7 @@ pub fn draw(f: &mut Frame, app: &App, theme: &Theme, d: &Dialog, area: Rect) {
             let inner = popup(f, theme, area, 64, h, "Incoming files", None);
             let mut lines = vec![Line::from(Span::styled(format!("{} wants to send you {} ({})", offer.from.name, format::plural(n, "file", "files"), format::size(offer.total)), Style::default().fg(theme.fg))), Line::default()];
             for file in offer.files.iter().take(6) {
-                lines.push(Line::from(vec![Span::styled(fit(&format!("  {}", file.name), inner.width as usize - 10), Style::default().fg(theme.fg)), Span::styled(format::size(file.size), theme.dim())]));
+                lines.push(Line::from(vec![Span::styled(fit(&format!("  {}", file.name), (inner.width as usize).saturating_sub(10)), Style::default().fg(theme.fg)), Span::styled(format::size(file.size), theme.dim())]));
             }
             if n > 6 {
                 lines.push(Line::from(Span::styled(format!("  … and {} more", n - 6), theme.dim())));
@@ -270,7 +270,7 @@ pub fn draw(f: &mut Frame, app: &App, theme: &Theme, d: &Dialog, area: Rect) {
 
 fn menu(f: &mut Frame, theme: &Theme, area: Rect, m: &Menu) {
     let vis = m.visible();
-    let h = (vis.len() as u16 + 4).clamp(6, area.height.saturating_sub(2));
+    let h = (vis.len() as u16 + 4).max(6).min(area.height.saturating_sub(2));
     let w = (m.items.iter().map(|i| i.label.width() + i.detail.width() + 6).max().unwrap_or(30) as u16).clamp(36, 96);
     let foot = if m.filter.is_empty() { hints(theme, &[("Enter", "open"), ("type", "filter"), ("Esc", "close")]) } else { hints(theme, &[("filter", &m.filter)]) };
     let inner = popup(f, theme, area, w, h, &m.title, Some(foot));
@@ -432,13 +432,13 @@ fn conflict(f: &mut Frame, theme: &Theme, area: Rect, c: &ConflictDlg) {
     let w = inner.width as usize;
     let side = |label: &str, e: &cx_core::Entry, uri: &str, newer: bool| -> Vec<Line<'static>> {
         vec![
-            Line::from(vec![Span::styled(fit(label, 10), theme.dim()), Span::styled(truncate(&e.name, w - 10), Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))]),
+            Line::from(vec![Span::styled(fit(label, 10), theme.dim()), Span::styled(truncate(&e.name, w.saturating_sub(10)), Style::default().fg(theme.fg).add_modifier(Modifier::BOLD))]),
             Line::from(vec![
                 Span::styled(fit("", 10), theme.dim()),
                 Span::styled(format!("{}  ·  {}", format::size(e.size), format::date_long(e.modified)), Style::default().fg(if newer { theme.ok } else { theme.fg })),
                 Span::styled(if newer { "  newer" } else { "" }, Style::default().fg(theme.ok)),
             ]),
-            Line::from(vec![Span::styled(fit("", 10), theme.dim()), Span::styled(truncate_left(&crate::util::display(uri), w - 10), theme.faint())]),
+            Line::from(vec![Span::styled(fit("", 10), theme.dim()), Span::styled(truncate_left(&crate::util::display(uri), w.saturating_sub(10)), theme.faint())]),
         ]
     };
     let (s, d) = (&c.conflict.source, &c.conflict.dest);
@@ -509,8 +509,8 @@ fn multi_rename(f: &mut Frame, theme: &Theme, area: Rect, m: &MultiRename) {
         Line::from(spans)
     };
     let mut lines = vec![
-        two(field(theme, "Name", 10, &m.name_mask, m.focus == 0, half - 1), field(theme, "Extension", 10, &m.ext_mask, m.focus == 1, w - half)),
-        two(field(theme, "Find", 10, &m.search, m.focus == 2, half - 1), field(theme, "Replace", 10, &m.replace, m.focus == 3, w - half)),
+        two(field(theme, "Name", 10, &m.name_mask, m.focus == 0, half.saturating_sub(1)), field(theme, "Extension", 10, &m.ext_mask, m.focus == 1, w.saturating_sub(half))),
+        two(field(theme, "Find", 10, &m.search, m.focus == 2, half.saturating_sub(1)), field(theme, "Replace", 10, &m.replace, m.focus == 3, w.saturating_sub(half))),
         two(check(theme, "Regular expression", m.regex, m.focus == 4), Line::from(vec![Span::styled(fit("Case", 10), if m.focus == 5 { theme.accent().add_modifier(Modifier::BOLD) } else { theme.dim() }), Span::styled(format!("◂ {} ▸", m.case.label()), Style::default().fg(theme.fg))])),
         two(field(theme, "Counter", 10, &m.start, m.focus == 6, 18), two(field(theme, "Step", 6, &m.step, m.focus == 7, 12), field(theme, "Digits", 8, &m.digits, m.focus == 8, 12))),
         Line::from(Span::styled("Tokens: [N] name  [E] extension  [N2-5] characters  [C] counter  [YMD] date  [hms] time  [P] folder", theme.faint())),

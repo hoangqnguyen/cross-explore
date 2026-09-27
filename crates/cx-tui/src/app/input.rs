@@ -215,7 +215,15 @@ impl App {
                 self.quicklook = false;
                 self.run(Action::Open);
             }
-            _ => {}
+            _ => {
+                // Quit and help work from Quick Look too.
+                if let Some(combo) = KeyCombo::from_event(&e) {
+                    if let Some(a) = resolve(&combo, self.settings.keymap).into_iter().find(|a| matches!(a, Action::Quit | Action::Help | Action::Palette)) {
+                        self.quicklook = a != Action::Quit && self.quicklook;
+                        self.run(a);
+                    }
+                }
+            }
         }
     }
 
@@ -254,7 +262,15 @@ impl App {
                     self.dialogs.push(Dialog::Conflict(crate::dialog::ConflictDlg { job: c.0, conflict: c.1, apply_all: false, cursor: 0 }));
                 }
             }
-            _ => {}
+            _ => {
+                // App-wide commands (quit, help, palette, dual…) still work.
+                if let Some(combo) = KeyCombo::from_event(&e) {
+                    if let Some(a) = resolve(&combo, self.settings.keymap).into_iter().find(|a| matches!(a, Action::Quit | Action::Help | Action::Palette | Action::ToggleDual | Action::Settings | Action::Connect | Action::GoTo)) {
+                        self.focus = Focus::List;
+                        self.run(a);
+                    }
+                }
+            }
         }
     }
 

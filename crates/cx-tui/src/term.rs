@@ -53,11 +53,16 @@ impl InputThread {
                                     return;
                                 }
                             }
-                            Err(_) => return,
+                            // A sequence crossterm can't parse: skip it, keep reading.
+                            Err(_) => std::thread::sleep(Duration::from_millis(5)),
                         }
                     }
-                    Ok(false) => {}
-                    Err(_) => return,
+                    Ok(false) => {
+                        if tx.is_closed() {
+                            return;
+                        }
+                    }
+                    Err(_) => std::thread::sleep(Duration::from_millis(20)),
                 }
             })
             .expect("input thread");
@@ -66,7 +71,9 @@ impl InputThread {
 
     fn pause(&self) {
         self.paused.store(true, Ordering::SeqCst);
-        while !self.idle.load(Ordering::SeqCst) {
+        // The thread notices within one poll interval; don't hang if it's gone.
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        while !self.idle.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(5));
         }
     }

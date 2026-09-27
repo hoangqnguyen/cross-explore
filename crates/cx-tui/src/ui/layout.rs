@@ -152,13 +152,22 @@ pub fn crumbs(t: &Tab, width: u16) -> Vec<(String, Option<String>)> {
         (Source::Home, _) => vec![("Home".into(), None)],
     };
     let total = |p: &[(String, Option<String>)]| p.iter().map(|(l, _)| l.width() as u16 + 3).sum::<u16>();
-    while parts.len() > 1 && total(&parts) + 2 > width {
-        parts.remove(0);
-        if parts.first().is_some_and(|(l, _)| l != "…") {
-            parts.insert(0, ("…".into(), None));
-            if total(&parts) + 2 > width && parts.len() > 2 {
-                parts.remove(1);
-            }
+    // Replace leading crumbs with "…" until it fits (keeping the last one).
+    while total(&parts) + 2 > width {
+        if parts[0].0 != "…" && parts.len() > 1 {
+            parts[0] = ("…".into(), None);
+        } else if parts.len() > 2 {
+            parts.remove(1);
+        } else {
+            break;
+        }
+    }
+    // Still too wide: cut the current folder's name itself.
+    if total(&parts) + 2 > width {
+        let others: u16 = total(&parts[..parts.len() - 1]);
+        let room = width.saturating_sub(others + 5) as usize;
+        if let Some(last) = parts.last_mut() {
+            last.0 = super::truncate(&last.0, room.max(1));
         }
     }
     parts
@@ -176,7 +185,7 @@ pub fn compute(area: Rect, app: &App) -> Layout {
     l.footer = Rect { y: main.y + main.height.saturating_sub(1), height: 1.min(main.height), ..main };
     main.height = main.height.saturating_sub(1);
     if app.transfers_open && main.height > 10 {
-        let h = (app.jobs.len() as u16 + 2).clamp(4, (main.height / 3).max(4));
+        let h = (app.jobs.len() as u16 + 2).clamp(4, (main.height / 3).max(4)).min(main.height);
         l.transfers = Some(Rect { y: main.y + main.height - h, height: h, ..main });
         main.height -= h;
     }
@@ -185,7 +194,7 @@ pub fn compute(area: Rect, app: &App) -> Layout {
     }
     let mut panes_area = main;
     if app.settings.preview_pane && main.width >= 60 {
-        let w = (main.width * 2 / 5).clamp(28, 80);
+        let w = (main.width * 2 / 5).clamp(28, 80).min(main.width);
         l.preview = Some(Rect { x: main.x + main.width - w, width: w, ..main });
         panes_area.width -= w;
     }
@@ -195,7 +204,7 @@ pub fn compute(area: Rect, app: &App) -> Layout {
         let k = k as u16;
         let w = panes_area.width / n;
         let x = panes_area.x + k * w;
-        let width = if k + 1 == n { panes_area.width - w * (n - 1) } else { w };
+        let width = if k + 1 == n { panes_area.width.saturating_sub(w * (n - 1)) } else { w };
         let outer = Rect { x, y: panes_area.y, width, height: panes_area.height };
         l.panes.push(pane_rects(app, p, outer));
     }
@@ -292,6 +301,23 @@ impl Layout {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crumbs_fit_any_width() {
+        use crate::folder::Folder;
+        let mut f = Folder::new(1, "file:///a/very-long-folder-name/another-long-one/current-folder-name", Default::default());
+        f.info = Some(cx_core::Location::parse("/a/very-long-folder-name/another-long-one/current-folder-name").unwrap().info());
+        let t = Tab::new(1, f, Source::Folder, ViewMode::Details);
+        for w in [0u16, 3, 8, 12, 20, 30, 60, 200] {
+            let parts = crumbs(&t, w);
+            let last = &parts.last().unwrap().0;
+            assert!(last.starts_with("current") || last.starts_with('c') || last == "…" || w < 12, "width {w}: {parts:?}");
+            if w >= 30 {
+                let total: usize = parts.iter().map(|(l, _)| l.width() + 3).sum();
+                assert!(total + 2 <= w as usize, "width {w}: {parts:?}");
+            }
+        }
+    }
 
     #[test]
     fn columns_drop_when_narrow() {
