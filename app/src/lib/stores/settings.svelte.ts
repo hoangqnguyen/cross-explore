@@ -50,6 +50,8 @@ export interface SettingsData {
   recent: string[];
   session: SavedWorkspace | null;
   groupBy: "none" | "date" | "kind";
+  /** The Full Disk Access banner was dismissed (macOS). */
+  fdaDismissed: boolean;
 }
 
 const KEY = "cx.settings";
@@ -76,6 +78,7 @@ const defaults: SettingsData = {
   recent: [],
   session: null,
   groupBy: "none",
+  fdaDismissed: false,
 };
 
 function load(): SettingsData {

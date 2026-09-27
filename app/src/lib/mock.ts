@@ -406,6 +406,8 @@ const handlers: Record<string, (a: Args) => unknown> = {
   open_entry: () => undefined,
   os_clipboard_set: () => undefined,
   os_clipboard_get: () => [],
+  full_disk_access: () => true,
+  open_full_disk_access_settings: () => undefined,
   reveal_entry: () => undefined,
   open_terminal: () => undefined,
   async dir_size({ uri, onProgress }: Args) {

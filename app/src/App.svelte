@@ -18,6 +18,7 @@
   import Dialogs from "./lib/dialogs/Dialogs.svelte";
   import MobileBar from "./lib/components/MobileBar.svelte";
   import TerminalPanel from "./lib/components/TerminalPanel.svelte";
+  import AccessBanner from "./lib/components/AccessBanner.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { isTextInput } from "./lib/keys";
   import { dropDestAt, dropElementAt, dropIsMove, nativeDrag } from "./lib/listing";
@@ -140,6 +141,7 @@
     <TitleBar />
     {#if !ws.dual}<AddressBar tab={ws.activeTab} />{/if}
     <CommandBar />
+    <AccessBanner />
     <div class="body">
       <Sidebar />
       <div class="panes">

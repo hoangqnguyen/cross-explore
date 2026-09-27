@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Cross Explore shows and manages the files on your Desktop.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Cross Explore shows and manages the files in your Documents folder.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Cross Explore shows and manages the files in your Downloads folder.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>Cross Explore shows and manages the files on removable drives.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>Cross Explore shows and manages the files on network volumes.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Cross Explore finds shared folders and your other devices on the local network.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_smb._tcp</string>
+    <string>_sftp-ssh._tcp</string>
+    <string>_ssh._tcp</string>
+    <string>_ftp._tcp</string>
+    <string>_webdav._tcp</string>
+    <string>_webdavs._tcp</string>
+    <string>_afpovertcp._tcp</string>
+    <string>_adisk._tcp</string>
+    <string>_device-info._tcp</string>
+    <string>_crossx._udp</string>
+    <string>_crossx._tcp</string>
+  </array>
+</dict>
+</plist>

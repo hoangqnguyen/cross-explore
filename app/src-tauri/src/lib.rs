@@ -42,6 +42,8 @@ pub fn run() {
             cmd::system::os_clipboard_set,
             cmd::system::os_clipboard_get,
             cmd::system::drag_icon,
+            cmd::system::full_disk_access,
+            cmd::system::open_full_disk_access_settings,
             cmd::jobs::transfer_submit,
             cmd::jobs::transfer_pause,
             cmd::jobs::transfer_resume,

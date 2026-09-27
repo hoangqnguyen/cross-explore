@@ -133,6 +133,19 @@ npx tauri android build --debug --target aarch64 --apk
 cargo run -p cx-cli --release -- serve --share Media=/srv/media:ro
 ```
 
+### macOS privacy prompts
+
+macOS asks separately before any app reads Desktop, Documents, Downloads, or removable and network
+drives. The app offers a one-time **Full Disk Access** grant (a banner that opens the right
+System Settings pane), which ends those prompts.
+
+macOS remembers the grant per code signature. Sign your builds with a stable identity so a rebuild
+isn't treated as a new app:
+
+```sh
+APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" npx tauri build
+```
+
 ### Building on Windows (x64)
 
 1. Install **Visual Studio 2022 Build Tools** with the *Desktop development with C++*

@@ -192,3 +192,32 @@ pub fn drag_icon(app: AppState<'_>) -> Result<String> {
     }
     Ok(path.to_string_lossy().into_owned())
 }
+
+/// Whether the app may read every folder without macOS asking first (Full
+/// Disk Access). Always true elsewhere. Checked by reading a folder that
+/// only Full Disk Access unlocks.
+#[tauri::command]
+pub fn full_disk_access() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = dirs::home_dir() else { return true };
+        ["Library/Safari", "Library/Mail", "Library/Messages"].iter().map(|p| home.join(p)).filter(|p| p.exists()).any(|p| std::fs::read_dir(p).is_ok())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+/// Open System Settings at Privacy & Security → Full Disk Access.
+#[tauri::command]
+pub fn open_full_disk_access_settings() -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        spawn(Command::new("open").arg("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(())
+    }
+}
