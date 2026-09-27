@@ -82,14 +82,67 @@ export class Tab {
   dirUri = $derived(this.folder.info?.uri ?? this.folder.uri);
   writable = $derived(this.folder.kind === "folder" && this.folder.status === "ready" && (this.folder.caps?.writable ?? true));
 
-  /** Rows on screen: hidden files and the quick filter applied. */
+  /** Folders expanded in place (Finder's list-view outline), by URI. */
+  expanded = $state.raw<ReadonlyMap<string, Folder>>(new Map());
+
+  /**
+   * Rows on screen: hidden files and the quick filter applied, with the
+   * contents of expanded folders spliced in under them (with a depth).
+   */
   visible = $derived.by(() => {
     const showHidden = settings.data.showHidden;
     const q = this.filter.trim().toLowerCase();
+    const keep = (e: Item) => (showHidden || !e.hidden) && (!q || e.name.toLowerCase().includes(q));
     const items = this.folder.items;
-    if (showHidden && !q) return items;
-    return items.filter((e) => (showHidden || !e.hidden) && (!q || e.name.toLowerCase().includes(q)));
+    if (!this.expanded.size) return showHidden && !q ? items : items.filter(keep);
+    const out: Item[] = [];
+    const walk = (list: Item[], depth: number, parent: string | null) => {
+      for (const e of list) {
+        const uri = parent ? childUri(parent, e.name) : this.uriOf(e);
+        const sub = e.isDir ? this.expanded.get(uri) : undefined;
+        if (!keep(e) && !sub) continue;
+        out.push(parent ? { ...e, uri, parent, depth } : e);
+        if (sub) walk(sub.items, depth + 1, uri);
+      }
+    };
+    walk(items, 0, null);
+    return out;
   });
+
+  isExpanded(e: Item) {
+    return this.expanded.has(this.uriOf(e));
+  }
+
+  /** Expand or collapse a folder in place. ⌥ (recursive) expands everything below too. */
+  toggleExpand(e: Item, recursive = false) {
+    const uri = this.uriOf(e);
+    const m = new Map(this.expanded);
+    if (m.has(uri)) {
+      for (const [k, f] of m) {
+        if (k === uri || k.startsWith(uri.replace(/\/+$/, "") + "/")) {
+          f.dispose();
+          m.delete(k);
+        }
+      }
+      // Keep the cursor visible if it was inside the collapsed folder.
+      if (this.cursor?.startsWith(uri.replace(/\/+$/, "") + "/")) this.selectOnly(keyOf(e));
+    } else {
+      if (m.size >= 200) return; // an outline this big stops being useful
+      const f = new Folder(uri, settings.data.sort);
+      m.set(uri, f);
+      void f.load().then(() => {
+        if (this.expanded.get(uri) !== f) return;
+        void f.watch();
+        if (recursive) for (const c of f.items) if (c.isDir && !c.hidden) this.toggleExpand({ ...c, uri: childUri(uri, c.name) }, true);
+      });
+    }
+    this.expanded = m;
+  }
+
+  collapseAll() {
+    for (const f of this.expanded.values()) f.dispose();
+    if (this.expanded.size) this.expanded = new Map();
+  }
 
   selectedEntries = $derived.by(() => this.visible.filter((e) => this.selection.has(keyOf(e))));
   selectedUris = $derived(this.selectedEntries.map((e) => this.uriOf(e)));
@@ -101,6 +154,7 @@ export class Tab {
 
   #open(uri: string, select: string | null) {
     const mem = this.#memory.get(uri);
+    this.collapseAll();
     this.folder?.dispose();
     const source = makeSource(uri, settings.data.sort);
     this.folder = source;
@@ -177,6 +231,7 @@ export class Tab {
   }
 
   close() {
+    this.collapseAll();
     this.folder.dispose();
   }
 
@@ -266,21 +321,26 @@ export class Tab {
 
   async rename(key: string, to: string) {
     this.renaming = null;
-    const prev = this.folder.get(key);
+    const prev = this.folder.get(key) ?? this.visible.find((e) => keyOf(e) === key);
     to = to.trim();
     if (!prev || !to || to === prev.name) return;
     const dir = prev.parent ?? this.dirUri;
     const from = prev.name;
     try {
       // Show the new name immediately; the watcher confirms it.
-      if (this.folder.kind === "folder") {
+      const topLevel = this.folder.kind === "folder" && !prev.parent;
+      if (topLevel) {
         this.folder.removeLocal([from]);
         this.folder.upsertLocal({ ...prev, name: to });
         this.selectOnly(to);
       }
       const entry = await renameEntry(dir, from, to);
-      if (this.folder.kind === "folder") this.folder.upsertLocal(entry);
-      else this.reload();
+      if (topLevel) this.folder.upsertLocal(entry);
+      else if (this.expanded.has(dir)) {
+        // A row inside an expanded folder: refresh that folder and keep it selected.
+        await this.expanded.get(dir)!.load();
+        this.selectOnly(childUri(dir, to));
+      } else this.reload();
       transfers.pushUndo(`Rename “${from}”`, { type: "rename", dir, from, to });
     } catch (e) {
       if (this.folder.kind === "folder") {
@@ -551,7 +611,10 @@ export class Workspace {
 
   setSort(sort: SortSpec) {
     settings.data.sort = sort;
-    for (const t of this.allTabs) t.folder.setSort(sort);
+    for (const t of this.allTabs) {
+      t.folder.setSort(sort);
+      for (const f of t.expanded.values()) f.setSort(sort);
+    }
   }
 
   sortBy(key: SortSpec["key"]) {

@@ -34,7 +34,7 @@ export interface Entry {
 }
 
 /** A row: a directory entry, plus where it lives for search results. */
-export type Item = Entry & { uri?: string; parent?: string; relPath?: string; snippet?: string | null; line?: number | null };
+export type Item = Entry & { uri?: string; parent?: string; relPath?: string; snippet?: string | null; line?: number | null; depth?: number };
 
 export interface Crumb {
   label: string;

@@ -67,8 +67,26 @@
     tab.scrollTop = scrollTop;
   }
 
+  let outline = $derived(tab.folder.kind === "folder");
+
   function onkeydown(e: KeyboardEvent) {
     if (e.target !== scroller) return;
+    // Finder's list view: → expands the focused folder, ← collapses it or
+    // jumps to the folder that contains the focused row.
+    const cur = tab.cursorEntry;
+    if (outline && cur && !e.metaKey && !e.ctrlKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+      if (e.key === "ArrowRight" && cur.isDir && !tab.isExpanded(cur)) tab.toggleExpand(cur, e.altKey);
+      else if (e.key === "ArrowLeft" && cur.isDir && tab.isExpanded(cur)) tab.toggleExpand(cur);
+      else if (e.key === "ArrowLeft" && cur.depth && cur.parent) {
+        const parent = rows.find((r) => tab.uriOf(r) === cur.parent);
+        if (parent) {
+          tab.selectOnly(keyOf(parent));
+          requestAnimationFrame(() => reveal());
+        }
+      }
+      e.preventDefault();
+      return;
+    }
     handleNavKey(e, tab, { cols: 1, page: Math.max(1, Math.floor(viewportH / rowH) - 1), reveal: () => requestAnimationFrame(() => reveal()) });
   }
 
@@ -95,7 +113,7 @@
   function sizeText(entry: Item) {
     if (!entry.isDir) return formatSize(entry.size);
     const s = sizes.get(tab.uriOf(entry));
-    return s ? (s.done ? formatSize(s.bytes) : `${formatSize(s.bytes)}…`) : "";
+    return s ? (s.done ? formatSize(s.bytes) : `${formatSize(s.bytes)}…`) : "--";
   }
 
   let columns = $derived<{ key: SortKey | "where"; label: string }[]>([
@@ -144,6 +162,7 @@
       {@const selected = tab.selection.has(key)}
       <div
         class="row"
+        class:odd={settings.data.stripes && i % 2 === 1}
         class:selected
         class:cursor={tab.cursor === key}
         class:fresh={folder.fresh.has(key)}
@@ -162,7 +181,27 @@
         ondragend={onDragEnd}
         use:dropTarget={{ dest: () => (entry.isDir ? tab.uriOf(entry) : null), spring: () => tab.open(entry) }}
       >
-        <span class="cell name">
+        <span class="cell name" style:padding-left="{(outline ? 2 : 8) + (entry.depth ?? 0) * 18}px">
+          {#if outline}
+            {#if entry.isDir}
+              <button
+                class="disclosure"
+                class:open={tab.isExpanded(entry)}
+                aria-label={tab.isExpanded(entry) ? "Collapse" : "Expand"}
+                title="{tab.isExpanded(entry) ? 'Collapse' : 'Expand'} (⌥-click: all subfolders)"
+                onpointerdown={(e) => e.stopPropagation()}
+                ondblclick={(e) => e.stopPropagation()}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  tab.toggleExpand(entry, e.altKey);
+                }}
+              >
+                <Icon name="chevronRight" size={11} stroke={2} />
+              </button>
+            {:else}
+              <span class="disclosure-space"></span>
+            {/if}
+          {/if}
           <FileIcon name={entry.name} isDir={entry.isDir} size={settings.data.compact ? 16 : 18} />
           {#if tab.renaming === key}
             <input class="rename" value={entry.name} use:renameInput={entry} spellcheck="false" />
@@ -266,6 +305,9 @@
     border-radius: 4px;
     contain: layout style;
   }
+  .row.odd {
+    background: var(--zebra);
+  }
   .row:hover {
     background: var(--hover);
   }
@@ -314,6 +356,27 @@
   .cell.size {
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+  .disclosure,
+  .disclosure-space {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-right: -4px;
+  }
+  .disclosure {
+    display: grid;
+    place-items: center;
+    border-radius: 3px;
+    color: var(--text-3);
+    transition: transform 0.12s var(--ease);
+  }
+  .disclosure:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .disclosure.open {
+    transform: rotate(90deg);
   }
   .text {
     overflow: hidden;

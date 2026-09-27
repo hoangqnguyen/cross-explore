@@ -38,6 +38,7 @@ const trashName = () => (ws.platform === "windows" ? "Recycle Bin" : "Trash");
 const m = (macKey: string, other: string) => (isMac ? macKey : other);
 
 function setView(v: ViewMode) {
+  if (v !== "details") tab().collapseAll();
   tab().view = v;
   settings.data.defaultView = v;
 }
@@ -110,6 +111,9 @@ export const commands: Command[] = [
   { id: "view.preview", label: "Toggle preview pane", group: "View", icon: "sidebarRight", keys: { both: [m("Mod+Shift+P", "Alt+P")] }, run: () => (settings.data.previewPane = !settings.data.previewPane) },
   { id: "view.hidden", label: "Toggle hidden items", group: "View", icon: "eye", keys: { both: [m("Mod+Shift+.", "Mod+H")] }, run: () => (settings.data.showHidden = !settings.data.showHidden) },
   { id: "view.compact", label: "Toggle compact spacing", group: "View", run: () => (settings.data.compact = !settings.data.compact) },
+  { id: "view.stripes", label: "Toggle alternating row colors", group: "View", run: () => (settings.data.stripes = !settings.data.stripes) },
+  { id: "view.pathBar", label: "Toggle path bar", group: "View", keys: { both: [m("Mod+Alt+P", "Mod+Alt+P")] }, run: () => (settings.data.pathBar = !settings.data.pathBar) },
+  { id: "view.collapseAll", label: "Collapse all folders", group: "View", keys: { both: [m("Mod+Alt+Left", "Mod+Alt+Left")] }, when: () => tab().expanded.size > 0, run: () => tab().collapseAll() },
   { id: "view.find", label: "Filter this folder", group: "View", icon: "search", keys: { both: ["Mod+F"] }, run: () => document.dispatchEvent(new CustomEvent("cx:focus-search")) },
   { id: "view.search", label: "Search in subfolders…", group: "Tools", icon: "search", keys: { both: [m("Mod+Alt+F", "Mod+Shift+F")], commander: ["Alt+F7"] }, when: () => tab().folder.kind === "folder", run: () => deepSearch(false) },
   { id: "view.searchContent", label: "Find text in files…", group: "Tools", icon: "search", when: () => tab().folder.kind === "folder", run: () => deepSearch(true) },

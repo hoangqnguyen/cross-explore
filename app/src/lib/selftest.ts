@@ -145,6 +145,17 @@ export async function selftest() {
     if (n <= 0) throw new Error(String(n));
   });
 
+  await check("list outline: expand a folder in place, live", async () => {
+    tab().view = "details";
+    const sub = tab().visible.find((e) => e.name === "sub")!;
+    tab().toggleExpand(sub);
+    await until("nested rows", () => tab().visible.some((e) => e.name === "nested.txt" && e.depth === 1));
+    const nested = tab().visible.find((e) => e.name === "nested.txt")!;
+    if (tab().uriOf(nested) !== childUri(childUri(dir, "sub"), "nested.txt")) throw new Error(tab().uriOf(nested));
+    tab().collapseAll();
+    if (tab().visible.some((e) => e.depth)) throw new Error("collapse left rows");
+  });
+
   await check("views render with real data", async () => {
     for (const v of ["icons", "columns", "gallery", "details"] as const) {
       tab().view = v;

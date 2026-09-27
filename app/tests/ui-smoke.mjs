@@ -107,6 +107,21 @@ try {
   await sleep(300);
   check("up selects the folder we came from", JSON.stringify(await t.selected()) === '["Invoices"]', JSON.stringify(await t.selected()));
 
+  // Finder-style outline: expand folders in place.
+  await t.eval(`document.querySelector('.pane.active .row .disclosure').click()`);
+  await sleep(300);
+  check("disclosure expands a folder in place", (await t.rows()).includes("Invoice-2026-001.pdf"));
+  await t.focusList();
+  await t.key("ArrowDown");
+  await t.key("ArrowLeft");
+  check("← jumps to the containing folder", JSON.stringify(await t.selected()) === '["Invoices"]', JSON.stringify(await t.selected()));
+  await t.key("ArrowLeft");
+  check("← collapses it", !(await t.rows()).includes("Invoice-2026-001.pdf"));
+  await t.key("ArrowRight");
+  await sleep(300);
+  check("→ expands it again", (await t.rows()).includes("Invoice-2026-001.pdf"));
+  await t.key("ArrowLeft");
+
   // Search subfolders.
   await t.eval(`document.dispatchEvent(new CustomEvent('cx:focus-search'))`);
   await t.type("invoice-2026-00");

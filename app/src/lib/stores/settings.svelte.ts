@@ -50,6 +50,10 @@ export interface SettingsData {
   recent: string[];
   session: SavedWorkspace | null;
   groupBy: "none" | "date" | "kind";
+  /** Alternating row colors in the Details view. */
+  stripes: boolean;
+  /** Path of the selected item in the status bar (Finder's path bar). */
+  pathBar: boolean;
   /** The Full Disk Access banner was dismissed (macOS). */
   fdaDismissed: boolean;
 }
@@ -79,6 +83,8 @@ const defaults: SettingsData = {
   session: null,
   groupBy: "none",
   fdaDismissed: false,
+  stripes: true,
+  pathBar: true,
 };
 
 function load(): SettingsData {

@@ -3,6 +3,8 @@
   import { formatSize } from "../format";
   import { clipboard } from "../stores/clipboard.svelte";
   import { settings } from "../stores/settings.svelte";
+  import { uriName } from "../api";
+  import Icon from "./Icon.svelte";
   import { ws } from "../workspace.svelte";
 
   let tab = $derived(ws.activeTab);
@@ -22,6 +24,34 @@
       .catch(() => {});
     return () => (stale = true);
   });
+
+  /**
+   * Finder's path bar: where the focused item lives. Rows inside expanded
+   * folders extend the current folder's crumbs with the folders in between.
+   */
+  let path = $derived.by(() => {
+    const info = folder?.info;
+    if (!settings.data.pathBar || !info || folder?.kind !== "folder") return [];
+    const crumbs: { label: string; uri: string; icon: string }[] = info.crumbs.map((c) => ({ ...c }));
+    const cur = tab?.cursorEntry;
+    if (cur?.parent && cur.depth) {
+      const base = tab.dirUri.replace(/\/+$/, "");
+      const rel = cur.parent.slice(base.length).split("/").filter(Boolean);
+      let acc = base;
+      for (const seg of rel) {
+        acc += "/" + seg;
+        crumbs.push({ label: decodeURIComponent(seg), uri: acc, icon: "folder" });
+      }
+    }
+    if (cur) crumbs.push({ label: cur.name, uri: tab.uriOf(cur), icon: cur.isDir ? "folder" : "file" });
+    return crumbs;
+  });
+
+  function openCrumb(uri: string, i: number) {
+    // The last crumb is the focused item itself: reveal rather than open it.
+    if (i === path.length - 1 && tab.cursorEntry && !tab.cursorEntry.isDir) return;
+    tab.navigate(uri);
+  }
 
   let timingText = $derived(
     folder?.timing
@@ -45,6 +75,18 @@
     <span class="muted">{clipboard.uris.length} {clipboard.mode === "cut" ? "cut" : "copied"} — paste to {clipboard.mode === "cut" ? "move" : "copy"}</span>
   {/if}
   <span class="spacer"></span>
+  {#if path.length}
+    <nav class="pathbar" aria-label="Path">
+      {#each path as c, i (c.uri + i)}
+        {#if i > 0}<Icon name="chevronRight" size={10} />{/if}
+        <button class:last={i === path.length - 1} title={uriName(c.uri) || c.label} onclick={() => openCrumb(c.uri, i)}>
+          {#if c.icon === "home"}<Icon name="home" size={12} />{:else if c.icon === "drive"}<Icon name="drive" size={12} />{:else if c.icon === "server"}<Icon name="server" size={12} />{/if}
+          {c.label}
+        </button>
+      {/each}
+    </nav>
+    <span class="spacer"></span>
+  {/if}
   {#if settings.data.keymap === "commander"}<span class="badge" title="Total Commander-style keys: F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane">Commander keys</span>{/if}
   {#if folder?.info && !folder.info.local}<span class="muted">{folder.info.scheme.toUpperCase()}</span>{/if}
   {#if space}<span class="muted">{formatSize(space.free)} free</span>{/if}
@@ -75,6 +117,35 @@
   }
   .spacer {
     flex: 1;
+  }
+  .pathbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-3);
+  }
+  .pathbar button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 4px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .pathbar button.last {
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .pathbar button:hover {
+    background: var(--hover);
   }
   .badge {
     padding: 1px 8px;

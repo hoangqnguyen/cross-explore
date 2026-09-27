@@ -39,6 +39,9 @@
         { separator: true },
         { ...item("view.hidden", "Hidden items"), checked: s.showHidden, icon: undefined },
         { label: "Compact spacing", checked: s.compact, action: () => (s.compact = !s.compact) },
+        { label: "Alternating row colors", checked: s.stripes, action: () => (s.stripes = !s.stripes) },
+        { ...item("view.pathBar", "Path bar"), checked: s.pathBar, icon: undefined },
+        ...(tab.expanded.size ? [{ separator: true } as MenuItem, item("view.collapseAll")] : []),
       ],
       e.currentTarget as HTMLElement,
     );
