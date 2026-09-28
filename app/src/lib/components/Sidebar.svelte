@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { disconnectServer, errorText, isCloudUri, type Device } from "../api";
+  import { disconnectServer, errorText, fileUriToPath, isCloudUri, type Device } from "../api";
   import { formatSize } from "../format";
   import { dropTarget } from "../listing";
   import { menu } from "../menu.svelte";
@@ -80,7 +80,7 @@
   function pretty(uri: string) {
     const home = ws.places?.home.uri.replace(/\/+$/, "");
     if (home && (uri === home || uri.startsWith(home + "/"))) return "~" + decodeURIComponent(uri.slice(home.length));
-    return uri.startsWith("file://") ? decodeURIComponent(uri.slice(7)) : uri;
+    return fileUriToPath(uri);
   }
 
   async function disconnect(uri: string) {

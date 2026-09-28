@@ -1,7 +1,7 @@
 <script lang="ts">
   // Right-hand details pane: a preview of the focused item plus its info
   // (Explorer's details pane and Finder's preview column in one).
-  import { getTags, openEntry, errorText, type Item } from "../api";
+  import { fileUriToPath, getTags, openEntry, errorText, type Item } from "../api";
   import { formatDateFull, formatSize, typeLabel } from "../format";
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
@@ -34,7 +34,7 @@
 
   function where(e: Item) {
     const p = e.parent ?? tab.dirUri;
-    return p.startsWith("file://") ? decodeURIComponent(p.slice(7)) : p;
+    return fileUriToPath(p);
   }
 
   let dragging = false;

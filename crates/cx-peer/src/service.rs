@@ -196,6 +196,8 @@ impl PeerService {
     /// Replace the shares (validated first) and save them in the state dir.
     pub fn set_shares(&self, shares: Vec<Share>) -> Result<()> {
         let roots = shares::prepare(&shares)?;
+        // Save the normalized paths (a `file://` URI or `/C:/…` becomes a real path).
+        let shares: Vec<Share> = roots.iter().map(|r| r.share.clone()).collect();
         shares::save(&self.inner.state_dir, &shares)?;
         *self.inner.shares.write().unwrap() = roots;
         Ok(())

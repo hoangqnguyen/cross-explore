@@ -15,6 +15,7 @@ import {
   type Entry,
   type Item,
   type Places,
+  fileUriToPath,
 } from "./api";
 import { Folder, keyOf, type Source } from "./folder.svelte";
 import { SearchResults, StaticSource, TagResults } from "./search.svelte";
@@ -395,11 +396,7 @@ export class Tab {
     const info = this.folder.info;
     if (!info) return;
     const sel = this.targets();
-    const toPath = (uri: string) => {
-      if (!uri.startsWith("file://")) return uri;
-      const p = decodeURIComponent(uri.slice(7));
-      return ws.platform === "windows" ? p.replace(/^\//, "").replaceAll("/", "\\") : p;
-    };
+    const toPath = fileUriToPath;
     const text = sel.length ? sel.map((e) => toPath(this.uriOf(e))).join("\n") : toPath(info.uri);
     navigator.clipboard.writeText(text).then(
       () => toasts.show(sel.length > 1 ? `Copied ${sel.length} paths` : "Copied path"),

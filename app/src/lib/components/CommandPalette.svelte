@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { uriName } from "../api";
+  import { fileUriToPath, uriName } from "../api";
   import { commands, enabled, keysFor } from "../commands.svelte";
   import { fuzzy, markMatches } from "../fuzzy";
   import { formatCombo } from "../keys";
@@ -37,7 +37,7 @@
   });
 
   const go = (uri: string) => () => ws.activeTab.navigate(uri);
-  const pretty = (uri: string) => (uri.startsWith("file://") ? decodeURIComponent(uri.slice(7)) : uri);
+  const pretty = fileUriToPath;
 
   let entries = $derived.by((): Entry[] => {
     if (!open) return [];

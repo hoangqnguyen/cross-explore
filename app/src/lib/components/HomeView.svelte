@@ -1,7 +1,7 @@
 <script lang="ts">
   // The Home page: pinned and recent folders, drives, nearby devices and
   // recent transfers — Explorer's Home and Finder's Recents in one place.
-  import { uriName, type Device, type Service } from "../api";
+  import { fileUriToPath, uriName, type Device, type Service } from "../api";
   import { formatSize } from "../format";
   import { devices } from "../stores/devices.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
@@ -22,7 +22,7 @@
     if (!uri.startsWith("file://")) return uri.replace(/^(\w+):\/\//, "$1 · ");
     const home = ws.places?.home.uri.replace(/\/+$/, "");
     if (home && (uri === home || uri.startsWith(home + "/"))) return "~" + decodeURIComponent(uri.slice(home.length));
-    return decodeURIComponent(uri.slice(7));
+    return fileUriToPath(uri);
   }
 
   function open(uri: string, e?: MouseEvent) {

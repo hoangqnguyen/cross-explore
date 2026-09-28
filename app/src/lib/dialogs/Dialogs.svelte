@@ -35,11 +35,28 @@
     destination: DestinationDialog,
     cloud: CloudDialog,
   } as const;
+
+  // When a dialog on top closes, hand focus back to the one underneath.
+  let depth = 0;
+  $effect(() => {
+    const n = dialogs.stack.length;
+    if (n < depth && n > 0) requestAnimationFrame(() => document.querySelectorAll<HTMLElement>(".layer .modal")[n - 1]?.focus());
+    depth = n;
+  });
 </script>
 
-{#if dialogs.current && dialogs.current.kind in components}
-  {@const Dialog = components[dialogs.current.kind as keyof typeof components] as any}
-  {#key dialogs.current}
-    <Dialog {...dialogs.current.props} />
-  {/key}
-{/if}
+{#each dialogs.stack as d, i (d)}
+  {#if d.kind in components}
+    {@const Dialog = components[d.kind as keyof typeof components] as any}
+    <!-- Dialogs below the top one stay visible but can't be used until it closes. -->
+    <div class="layer" inert={i < dialogs.stack.length - 1}>
+      <Dialog {...d.props} />
+    </div>
+  {/if}
+{/each}
+
+<style>
+  .layer {
+    display: contents;
+  }
+</style>

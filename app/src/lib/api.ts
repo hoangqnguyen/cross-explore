@@ -213,6 +213,22 @@ export interface TrashedItem {
   trashed: string | null;
 }
 
+/**
+ * The OS path of a `file://` URI: `/Users/me/x` on macOS and Linux,
+ * `C:\\Users\\me\\x` for a drive letter, `\\\\server\\share` for UNC. Other
+ * URIs come back unchanged.
+ */
+export function fileUriToPath(uri: string): string {
+  if (!uri.startsWith("file://")) return uri;
+  const p = decodeURIComponent(uri.slice(7));
+  if (/^\/[A-Za-z]:/.test(p)) {
+    const d = p.slice(1).replaceAll("/", "\\");
+    return /^[A-Za-z]:$/.test(d) ? d + "\\" : d;
+  }
+  if (!p.startsWith("/")) return "\\\\" + p.replaceAll("/", "\\"); // file://server/share
+  return p;
+}
+
 /** URI of `name` inside the folder at `dir`. */
 export function childUri(dir: string, name: string): string {
   const bang = dir.startsWith("archive://") && !dir.includes("!/") ? "!" : "";

@@ -2,7 +2,7 @@
   // "Copy to…" / "Move to…": pick destinations from everywhere the app knows
   // about (other pane, tabs, favorites, recents, servers, devices) or browse
   // to one. Copy can go to several places at once; one job per destination.
-  import { asCxError, connectServer, errorText, isCloudUri, listDir, trustHostKey, type CxError, uriName, type ConflictPolicy, type Device, type Entry } from "../api";
+  import { asCxError, connectServer, errorText, fileUriToPath, isCloudUri, listDir, trustHostKey, type CxError, uriName, type ConflictPolicy, type Device, type Entry } from "../api";
   import FileIcon from "../components/FileIcon.svelte";
   import Icon, { type IconName } from "../components/Icon.svelte";
   import { deviceTarget, devices } from "../stores/devices.svelte";
@@ -28,7 +28,7 @@
     const home = ws.places?.home.uri && norm(ws.places.home.uri);
     if (!uri.startsWith("file://")) return uri;
     if (home && (norm(uri) === home || uri.startsWith(home + "/"))) return "~" + decodeURIComponent(uri.slice(home.length));
-    return decodeURIComponent(uri.slice(7));
+    return fileUriToPath(uri);
   };
   // The folder(s) the items are in: copying there is "duplicate", not this.
   // svelte-ignore state_referenced_locally

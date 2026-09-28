@@ -384,6 +384,29 @@ try {
     check("…and the rows never disappear", quiet.empty === 0, JSON.stringify(quiet));
   }
 
+  // Dialogs stack: one opened from Settings shows on top right away, and
+  // closing it returns to Settings.
+  await t.open("?path=~");
+  await t.eval(`void window.__cx.dialogs.ask("settings")`);
+  await sleep(300);
+  await t.clickText(".modal nav button", "Sharing");
+  await sleep(300);
+  await t.clickText(".modal button", "Pair with a device");
+  await sleep(300);
+  {
+    const titles = () => t.eval(`[...document.querySelectorAll('.modal h2')].map(h => h.textContent)`);
+    check("a dialog opened from Settings appears on top", JSON.stringify(await titles()) === '["Settings","Pair a device"]', JSON.stringify(await titles()));
+    check("Settings underneath can't be used meanwhile", await t.eval(`!!document.querySelectorAll('.layer')[0]?.inert && !document.querySelectorAll('.layer')[1]?.inert`));
+    await t.key("Escape");
+    await sleep(250);
+    check("closing it goes back to Settings", JSON.stringify(await titles()) === '["Settings"]', JSON.stringify(await titles()));
+    await t.key("Escape");
+    await sleep(200);
+    check("Escape again closes Settings", (await titles()).length === 0);
+  }
+  const paths = await t.eval(`import('/src/lib/api.ts').then(m => [m.fileUriToPath('file:///C:/Users/PC/Downloads'), m.fileUriToPath('file:///C:'), m.fileUriToPath('file:///Users/me/My%20Docs'), m.fileUriToPath('file://server/share/x'), m.fileUriToPath('sftp://h/x')])`);
+  check("file URIs become real OS paths (Windows drive, UNC, POSIX)", JSON.stringify(paths) === JSON.stringify(["C:\\Users\\PC\\Downloads", "C:\\", "/Users/me/My Docs", "\\\\server\\share\\x", "sftp://h/x"]), JSON.stringify(paths));
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

@@ -101,10 +101,29 @@ pub fn scrub(share: &ShareRoot, e: CxError) -> CxError {
     }
 }
 
+/// Accept what a UI may hand us besides a plain path: a `file://` URI, or
+/// the URI's path part on Windows (`/C:/Users/me`).
+fn native_path(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.starts_with("file://") {
+        if let Ok(loc) = cx_core::Location::parse(&s) {
+            if let Some(local) = loc.local_path() {
+                return local.to_path_buf();
+            }
+        }
+    }
+    let b = s.as_bytes();
+    if b.len() >= 3 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b':' {
+        return PathBuf::from(s[1..].replace('/', std::path::MAIN_SEPARATOR_STR));
+    }
+    p.to_path_buf()
+}
+
 /// Check a share list: unique valid names, existing directories.
 pub fn prepare(shares: &[Share]) -> Result<Vec<ShareRoot>> {
     let mut out: Vec<ShareRoot> = Vec::new();
     for s in shares {
+        let s = &Share { path: native_path(&s.path), ..s.clone() };
         validate_name(&s.name)?;
         if out.iter().any(|o| o.share.name.eq_ignore_ascii_case(&s.name)) {
             return Err(CxError::AlreadyExists(format!("share {}", s.name)));
@@ -221,6 +240,21 @@ pub fn share_entry(s: &ShareRoot) -> Entry {
 
 pub fn root_entry() -> Entry {
     Entry { name: String::new(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: true, executable: false }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn share_paths_from_uis_are_normalized() {
+        let tmp = tempfile::tempdir().unwrap();
+        let uri = cx_core::Location::local(tmp.path()).uri();
+        let roots = prepare(&[Share { name: "T".into(), path: PathBuf::from(&uri), read_only: false }]).unwrap();
+        assert_eq!(std::fs::canonicalize(&roots[0].share.path).unwrap(), std::fs::canonicalize(tmp.path()).unwrap());
+        assert_eq!(native_path(Path::new("/C:/Users/PC/Downloads")), PathBuf::from(format!("C:{0}Users{0}PC{0}Downloads", std::path::MAIN_SEPARATOR)));
+        assert_eq!(native_path(Path::new("/home/me")), PathBuf::from("/home/me"));
+    }
 }
 
 #[cfg(test)]

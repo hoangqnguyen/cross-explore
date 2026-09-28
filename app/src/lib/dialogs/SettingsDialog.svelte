@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { errorText, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
+  import { errorText, fileUriToPath, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
   import Icon from "../components/Icon.svelte";
   import { devices } from "../stores/devices.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
@@ -28,7 +28,7 @@
     if (!path?.startsWith("file://")) return;
     const name = await dialogs.prompt("Share a folder", "Name other devices will see", decodeURIComponent(path.split("/").pop() ?? "Share"), "Share");
     if (!name || !devices.peer) return;
-    const shares: PeerShare[] = [...devices.peer.shares, { name, path: decodeURIComponent(path.replace(/^file:\/\//, "")), readOnly: false }];
+    const shares: PeerShare[] = [...devices.peer.shares, { name, path: fileUriToPath(path), readOnly: false }];
     await peer(peerSetShares(shares));
   }
 

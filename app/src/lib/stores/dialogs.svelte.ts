@@ -1,5 +1,6 @@
-// A single modal slot. `ask()` opens a dialog and resolves with its result
-// (or null when dismissed), so flows read top to bottom.
+// Modal dialogs, stacked: `ask()` opens one on top of whatever is showing
+// (Settings → "Pair with a device…" opens over Settings) and resolves with
+// its result (or null when dismissed), so flows read top to bottom.
 export type DialogKind =
   | "connect"
   | "signIn"
@@ -27,21 +28,26 @@ interface Open {
 }
 
 class Dialogs {
-  current = $state.raw<Open | null>(null);
-  #queue: Open[] = [];
+  /** Open dialogs, bottom first; only the top one is interactive. */
+  stack = $state.raw<Open[]>([]);
+
+  /** The dialog on top (the one taking input), if any. */
+  get current(): Open | null {
+    return this.stack.at(-1) ?? null;
+  }
 
   ask<T = unknown>(kind: DialogKind, props: Record<string, unknown> = {}): Promise<T | null> {
     return new Promise((resolve) => {
-      const d: Open = { kind, props, resolve: resolve as (v: unknown) => void };
-      if (this.current) this.#queue.push(d);
-      else this.current = d;
+      this.stack = [...this.stack, { kind, props, resolve: resolve as (v: unknown) => void }];
     });
   }
 
+  /** Close the top dialog with `result`. */
   close(result: unknown = null) {
-    const d = this.current;
-    this.current = this.#queue.shift() ?? null;
-    d?.resolve(result);
+    const d = this.stack.at(-1);
+    if (!d) return;
+    this.stack = this.stack.slice(0, -1);
+    d.resolve(result);
   }
 
   async confirm(title: string, message: string, ok = "OK", danger = false): Promise<boolean> {
