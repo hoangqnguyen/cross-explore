@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import Modal from "./Modal.svelte";
 
@@ -7,10 +8,13 @@
   let text = $state(value);
   let input: HTMLInputElement | undefined = $state();
 
+  // Preselect the name without its extension, like a rename, once when the
+  // dialog opens (not on every keystroke, which would select what you typed).
   $effect(() => {
-    // Preselect the name without its extension, like a rename.
-    const dot = text.lastIndexOf(".");
-    input?.setSelectionRange(0, dot > 0 ? dot : text.length);
+    if (!input) return;
+    const start = untrack(() => text);
+    const dot = start.lastIndexOf(".");
+    input.setSelectionRange(0, dot > 0 ? dot : start.length);
   });
 </script>
 

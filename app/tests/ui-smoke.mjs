@@ -317,7 +317,9 @@ try {
     await t.clickText(".menu button, .menu [role=menuitem]", "Rename…");
     await sleep(200);
     check("renaming a favorite asks for a name", (await t.eval(`document.querySelector('.modal input')?.value`)) === "Code");
-    await t.eval(`(() => { const i = document.querySelector('.modal input'); i.value = 'My code'; i.dispatchEvent(new Event('input')); })()`);
+    // Type it for real, key by key (the name starts selected, so it's replaced).
+    await t.type("My code");
+    check("typing into the rename box keeps every character", (await t.eval(`document.querySelector('.modal input')?.value`)) === "My code", await t.eval(`document.querySelector('.modal input')?.value`));
     await t.key("Enter");
     await sleep(200);
     check("the favorite shows its alias", (await favs()).includes("My code") && !(await favs()).includes("Code"), JSON.stringify(await favs()));
