@@ -39,6 +39,7 @@
     menu.show(
       [
         { label: "Open in new tab", icon: "plus", action: () => ws.newTab(uri) },
+        { label: "Rename…", icon: "rename", action: () => renameBookmark(uri) },
         { label: "Remove from Favorites", icon: "close", action: () => (settings.data.bookmarks = settings.data.bookmarks.filter((b) => b.uri !== uri)) },
       ],
       e.clientX,
@@ -52,11 +53,34 @@
       [
         { label: "Open in new tab", icon: "plus", action: () => ws.newTab(uri) },
         ...(devices.connected.some((c) => uri.startsWith(c)) ? [{ label: "Disconnect", icon: "close" as const, action: () => disconnect(uri) }] : []),
+        ...(saved ? [{ label: "Rename…", icon: "rename" as const, action: () => renameServer(uri) }] : []),
         ...(saved ? [{ label: "Remove", icon: "trash" as const, action: () => (settings.data.servers = settings.data.servers.filter((s) => s.uri !== uri)) }] : []),
       ],
       e.clientX,
       e.clientY,
     );
+  }
+
+  /** Give a favorite its own name (an alias); the folder itself is untouched. */
+  async function renameBookmark(uri: string) {
+    const b = settings.data.bookmarks.find((x) => x.uri === uri);
+    if (!b) return;
+    const name = (await dialogs.prompt("Rename favorite", `Name shown in the sidebar for ${pretty(uri)}`, b.name, "Rename"))?.trim();
+    if (name) settings.data.bookmarks = settings.data.bookmarks.map((x) => (x.uri === uri ? { ...x, name } : x));
+  }
+
+  async function renameServer(uri: string) {
+    const srv = settings.data.servers.find((x) => x.uri === uri);
+    if (!srv) return;
+    const name = (await dialogs.prompt("Rename server", `Name shown in the sidebar for ${uri}`, srv.name, "Rename"))?.trim();
+    if (name) settings.data.servers = settings.data.servers.map((x) => (x.uri === uri ? { ...x, name } : x));
+  }
+
+  /** file:///Users/me/x → ~/x; other URIs as they are. */
+  function pretty(uri: string) {
+    const home = ws.places?.home.uri.replace(/\/+$/, "");
+    if (home && (uri === home || uri.startsWith(home + "/"))) return "~" + decodeURIComponent(uri.slice(home.length));
+    return uri.startsWith("file://") ? decodeURIComponent(uri.slice(7)) : uri;
   }
 
   async function disconnect(uri: string) {
@@ -119,7 +143,7 @@
           {@render item(p.name, p.uri, p.icon as IconName)}
         {/each}
         {#each settings.data.bookmarks as b (b.uri)}
-          {@render item(b.name, b.uri, "star", { title: b.uri, menu: (e) => bookmarkMenu(e, b.uri) })}
+          {@render item(b.name, b.uri, "star", { title: `${b.name} — ${pretty(b.uri)}`, menu: (e) => bookmarkMenu(e, b.uri) })}
         {/each}
       </div>
     {/if}

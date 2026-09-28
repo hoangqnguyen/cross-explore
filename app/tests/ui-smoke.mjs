@@ -311,11 +311,22 @@ try {
     await t.clickText(".menu button, .menu [role=menuitem]", "Add to Favorites");
     await sleep(150);
     check("the folder appears in the sidebar", (await favs()).includes("Code"), JSON.stringify(await favs()));
+    // Give it an alias from the sidebar's own menu.
+    await t.eval(`(() => { const el = [...document.querySelectorAll('.sidebar .item')].find(e => e.querySelector('.label')?.textContent === 'Code'); el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 60, clientY: 300 })); })()`);
+    await sleep(150);
+    await t.clickText(".menu button, .menu [role=menuitem]", "Rename…");
+    await sleep(200);
+    check("renaming a favorite asks for a name", (await t.eval(`document.querySelector('.modal input')?.value`)) === "Code");
+    await t.eval(`(() => { const i = document.querySelector('.modal input'); i.value = 'My code'; i.dispatchEvent(new Event('input')); })()`);
+    await t.key("Enter");
+    await sleep(200);
+    check("the favorite shows its alias", (await favs()).includes("My code") && !(await favs()).includes("Code"), JSON.stringify(await favs()));
+    check("the alias still opens the same folder", (await t.eval(`window.__cx.settings.data.bookmarks.find(b => b.name === 'My code')?.uri`))?.endsWith("/Code"));
     const again = await menuOn("Code");
     check("then offers Remove from Favorites", again.some((l) => l.startsWith("Remove from Favorites")), JSON.stringify(again));
     await t.clickText(".menu button, .menu [role=menuitem]", "Remove from Favorites");
     await sleep(150);
-    check("and removing takes it off the sidebar", !(await favs()).includes("Code"));
+    check("and removing takes it off the sidebar", !(await favs()).includes("My code"));
   }
 
   // Column view: right-click works in every column, not just the focused one.
