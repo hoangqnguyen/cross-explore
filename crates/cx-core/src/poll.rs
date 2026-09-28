@@ -89,7 +89,7 @@ mod tests {
     use crate::EntryKind;
 
     fn e(name: &str, size: u64) -> Entry {
-        Entry { name: name.into(), kind: EntryKind::File, is_dir: false, size, modified: None, created: None, hidden: false, readonly: false }
+        Entry { name: name.into(), kind: EntryKind::File, is_dir: false, size, modified: None, created: None, hidden: false, readonly: false, executable: false }
     }
 
     #[test]

@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use tokio::sync::oneshot;
 
-pub(crate) async fn thumbnail(path: &Path, size_px: u32) -> Result<Cached> {
+pub(crate) async fn thumbnail(path: &Path, size_px: u32, want: super::Want) -> Result<Cached> {
     let Some(path_str) = path.to_str() else {
         return Err(CxError::Unsupported(format!("non-UTF-8 path {}", path.display())));
     };
@@ -39,7 +39,12 @@ pub(crate) async fn thumbnail(path: &Path, size_px: u32) -> Result<Cached> {
                 CGSize { width: side, height: side },
                 1.0,
                 // Real thumbnails only: generic type icons are drawn by the UI.
-                QLThumbnailGenerationRequestRepresentationTypes::Thumbnail,
+                // Apps are the exception: their icon is their picture.
+                if want == super::Want::Icon {
+                    QLThumbnailGenerationRequestRepresentationTypes::Icon
+                } else {
+                    QLThumbnailGenerationRequestRepresentationTypes::Thumbnail
+                },
             )
         };
         let tx = Mutex::new(Some(tx));

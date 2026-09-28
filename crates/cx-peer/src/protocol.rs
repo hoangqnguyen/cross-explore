@@ -24,7 +24,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+/// 2: entries carry `executable`.
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Largest control frame accepted. Bulk data never goes through frames.
 pub const MAX_FRAME: usize = 8 << 20;

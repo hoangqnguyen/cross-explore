@@ -114,11 +114,11 @@
         {@const s = symbols[i.kind]}
         <div class="row">
           <div class="cell" class:missing={!i.left}>
-            {#if i.left}<FileIcon name={i.left.name} isDir={i.left.isDir} size={16} /><span class="n">{i.relPath}</span><span class="meta">{i.left.isDir ? "" : formatSize(i.left.size)} · {formatDate(i.left.modified)}</span>{/if}
+            {#if i.left}<FileIcon name={i.left.name} isDir={i.left.isDir} executable={i.left.executable} size={16} /><span class="n">{i.relPath}</span><span class="meta">{i.left.isDir ? "" : formatSize(i.left.size)} · {formatDate(i.left.modified)}</span>{/if}
           </div>
           <div class="state {s.tone}" title={s.label}><Icon name={s.icon} size={14} /></div>
           <div class="cell" class:missing={!i.right}>
-            {#if i.right}<FileIcon name={i.right.name} isDir={i.right.isDir} size={16} /><span class="n">{i.relPath}</span><span class="meta">{i.right.isDir ? "" : formatSize(i.right.size)} · {formatDate(i.right.modified)}</span>{/if}
+            {#if i.right}<FileIcon name={i.right.name} isDir={i.right.isDir} executable={i.right.executable} size={16} /><span class="n">{i.relPath}</span><span class="meta">{i.right.isDir ? "" : formatSize(i.right.size)} · {formatDate(i.right.modified)}</span>{/if}
           </div>
         </div>
       {/each}

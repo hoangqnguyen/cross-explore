@@ -98,6 +98,15 @@ async fn check_server(inner: &Inner, conn: &quinn::Connection, key: &PublicKey, 
     Err(unknown(inner.trust.get(&id).is_some()))
 }
 
+fn version_mismatch(hello: &Hello) -> CxError {
+    CxError::Connection(format!(
+        "{} runs a {} version of Cross Explore (peer protocol {} vs {PROTOCOL_VERSION}) — update both devices",
+        hello.name,
+        if hello.version < PROTOCOL_VERSION { "older" } else { "newer" },
+        hello.version
+    ))
+}
+
 fn own_hello(inner: &Inner) -> Hello {
     Hello { version: PROTOCOL_VERSION, device_id: inner.identity.device_id().to_string(), name: inner.identity.name.clone(), os: std::env::consts::OS.to_string() }
 }
@@ -160,6 +169,10 @@ impl PeerClient {
             Response::Err(e) => return Err(e.into()),
             _ => return Err(CxError::Connection("unexpected reply to hello".into())),
         };
+        if hello.version != PROTOCOL_VERSION {
+            conn.close(4u32.into(), b"version");
+            return Err(version_mismatch(&hello));
+        }
         if hello.device_id != id {
             conn.close(3u32.into(), b"bad hello");
             return Err(CxError::Connection("peer claimed another device id".into()));

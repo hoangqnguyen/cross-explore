@@ -215,11 +215,12 @@ pub fn share_entry(s: &ShareRoot) -> Entry {
         created: None,
         hidden: false,
         readonly: s.share.read_only,
+        executable: false,
     }
 }
 
 pub fn root_entry() -> Entry {
-    Entry { name: String::new(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: true }
+    Entry { name: String::new(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: true, executable: false }
 }
 
 #[cfg(test)]

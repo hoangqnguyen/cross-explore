@@ -25,6 +25,7 @@ fn entry(i: usize) -> Entry {
         created: None,
         hidden: k.is_multiple_of(97),
         readonly: false,
+        executable: false,
     }
 }
 

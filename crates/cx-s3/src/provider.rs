@@ -68,11 +68,11 @@ fn split(path: &str) -> Path<'_> {
 }
 
 fn dir_entry(name: String, modified: Option<i64>) -> Entry {
-    Entry { hidden: name.starts_with('.'), kind: EntryKind::Dir, is_dir: true, size: 0, modified, created: None, readonly: false, name }
+    Entry { hidden: name.starts_with('.'), kind: EntryKind::Dir, is_dir: true, size: 0, modified, created: None, readonly: false, executable: false, name }
 }
 
 fn file_entry(name: String, size: u64, modified: Option<i64>) -> Entry {
-    Entry { hidden: name.starts_with('.'), kind: EntryKind::File, is_dir: false, size, modified, created: None, readonly: false, name }
+    Entry { hidden: name.starts_with('.'), kind: EntryKind::File, is_dir: false, size, modified, created: None, readonly: false, executable: false, name }
 }
 
 fn last_segment(s: &str) -> String {

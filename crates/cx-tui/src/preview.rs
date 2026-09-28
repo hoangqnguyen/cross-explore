@@ -34,7 +34,7 @@ pub struct Preview {
 
 fn binary_ext(name: &str) -> bool {
     matches!(
-        format::category(&Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size: 0, modified: None, created: None, hidden: false, readonly: false }),
+        format::category(&Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size: 0, modified: None, created: None, hidden: false, readonly: false, executable: false }),
         format::Category::Image | format::Category::Audio | format::Category::Video | format::Category::Executable
     ) || matches!(format::ext(name).to_ascii_lowercase().as_str(), "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "pages" | "numbers" | "key" | "epub" | "odt" | "ods" | "odp" | "so" | "dylib" | "dll" | "o" | "a" | "class" | "pyc" | "wasm" | "ttf" | "otf" | "woff" | "woff2" | "sqlite" | "db" | "iso" | "img" | "bin")
 }

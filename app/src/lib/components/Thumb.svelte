@@ -2,15 +2,17 @@
   // A file's picture: a real thumbnail for media (and anything QuickLook /
   // the shell can render), the colored type icon otherwise or on failure.
   import { thumbUrl, type Item } from "../api";
+  import { hasOsIcon } from "../fileTypes";
   import { categoryOf } from "../format";
+  import { ws } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
 
-  let { entry, uri, size, fit = "contain" }: { entry: Item; uri: string; size: number; fit?: "contain" | "cover" } = $props();
+  let { entry, uri, size, fit = "contain", iconScale = 0.78 }: { entry: Item; uri: string; size: number; fit?: "contain" | "cover"; iconScale?: number } = $props();
 
   const thumbable = new Set(["image", "video", "pdf", "doc", "slides", "sheet", "font"]);
   let failed = $state(false);
   let loaded = $state(false);
-  let wants = $derived(!entry.isDir && thumbable.has(categoryOf(entry)) && !failed);
+  let wants = $derived(!failed && ((!entry.isDir && thumbable.has(categoryOf(entry))) || hasOsIcon(entry.name, entry.isDir, uri, ws.platform)));
   let src = $derived(wants ? thumbUrl(uri, Math.round(size * (window.devicePixelRatio || 1)), entry.modified) : "");
 
   $effect(() => {
@@ -25,7 +27,7 @@
     <img {src} alt="" loading="lazy" decoding="async" draggable="false" class:loaded class:cover={fit === "cover"} onload={() => (loaded = true)} onerror={() => (failed = true)} />
   {/if}
   {#if !src || failed || !loaded}
-    <span class="icon"><FileIcon name={entry.name} isDir={entry.isDir} size={Math.round(size * 0.78)} /></span>
+    <span class="icon"><FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={Math.round(size * iconScale)} /></span>
   {/if}
 </div>
 

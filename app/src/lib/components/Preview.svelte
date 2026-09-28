@@ -126,12 +126,12 @@
     <div class="listing">
       <div class="count">{children.length} {children.length === 1 ? "item" : "items"}</div>
       {#each children.slice(0, large ? 500 : 60) as c (c.name)}
-        <div class="child"><FileIcon name={c.name} isDir={c.isDir} size={16} /><span>{c.name}</span></div>
+        <div class="child"><FileIcon name={c.name} isDir={c.isDir} executable={c.executable} size={16} /><span>{c.name}</span></div>
       {/each}
     </div>
   {:else}
     <div class="fallback">
-      <FileIcon name={entry.name} isDir={entry.isDir} size={large ? 128 : 88} />
+      <FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={large ? 128 : 88} />
       {#if textError && large}<p>{textError}</p>{/if}
     </div>
   {/if}

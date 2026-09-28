@@ -68,7 +68,7 @@ pub fn parse_mlsx(line: &str) -> Option<Mlsx> {
     };
     let name = name.to_string();
     Some(Mlsx {
-        entry: Entry { hidden: name.starts_with('.'), name, kind, is_dir, size: if is_dir { 0 } else { size }, modified, created: None, readonly },
+        entry: Entry { hidden: name.starts_with('.'), name, kind, is_dir, size: if is_dir { 0 } else { size }, modified, created: None, readonly, executable: false },
         is_self_or_parent: self_or_parent,
     })
 }
@@ -98,7 +98,7 @@ fn entry_from_list(f: &ListFile, posix: bool) -> Option<Entry> {
     };
     let modified = f.modified().duration_since(UNIX_EPOCH).ok().map(|d| d.as_millis() as i64).filter(|&ms| ms > 0);
     let readonly = posix && ![PosixPexQuery::Owner, PosixPexQuery::Group, PosixPexQuery::Others].into_iter().any(|q| f.can_write(q));
-    Some(Entry { hidden: name.starts_with('.'), name, kind, is_dir, size: if is_dir { 0 } else { f.size() as u64 }, modified, created: None, readonly })
+    Some(Entry { hidden: name.starts_with('.'), name, kind, is_dir, size: if is_dir { 0 } else { f.size() as u64 }, modified, created: None, readonly, executable: false })
 }
 
 /// `YYYYMMDDHHMMSS[.sss]` (UTC) → milliseconds since the epoch.

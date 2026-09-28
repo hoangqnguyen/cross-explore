@@ -166,6 +166,7 @@ impl Inner {
                 created: stat.created,
                 hidden: stat.hidden,
                 readonly: !format.writable(),
+                executable: false,
             };
             Ok((format, build_index(&path, format, root)?))
         })

@@ -50,7 +50,26 @@ const roots: Record<string, Node> = {
         dir("Movies", 60 * day),
         dir("Music", 60 * day),
         dir("Pictures", 7 * day, Array.from({ length: 300 }, (_, i) => file(`IMG_${1000 + i}.jpg`, 1_500_000 + ((i * 7919) % 3_000_000), i * 3 * 3600_000))),
-        dir("Code", 3 * 3600_000, [dir("cross-explore", 10 * min), dir("dotfiles", 20 * day)]),
+        dir("Code", 3 * 3600_000, [
+          dir("cross-explore", 10 * min),
+          dir("dotfiles", 20 * day),
+          // Every kind of file icon, for eyeballing (tests/ui-shots.mjs).
+          dir(
+            "icon-gallery",
+            day,
+            [
+              "distribution.cer", "Staging_AdHoc.mobileprovision", "google-services.json", "release-001.zip", "model_zoom.pth", "VID_0001.insv", "LRV_0001.lrv",
+              "PawnIO_setup.exe", "installer.msi", "segment_01.webm", "Full Run Report.html", "invoice.pdf", "HOADON.xml", "report.doc", "budget.xlsx",
+              "deck.pptx", "photo.jpg", "song.flac", "notes.md", "readme.txt", "server.log", "main.rs", "app.ts", "script.py", "index.js", "style.css",
+              "App.svelte", "settings.yaml", "data.csv", "backup.tar.gz", "macOS.dmg", "font.ttf", "scene.blend", "design.fig", "book.epub", "movie.srt",
+              "cal.ics", "card.vcf", "mail.eml", "site.url", "db.sqlite", "weights.onnx", "id_ed25519.pub", "package.deb", "app.apk", "tool.jar",
+              "lib.dll", "shortcut.lnk", "run.bat", "deploy.sh", "Cargo.lock", "unknown.xyz",
+            ]
+              .map((n) => file(n, 10_000, day))
+              // A Unix program without an extension (execute bit set).
+              .concat([{ ...file("cx-helper", 2_000_000, day), executable: true }]),
+          ),
+        ]),
         dir("Big", day),
         dir(".config", 10 * day, [], true),
         file(".zshrc", 3_400, 15 * day, true, "export PATH=$HOME/bin:$PATH\n"),

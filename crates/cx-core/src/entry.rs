@@ -29,6 +29,10 @@ pub struct Entry {
     pub created: Option<i64>,
     pub hidden: bool,
     pub readonly: bool,
+    /// A program you can run: a file with an execute bit (Unix permissions),
+    /// where the provider knows them. Windows programs are told by extension.
+    #[serde(default)]
+    pub executable: bool,
 }
 
 impl Entry {
@@ -60,6 +64,7 @@ impl Entry {
         Entry {
             hidden: is_hidden(&name, meta),
             readonly: meta.permissions().readonly(),
+            executable: is_executable(ft.is_file(), meta),
             modified: meta.modified().ok().and_then(to_millis),
             created: meta.created().ok().and_then(to_millis),
             name,
@@ -68,6 +73,17 @@ impl Entry {
             size,
         }
     }
+}
+
+#[cfg(unix)]
+fn is_executable(is_file: bool, meta: &Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    is_file && meta.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_is_file: bool, _meta: &Metadata) -> bool {
+    false
 }
 
 fn to_millis(t: SystemTime) -> Option<i64> {

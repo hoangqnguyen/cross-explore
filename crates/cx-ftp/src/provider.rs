@@ -215,7 +215,7 @@ impl FtpProvider {
 
     async fn stat_path(&self, path: &str, name: String) -> Result<Entry> {
         if path == "/" {
-            return Ok(Entry { name, kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: false });
+            return Ok(Entry { name, kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: false, executable: false });
         }
         let mlst = self.pool.lease().await?.features().has("MLST");
         if mlst {

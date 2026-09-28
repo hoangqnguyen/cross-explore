@@ -66,7 +66,9 @@ impl Thumbnailer {
         let size = size_px.clamp(SIZE_RANGE.0, SIZE_RANGE.1);
         let provider = vfs.provider(loc).await?;
         let entry = provider.stat(loc).await?;
-        if entry.is_dir {
+        let ext = crate::extension(&entry.name);
+        let want = if app_icon(&ext, entry.is_dir) { crate::os::Want::Icon } else { crate::os::Want::Thumbnail };
+        if entry.is_dir && want != crate::os::Want::Icon {
             return Err(CxError::Unsupported("thumbnail of a folder".into()));
         }
         // Any change to the file changes its mtime or size, so stale
@@ -79,7 +81,6 @@ impl Thumbnailer {
         }
 
         let permit = self.permits.clone().acquire_owned().await.map_err(|_| CxError::Cancelled)?;
-        let ext = crate::extension(&entry.name);
         let made = match loc.local_path() {
             Some(path) if image_thumb::is_decodable(&ext) => {
                 let p = path.to_path_buf();
@@ -95,13 +96,13 @@ impl Thumbnailer {
                     // Unusual variants (CMYK JPEG, odd TIFFs): the OS may cope.
                     Err(e) => {
                         let _permit = self.permits.acquire().await.map_err(|_| CxError::Cancelled)?;
-                        crate::os::thumbnail(path.to_path_buf(), size).await.map_err(|_| e)?
+                        crate::os::thumbnail(path.to_path_buf(), size, want).await.map_err(|_| e)?
                     }
                 }
             }
             Some(path) => {
                 let _permit = permit;
-                crate::os::thumbnail(path.to_path_buf(), size).await?
+                crate::os::thumbnail(path.to_path_buf(), size, want).await?
             }
             None => {
                 if !image_thumb::is_decodable(&ext) {
@@ -130,5 +131,15 @@ impl Thumbnailer {
         })
         .await;
         Ok(made.into())
+    }
+}
+
+/// Programs whose own icon is their picture: macOS app bundles (folders) and
+/// Windows executables, installers and shortcuts.
+fn app_icon(ext: &str, is_dir: bool) -> bool {
+    if is_dir {
+        cfg!(target_os = "macos") && ext == "app"
+    } else {
+        cfg!(windows) && matches!(ext, "exe" | "msi" | "lnk" | "com" | "scr" | "cpl" | "appx" | "msix" | "appref-ms")
     }
 }

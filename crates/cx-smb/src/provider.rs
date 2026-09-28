@@ -43,6 +43,7 @@ pub(crate) fn to_entry(raw: RawEntry) -> Entry {
         // On folders the read-only bit is a legacy "customized folder"
         // marker in Windows, not a permission.
         readonly: !is_dir && raw.attributes & ATTR_READONLY != 0,
+        executable: false,
         modified: wire::filetime_to_ms(raw.modified),
         created: wire::filetime_to_ms(raw.created),
         size: if is_dir { 0 } else { raw.size },
@@ -63,6 +64,7 @@ fn share_entry(name: String) -> Entry {
         modified: None,
         created: None,
         readonly: false,
+        executable: false,
     }
 }
 

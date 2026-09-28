@@ -91,7 +91,7 @@
     <div class="column" use:dropTarget={{ dest: () => a.uri }}>
       {#each visibleOf(f.items) as e (e.name)}
         <button class="item" class:trail={e.name === a.child} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
-          <FileIcon name={e.name} isDir={e.isDir} size={16} />
+          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
           <span>{e.name}</span>
           {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
         </button>
@@ -133,7 +133,7 @@
         ondragend={onDragEnd}
         use:dropTarget={{ dest: () => (e.isDir ? tab.uriOf(e) : null), spring: () => tab.open(e) }}
       >
-        <FileIcon name={e.name} isDir={e.isDir} size={16} />
+        <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
         {#if tab.renaming === key}
           <input class="rename" value={e.name} use:renameInput={e} spellcheck="false" />
         {:else}
@@ -149,7 +149,7 @@
     <div class="column">
       {#each visibleOf(f.items) as e (e.name)}
         <button class="item" onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
-          <FileIcon name={e.name} isDir={e.isDir} size={16} />
+          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
           <span>{e.name}</span>
           {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
         </button>

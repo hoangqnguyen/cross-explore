@@ -185,6 +185,7 @@ impl Node {
                 modified: self.modified,
                 created: self.created,
                 readonly,
+                executable: false,
                 name: self.name.clone(),
             };
         }

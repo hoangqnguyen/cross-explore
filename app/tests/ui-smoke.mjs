@@ -278,6 +278,25 @@ try {
     await t.eval(`window.__cx.dialogs.close(null)`);
   }
 
+  // File icons: programs get app tiles, documents get pages with their own look.
+  await t.open("?path=~/Code/icon-gallery");
+  {
+    const shape = async (name) => {
+      await t.eval(`window.__cx.ws.activeTab.filter = ${JSON.stringify(name)}`);
+      await sleep(100);
+      return shapeOf(name);
+    };
+    const shapeOf = (name) => t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')].find((r) => r.querySelector('.text')?.textContent === ${JSON.stringify(name)}); const svg = r?.querySelector('svg:not(.disclosure svg)'); return !svg ? 'none' : svg.classList.contains('tile') ? 'tile' : 'page'; })()`);
+    check("an .exe gets an app tile", (await shape("PawnIO_setup.exe")) === "tile");
+    check("an executable without extension gets a program tile", (await shape("cx-helper")) === "tile");
+    check("a PDF is a page", (await shape("invoice.pdf")) === "page");
+    await t.eval(`window.__cx.ws.activeTab.filter = ""`);
+    await sleep(100);
+    const looks = await t.eval(`new Set([...document.querySelectorAll('.pane.active .details .row')].map((r) => r.querySelector('.cell.name svg')?.innerHTML ?? '')).size`);
+    const count = (await t.rows()).length;
+    check("file types look different from each other", looks > count * 0.8, `${looks} distinct icons for ${count} files`);
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

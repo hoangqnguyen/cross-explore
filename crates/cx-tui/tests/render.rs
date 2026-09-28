@@ -118,7 +118,7 @@ async fn dialogs() {
     h.app.dialogs.clear();
 
     // Conflict.
-    let e = |name: &str, size, ms| cx_core::Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size, modified: Some(ms), created: None, hidden: false, readonly: false };
+    let e = |name: &str, size, ms| cx_core::Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size, modified: Some(ms), created: None, hidden: false, readonly: false, executable: false };
     h.app.dialogs.push(Dialog::Conflict(ConflictDlg {
         job: 1,
         conflict: cx_engine::JobConflict { id: 1, source: e("notes.md", 2048, 1_700_000_000_000), source_uri: uri(&dir.join("notes.md")), dest: e("notes.md", 1024, 1_600_000_000_000), dest_uri: uri(&dir.join("Documents/notes.md")) },

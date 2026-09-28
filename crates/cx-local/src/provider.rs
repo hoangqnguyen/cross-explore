@@ -43,6 +43,7 @@ fn list_blocking(dir: &Path, sink: &mpsc::Sender<Vec<Entry>>) -> Result<usize> {
                 modified: None,
                 created: None,
                 readonly: false,
+                executable: false,
             },
         };
         batch.push(entry);

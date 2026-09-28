@@ -96,11 +96,11 @@ pub(crate) fn format_rfc3339(ms: i64) -> String {
 }
 
 pub(crate) fn dir_entry(name: String, modified: Option<i64>, readonly: bool) -> Entry {
-    Entry { hidden: name.starts_with('.'), kind: EntryKind::Dir, is_dir: true, size: 0, modified, created: None, readonly, name }
+    Entry { hidden: name.starts_with('.'), kind: EntryKind::Dir, is_dir: true, size: 0, modified, created: None, readonly, executable: false, name }
 }
 
 pub(crate) fn file_entry(name: String, size: u64, modified: Option<i64>, created: Option<i64>) -> Entry {
-    Entry { hidden: name.starts_with('.'), kind: EntryKind::File, is_dir: false, size, modified, created, readonly: false, name }
+    Entry { hidden: name.starts_with('.'), kind: EntryKind::File, is_dir: false, size, modified, created, readonly: false, executable: false, name }
 }
 
 /// "New folder", then "New folder (2)", "New folder (3)"…

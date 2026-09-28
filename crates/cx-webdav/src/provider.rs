@@ -85,6 +85,7 @@ fn to_entry(name: String, r: &Resource) -> Entry {
         modified: r.modified,
         created: r.created,
         readonly: false,
+        executable: false,
         name,
     }
 }

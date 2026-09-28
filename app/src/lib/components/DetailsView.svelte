@@ -11,7 +11,9 @@
   import { ui } from "../stores/ui.svelte";
   import { sizes } from "../stores/sizes.svelte";
   import { ws, type Tab } from "../workspace.svelte";
+  import { hasOsIcon } from "../fileTypes";
   import FileIcon from "./FileIcon.svelte";
+  import Thumb from "./Thumb.svelte";
   import Icon from "./Icon.svelte";
   import ViewStates from "./ViewStates.svelte";
 
@@ -225,7 +227,11 @@
               <span class="disclosure-space"></span>
             {/if}
           {/if}
-          <FileIcon name={entry.name} isDir={entry.isDir} size={settings.data.compact ? 16 : 18} />
+          {#if hasOsIcon(entry.name, entry.isDir, tab.uriOf(entry), ws.platform)}
+            <Thumb {entry} uri={tab.uriOf(entry)} size={settings.data.compact ? 16 : 18} iconScale={1} />
+          {:else}
+            <FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={settings.data.compact ? 16 : 18} />
+          {/if}
           {#if tab.renaming === key}
             <input class="rename" value={entry.name} use:renameInput={entry} spellcheck="false" />
           {:else}

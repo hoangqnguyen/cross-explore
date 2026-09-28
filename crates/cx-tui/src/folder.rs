@@ -445,11 +445,11 @@ pub(crate) mod tests {
     use cx_core::EntryKind;
 
     pub fn file(name: &str, size: u64, modified: i64) -> Entry {
-        Entry { name: name.into(), kind: EntryKind::File, is_dir: false, size, modified: Some(modified), created: None, hidden: name.starts_with('.'), readonly: false }
+        Entry { name: name.into(), kind: EntryKind::File, is_dir: false, size, modified: Some(modified), created: None, hidden: name.starts_with('.'), readonly: false, executable: false }
     }
 
     pub fn dir(name: &str) -> Entry {
-        Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: Some(0), created: None, hidden: name.starts_with('.'), readonly: false }
+        Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: Some(0), created: None, hidden: name.starts_with('.'), readonly: false, executable: false }
     }
 
     fn names(f: &Folder) -> Vec<&str> {

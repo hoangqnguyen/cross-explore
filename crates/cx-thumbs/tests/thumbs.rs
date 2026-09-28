@@ -298,3 +298,19 @@ async fn quicklook_request_can_be_dropped() {
     let _ = tokio::time::timeout(std::time::Duration::from_micros(1), thumbs.thumbnail(&vfs(), &loc, 64)).await;
     assert!(thumbs.thumbnail(&vfs(), &loc, 64).await.is_ok());
 }
+
+/// App bundles get their own icon (QuickLook's icon representation).
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn macos_app_bundles_show_their_icon() {
+    let app = Path::new("/System/Applications/Calculator.app");
+    if !app.exists() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let thumbs = Thumbnailer::new(tmp.path().join("cache"), 10 << 20).unwrap();
+    let t = thumbs.thumbnail(&vfs(), &Location::local(app), 128).await.unwrap();
+    assert!(t.width >= 64 && t.height >= 64, "{}x{}", t.width, t.height);
+    // Plain folders still have no thumbnail.
+    assert!(thumbs.thumbnail(&vfs(), &Location::local(tmp.path()), 128).await.is_err());
+}

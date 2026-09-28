@@ -17,7 +17,7 @@ use windows::Win32::Graphics::Gdi::{
     DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
 };
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, IBindCtx, COINIT_MULTITHREADED};
-use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF, SIIGBF_BIGGERSIZEOK, SIIGBF_THUMBNAILONLY};
+use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF, SIIGBF_BIGGERSIZEOK, SIIGBF_ICONONLY, SIIGBF_THUMBNAILONLY};
 
 struct ComGuard;
 
@@ -43,7 +43,7 @@ fn win_err(e: windows::core::Error) -> CxError {
     CxError::Unsupported(format!("Shell thumbnail: {e}"))
 }
 
-pub(crate) fn thumbnail(path: &Path, size_px: u32) -> Result<Cached> {
+pub(crate) fn thumbnail(path: &Path, size_px: u32, want: super::Want) -> Result<Cached> {
     // SAFETY: straightforward COM/GDI calls; every handle is released by a guard.
     unsafe {
         let _com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok().then_some(ComGuard);
@@ -51,7 +51,8 @@ pub(crate) fn thumbnail(path: &Path, size_px: u32) -> Result<Cached> {
         let side = size_px as i32;
         // THUMBNAILONLY: fail instead of returning the generic type icon,
         // which the UI draws itself.
-        let flags = SIIGBF(SIIGBF_THUMBNAILONLY.0 | SIIGBF_BIGGERSIZEOK.0);
+        // Programs: ICONONLY gives the icon embedded in the .exe/.msi/.lnk.
+        let flags = if want == super::Want::Icon { SIIGBF(SIIGBF_ICONONLY.0 | SIIGBF_BIGGERSIZEOK.0) } else { SIIGBF(SIIGBF_THUMBNAILONLY.0 | SIIGBF_BIGGERSIZEOK.0) };
         let hbmp = factory.GetImage(SIZE { cx: side, cy: side }, flags).map_err(win_err)?;
         let _bmp = BitmapGuard(hbmp);
 

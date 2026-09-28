@@ -156,6 +156,7 @@ fn make_entry(name: String, attrs: &FileAttributes, target: Option<&FileAttribut
         hidden: name.starts_with('.'),
         // Like std's `readonly()`: nobody may write.
         readonly: attrs.permissions.is_some_and(|p| p & 0o222 == 0),
+        executable: kind == EntryKind::File && attrs.permissions.is_some_and(|p| p & 0o111 != 0),
         modified: to_ms(target.and_then(|t| t.mtime).or(attrs.mtime)),
         created: None,
         name,

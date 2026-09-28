@@ -31,6 +31,8 @@ export interface Entry {
   created: number | null;
   hidden: boolean;
   readonly: boolean;
+  /** Has an execute bit (where the provider knows permissions). */
+  executable?: boolean;
 }
 
 /** A row: a directory entry, plus where it lives for search results. */

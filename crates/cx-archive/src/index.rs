@@ -116,6 +116,7 @@ impl ArchiveIndex {
             created: None,
             hidden: name.starts_with('.'),
             readonly: self.readonly,
+            executable: false,
         }
     }
 
@@ -188,7 +189,7 @@ mod tests {
 
     #[test]
     fn implied_dirs_are_synthesised() {
-        let root = Entry { name: "x.zip".into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: true };
+        let root = Entry { name: "x.zip".into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: true, executable: false };
         let mut idx = ArchiveIndex::new(root, true);
         idx.insert(&h("a/b/c.txt", MemberKind::File, 0));
         idx.insert(&h("a/", MemberKind::Dir, 1));

@@ -84,6 +84,7 @@ fn entry_for(name: &str, node: &Node) -> Entry {
         created: None,
         hidden: name.starts_with('.'),
         readonly: false,
+        executable: false,
     }
 }
 

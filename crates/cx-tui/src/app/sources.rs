@@ -15,7 +15,7 @@ use cx_transfer::DiffKind;
 use std::collections::HashSet;
 
 fn nav_entry(name: &str) -> Entry {
-    Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: false }
+    Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: false, executable: false }
 }
 
 pub fn search_uri(root: &str, text: &str, content: bool, hidden: bool) -> String {
