@@ -59,6 +59,16 @@ export interface SettingsData {
   pathBar: boolean;
   /** The Full Disk Access banner was dismissed (macOS). */
   fdaDismissed: boolean;
+  /**
+   * Typing letters in a file list: jump to the matching item (Finder,
+   * Explorer) or filter the list (Total Commander). Unset follows the keymap.
+   */
+  typeAction?: "select" | "filter";
+}
+
+/** What typing in a file list does, given the settings. */
+export function typeAction(d: SettingsData): "select" | "filter" {
+  return d.typeAction ?? (d.keymap === "commander" ? "filter" : "select");
 }
 
 const KEY = "cx.settings";

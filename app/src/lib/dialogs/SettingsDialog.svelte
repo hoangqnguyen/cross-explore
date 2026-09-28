@@ -66,6 +66,14 @@
             <span>Explorer keys plus F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane, Insert select.</span>
           </label>
         </div>
+        <label class="field typing">
+          Typing in a file list
+          <select value={s.typeAction ?? "auto"} onchange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; s.typeAction = v === "auto" ? undefined : (v as "select" | "filter"); }}>
+            <option value="auto">Follow the keys above ({s.keymap === "commander" ? "filters" : "jumps to the item"})</option>
+            <option value="select">Jumps to the matching item (Finder, Explorer)</option>
+            <option value="filter">Filters the list (Total Commander)</option>
+          </select>
+        </label>
         <h3>Appearance</h3>
         <label class="field">Theme
           <select bind:value={s.theme}>

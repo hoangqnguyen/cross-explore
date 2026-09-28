@@ -23,10 +23,24 @@ try {
   await t.key("ArrowDown", MOD.shift);
   check("shift+arrow extends selection", (await t.selected()).length === 2);
 
+  // Finder/Explorer: typing jumps the selection to the matching item.
+  await t.type("pod");
+  check("type-to-select jumps to the match", JSON.stringify(await t.selected()) === '["podcast-ep12.mp3"]', JSON.stringify(await t.selected()));
+  check("…without filtering the list", (await t.rows()).length === 10);
+  await sleep(1100); // a pause starts a new search
+  await t.type("i");
+  const firstI = JSON.stringify(await t.selected());
+  await t.type("i");
+  check("the same letter again steps to the next match", firstI === '["IMG_2041.HEIC"]' && JSON.stringify(await t.selected()) === '["IMG_2042.HEIC"]', `${firstI} → ${JSON.stringify(await t.selected())}`);
+  await sleep(1100);
+
+  // Total Commander style: typing filters.
+  await t.eval(`window.__cx.settings.data.typeAction = "filter"`);
   await t.type("img");
   check("type-to-filter", JSON.stringify(await t.rows()) === JSON.stringify(["IMG_2041.HEIC", "IMG_2042.HEIC"]), JSON.stringify(await t.rows()));
   await t.key("Escape");
   check("escape clears filter", (await t.rows()).length === 10);
+  await t.eval(`window.__cx.settings.data.typeAction = undefined`);
 
   // New folder via command bar → inline rename → commit.
   await t.clickText(".commands button", "New folder");

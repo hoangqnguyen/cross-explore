@@ -6,7 +6,7 @@ import { byId, enabled, run, shortcut } from "./commands.svelte";
 import { keyOf } from "./folder.svelte";
 import { isMac, primary } from "./keys";
 import { menu, type MenuItem } from "./menu.svelte";
-import { settings } from "./stores/settings.svelte";
+import { settings, typeAction } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
 import { inTauri } from "./api";
@@ -116,11 +116,52 @@ export function handleNavKey(e: KeyboardEvent, tab: Tab, layout: NavLayout): boo
     else return false;
   } else if (k === "Backspace" && tab.filter && !e.metaKey && !e.ctrlKey) tab.filter = tab.filter.slice(0, -1);
   else if (k.length === 1 && k !== " " && !e.ctrlKey && !e.metaKey && !e.altKey && !e.code.startsWith("Numpad")) {
-    // Type to filter, Total Commander style.
-    tab.filter += k;
+    if (typeAction(settings.data) === "filter" || tab.filter) tab.filter += k; // Total Commander style
+    else typeToSelect(tab, k, layout);
   } else return false;
   e.preventDefault();
   return true;
+}
+
+// ---------------- type to select (Finder / Explorer) ----------------
+
+/** Pause after which typing starts a new search, like Finder. */
+const TYPE_AHEAD_MS = 1000;
+const typed = new WeakMap<Tab, { text: string; at: number }>();
+
+/** Lower-case and without accents, so "bien" finds "BIÊN BẢN". */
+export const foldName = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+/**
+ * Jump to the first item whose name starts with what was typed. Pressing the
+ * same letter again steps through the items starting with it (Explorer).
+ */
+export function typeToSelect(tab: Tab, key: string, layout: Pick<NavLayout, "reveal">) {
+  const rows = tab.visible;
+  if (!rows.length) return;
+  const now = performance.now();
+  const prev = typed.get(tab);
+  const text = prev && now - prev.at < TYPE_AHEAD_MS ? prev.text + key : key;
+  typed.set(tab, { text, at: now });
+  const want = foldName(text);
+  const names = rows.map((r) => foldName(r.name));
+  const cur = tab.cursor == null ? -1 : rows.findIndex((r) => keyOf(r) === tab.cursor);
+
+  let hit = -1;
+  const same = [...want].every((c) => c === want[0]);
+  if (same && want.length > 1 && !names.some((n) => n.startsWith(want))) {
+    // "aaa": cycle through the "a" items.
+    const c = want[0];
+    for (let n = 1; n <= rows.length && hit < 0; n++) if (names[(cur + n) % rows.length].startsWith(c)) hit = (cur + n) % rows.length;
+  } else if (want.length === 1 && cur >= 0 && names[cur].startsWith(want)) {
+    // A single letter when already on a match moves to the next match.
+    for (let n = 1; n <= rows.length && hit < 0; n++) if (names[(cur + n) % rows.length].startsWith(want)) hit = (cur + n) % rows.length;
+  } else {
+    hit = names.findIndex((n) => n.startsWith(want));
+  }
+  if (hit < 0) return;
+  tab.selectOnly(keyOf(rows[hit]));
+  layout.reveal();
 }
 
 function cmd(id: string, label?: string, danger = false): MenuItem {
