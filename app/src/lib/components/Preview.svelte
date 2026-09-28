@@ -6,6 +6,7 @@
   import { renderMarkdown } from "../markdown";
   import { isArchive } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
+  import CodeView from "./CodeView.svelte";
   import PdfView from "./PdfView.svelte";
   import ZoomImage from "./ZoomImage.svelte";
 
@@ -78,7 +79,7 @@
     return () => (stale = true);
   });
 
-  let html = $derived(text ? (ext === "md" || ext === "markdown" ? renderMarkdown(text.text) : highlight(text.text, text.language ?? ext)) : "");
+  let html = $derived(text ? (ext === "md" || ext === "markdown" ? renderMarkdown(text.text) : highlight(text.text, ext)) : "");
 </script>
 
 <div class="preview" class:large>
@@ -119,7 +120,7 @@
     {#if ext === "md" || ext === "markdown"}
       <div class="md">{@html html}</div>
     {:else}
-      <pre class="code"><code>{@html html}</code></pre>
+      <CodeView text={text.text} {html} lang={ext} {large} />
     {/if}
     {#if text.truncated}<div class="note">Preview shows the beginning of the file</div>{/if}
   {:else if (kind === "folder" || kind === "archive") && children}
@@ -194,7 +195,6 @@
     font-size: 13px;
     color: var(--text-2);
   }
-  .code,
   .md {
     align-self: stretch;
     width: 100%;
@@ -207,16 +207,6 @@
     user-select: text;
     -webkit-user-select: text;
     cursor: text;
-  }
-  .code {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace;
-    font-size: 11.5px;
-    line-height: 1.55;
-    tab-size: 4;
-    white-space: pre;
-  }
-  .large .code {
-    font-size: 13px;
   }
   .md {
     line-height: 1.6;

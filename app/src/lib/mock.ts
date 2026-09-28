@@ -21,6 +21,8 @@ function file(name: string, size: number, age: number, hidden = false, content?:
 const readme = `# Cross Explore\n\nA fast, **live** file explorer.\n\n- Dual pane\n- Quick Look\n- Network shares & peers\n`;
 const code = `use std::fs;\n\nfn main() {\n    for e in fs::read_dir(".").unwrap() {\n        println!("{}", e.unwrap().path().display());\n    }\n}\n`;
 
+const py = `import sys\n\n\nclass Greeter:\n    def __init__(self, name):\n        self.name = name\n\n    def greet(self):\n        if self.name:\n            print("hi", self.name)\n        else:\n            print("hi")\n\n\nif __name__ == "__main__":\n    Greeter(sys.argv[1]).greet()\n`;
+
 const roots: Record<string, Node> = {
   "file://": dir("", 0, [
     dir("Users", 400 * day, [
@@ -28,7 +30,7 @@ const roots: Record<string, Node> = {
         dir("Desktop", 2 * day, [file("Screenshot 2026-09-25 at 10.41.03.png", 2_400_000, 26 * 3600_000), file("todo.md", 1_200, 3 * min, false, "- [ ] ship Phase 1\n- [x] live updates\n")]),
         dir("Documents", 5 * day, [
           dir("Invoices", 12 * day, Array.from({ length: 24 }, (_, i) => file(`Invoice-2026-${String(i + 1).padStart(3, "0")}.pdf`, 80_000 + i * 913, (i + 3) * day))),
-          dir("Projects", 1 * day, [file("README.md", readme.length, 2 * day, false, readme), file("main.rs", code.length, day, false, code)]),
+          dir("Projects", 1 * day, [file("README.md", readme.length, 2 * day, false, readme), file("main.rs", code.length, day, false, code), file("greet.py", py.length, day, false, py)]),
           file("Budget 2026.xlsx", 48_200, 2 * day),
           file("Pitch deck.pptx", 5_800_000, 9 * day),
           file("Resume.docx", 32_100, 40 * day),
@@ -471,7 +473,7 @@ const handlers: Record<string, (a: Args) => unknown> = {
     if (!n || n.isDir) throw { kind: "notFound", message: uri };
     if (n.content == null) throw { kind: "unsupported", message: "binary file" };
     const ext = n.name.split(".").pop() ?? "";
-    return { text: n.content, truncated: false, encoding: "utf-8", language: ext };
+    return { text: n.content, truncated: false, encoding: "utf-8", languageGuess: ext };
   },
   transfer_submit({ req }: { req: JobRequest }) {
     const id = nextId++;

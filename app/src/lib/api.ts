@@ -273,7 +273,8 @@ export interface TextPreview {
   text: string;
   truncated: boolean;
   encoding: string;
-  language: string | null;
+  /** Highlighting hint from the name ("rust", "python"…); the UI keys on the extension instead. */
+  languageGuess: string | null;
 }
 export const previewText = (uri: string, maxBytes = 512 * 1024) => invoke<TextPreview>("preview_text", { uri, maxBytes });
 

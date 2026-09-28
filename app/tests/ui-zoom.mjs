@@ -101,6 +101,41 @@ try {
   await t.key("Escape");
   await sleep(150);
 
+  // Code previews fold: brackets for Rust, indentation for Python.
+  await t.open("?path=~/Documents/Projects");
+  await t.focusList();
+  {
+    const rows = await t.rows();
+    await t.key("Home");
+    for (let k = 0; k < rows.indexOf("main.rs"); k++) await t.key("ArrowDown");
+    await t.key(" ");
+    await sleep(400);
+    const lineNos = () => t.eval(`[...document.querySelectorAll('.ql .codeview .line .no')].map(e => +e.textContent)`);
+    check("code preview shows line numbers", JSON.stringify(await lineNos()) === "[1,2,3,4,5,6,7]", JSON.stringify(await lineNos()));
+    const folds = await t.eval(`[...document.querySelectorAll('.ql .codeview .line')].filter(l => l.querySelector('.fold')).map(l => +l.querySelector('.no').textContent)`);
+    check("fold markers on block starts (fn, for)", JSON.stringify(folds) === "[3,4]", JSON.stringify(folds));
+    await t.eval(`document.querySelectorAll('.ql .codeview .fold')[0].click()`);
+    await sleep(150);
+    check("collapsing fn main hides its body, keeps the closing brace", JSON.stringify(await lineNos()) === "[1,2,3,7]", JSON.stringify(await lineNos()));
+    check("collapsed block says how many lines are hidden", (await t.eval(`document.querySelector('.ql .codeview .more')?.textContent`)) === "⋯ 3 lines");
+    await t.eval(`document.querySelector('.ql .codeview .more').click()`);
+    await sleep(150);
+    check("the ⋯ marker expands it again", (await lineNos()).length === 7);
+    await t.eval(`document.querySelector('.ql .codeview .folds button').click()`);
+    await sleep(150);
+    check("Collapse all", JSON.stringify(await lineNos()) === "[1,2,3,7]", JSON.stringify(await lineNos()));
+    await t.key("ArrowUp"); // previous file: greet.py
+    await sleep(400);
+    const pyFolds = await t.eval(`[...document.querySelectorAll('.ql .codeview .line')].filter(l => l.querySelector('.fold')).map(l => +l.querySelector('.no').textContent)`);
+    check("Python folds by indentation (class, defs, if/else, main)", JSON.stringify(pyFolds) === "[4,5,8,9,11,15]", JSON.stringify(pyFolds));
+    await t.eval(`[...document.querySelectorAll('.ql .codeview .line')].find(l => l.querySelector('.no').textContent === '4').querySelector('.fold').click()`);
+    await sleep(150);
+    check("collapsing a Python class hides its methods", JSON.stringify(await lineNos()) === "[1,2,3,4,13,14,15,16]", JSON.stringify(await lineNos()));
+    await t.key("Escape");
+  }
+  const split = await t.eval(`import('/src/lib/folding.ts').then(m => JSON.stringify(m.splitHtmlLines('a<span class="c">/* x\\ny */</span>b')))`);
+  check("highlight spans across lines are closed and reopened", split === JSON.stringify(['a<span class="c">/* x</span>', '<span class="c">y */</span>b']), split);
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);
