@@ -10,23 +10,44 @@
   let { entry, uri, size, fit = "contain", iconScale = 0.78 }: { entry: Item; uri: string; size: number; fit?: "contain" | "cover"; iconScale?: number } = $props();
 
   const thumbable = new Set(["image", "video", "pdf", "doc", "slides", "sheet", "font"]);
-  let failed = $state(false);
-  let loaded = $state(false);
-  let wants = $derived(!failed && ((!entry.isDir && thumbable.has(categoryOf(entry))) || hasOsIcon(entry.name, entry.isDir, uri, ws.platform)));
-  let src = $derived(wants ? thumbUrl(uri, Math.round(size * (window.devicePixelRatio || 1)), entry.modified) : "");
+  let wanted = $derived((!entry.isDir && thumbable.has(categoryOf(entry))) || hasOsIcon(entry.name, entry.isDir, uri, ws.platform) ? thumbUrl(uri, Math.round(size * (window.devicePixelRatio || 1)), entry.modified) : "");
 
+  // Double-buffered: when the file changes (new mtime → new URL) the old
+  // picture stays up until the new one has loaded, so refreshes don't blink.
+  let shown = $state("");
+  let failedSrc = $state("");
+  let shownUri = "";
+  let pending = $derived(wanted && wanted !== shown && wanted !== failedSrc ? wanted : "");
+  let layers = $derived([...new Set([shown, pending].filter(Boolean))]);
+
+  // A different file entirely (the component was reused): start over.
   $effect(() => {
-    void src;
-    failed = false;
-    loaded = false;
+    if (uri !== shownUri) {
+      shownUri = uri;
+      shown = "";
+      failedSrc = "";
+    }
   });
 </script>
 
 <div class="thumb" style:width="{size}px" style:height="{size}px">
-  {#if src && !failed}
-    <img {src} alt="" loading="lazy" decoding="async" draggable="false" class:loaded class:cover={fit === "cover"} onload={() => (loaded = true)} onerror={() => (failed = true)} />
-  {/if}
-  {#if !src || failed || !loaded}
+  {#each layers as layer (layer)}
+    <img
+      src={layer}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      draggable="false"
+      class:loaded={layer === shown}
+      class:cover={fit === "cover"}
+      onload={() => layer === pending && (shown = layer)}
+      onerror={() => {
+        failedSrc = layer;
+        if (layer === shown) shown = "";
+      }}
+    />
+  {/each}
+  {#if !shown}
     <span class="icon"><FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={Math.round(size * iconScale)} /></span>
   {/if}
 </div>

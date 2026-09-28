@@ -191,7 +191,9 @@
     </div>
   {/if}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="filler" title={uriName(tab.dirUri)} oncontextmenu={(ev) => blankMenu(ev, tab)}></div>
+  {#if next || !focusEntry || focusEntry.isDir}
+    <div class="filler" title={uriName(tab.dirUri)} oncontextmenu={(ev) => blankMenu(ev, tab)}></div>
+  {/if}
 </div>
 
 <style>
@@ -210,8 +212,11 @@
     border-right: 1px solid var(--stroke);
     outline: none;
   }
+  /* The file preview takes whatever width is left, instead of a blank strip. */
   .column.preview {
-    width: 300px;
+    flex: 1 0 300px;
+    width: auto;
+    min-width: 300px;
     display: flex;
     flex-direction: column;
     gap: 8px;

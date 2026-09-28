@@ -508,7 +508,7 @@ export class Workspace {
     transfers.onFinished = (job) => {
       const dirs = new Set([job.dest, ...job.sources.map((s) => s.replace(/\/[^/]*\/?$/, ""))].filter(Boolean).map((u) => u!.replace(/\/+$/, "")));
       for (const t of this.allTabs) {
-        if (t.folder.kind === "folder" && t.folder.live !== "live" && dirs.has(t.dirUri.replace(/\/+$/, ""))) void t.folder.load();
+        if (t.folder.kind === "folder" && t.folder.live !== "live" && dirs.has(t.dirUri.replace(/\/+$/, ""))) void t.folder.load({ quiet: true });
       }
     };
     try {

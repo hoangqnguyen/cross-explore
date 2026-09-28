@@ -76,7 +76,7 @@
           {:else}
             <span class="fold-space"></span>
           {/if}
-          <span class="src">{@html lines[n] || " "}{#if closed && r}<button type="button" class="more" onclick={() => toggle(n)} title="Show {r.end - n} hidden lines">⋯ {r.end - n} lines</button>{/if}</span>
+          <span class="src">{@html lines[n] || " "}{#if closed && r}<span class="more" role="button" tabindex="0" onclick={() => toggle(n)} onkeydown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggle(n))} title="Show {r.end - n} hidden lines">⋯ {r.end - n} lines</span>{/if}</span>
         </div>
       {/each}
     </div>
@@ -167,6 +167,8 @@
     user-select: text;
   }
   .more {
+    display: inline;
+    white-space: nowrap;
     margin-left: 8px;
     padding: 0 6px;
     border: 0;

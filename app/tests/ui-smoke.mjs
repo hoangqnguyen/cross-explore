@@ -349,6 +349,28 @@ try {
     await closeMenu();
   }
 
+  // Background refreshes are seamless: no spinner, rows never disappear
+  // (a normal reload of the same remote folder does show the spinner).
+  await t.open("?path=smb://nas.local/Media");
+  await sleep(400);
+  await t.eval(`(() => { const [u, p] = document.querySelectorAll('.modal input'); u.value = 'demo'; u.dispatchEvent(new Event('input')); p.value = 'demo'; p.dispatchEvent(new Event('input')); })()`);
+  await t.key("Enter");
+  await sleep(800);
+  {
+    const watchFlash = async (quiet) => {
+      await t.eval(`(() => { window.__flash = { spinner: 0, empty: 0 }; window.__watching = true; const tick = () => { if (!window.__watching) return; if (document.querySelector('.state .spinner')) window.__flash.spinner++; if (!document.querySelector('.pane.active .details .row')) window.__flash.empty++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); })()`);
+      await t.eval(`window.__cx.ws.activeTab.folder.load({ quiet: ${quiet} })`);
+      await sleep(400);
+      await t.eval(`window.__watching = false`);
+      return t.eval(`window.__flash`);
+    };
+    const loud = await watchFlash(false);
+    const quiet = await watchFlash(true);
+    check("a normal reload shows the spinner (detector works)", loud.spinner > 0, JSON.stringify(loud));
+    check("a background refresh shows no spinner", quiet.spinner === 0, JSON.stringify(quiet));
+    check("…and the rows never disappear", quiet.empty === 0, JSON.stringify(quiet));
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

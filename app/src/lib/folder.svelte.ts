@@ -17,7 +17,8 @@ export interface Source {
   items: Item[];
   fresh: ReadonlySet<string>;
   timing: { firstRowsMs: number; totalMs: number; count: number } | null;
-  load(): Promise<void>;
+  /** `quiet`: a background refresh (no spinner; keep rows if it fails). */
+  load(opts?: { quiet?: boolean }): Promise<void>;
   watch(): Promise<void>;
   unwatch(): void;
   dispose(): void;
@@ -76,11 +77,18 @@ export class Folder implements Source {
     return this.#byName.get(name);
   }
 
-  async load(): Promise<void> {
+  /**
+   * List the folder. `quiet` is for refreshes nobody asked for (a server's
+   * "re-list please", our own copy landing): no spinner, new rows get the
+   * live-change glow, and a failed attempt keeps what's on screen.
+   */
+  async load(opts: { quiet?: boolean } = {}): Promise<void> {
     const gen = ++this.#gen;
     const refresh = this.items.length > 0;
-    if (refresh) this.refreshing = true;
-    else this.status = "loading";
+    const quiet = !!opts.quiet && refresh;
+    const before = quiet ? new Set(this.#byName.keys()) : null;
+    if (refresh && !quiet) this.refreshing = true;
+    else if (!refresh) this.status = "loading";
     this.#buffer = [];
 
     const cmp = this.#cmp;
@@ -132,9 +140,18 @@ export class Folder implements Source {
       const buffered = this.#buffer;
       this.#buffer = null;
       if (buffered?.length) this.#apply(buffered);
+      if (before) {
+        const added = acc.filter((e) => !before.has(e.name)).map((e) => e.name);
+        if (added.length && added.length < acc.length) this.#markFresh(added);
+      }
     } catch (e) {
       if (gen !== this.#gen) return;
       this.#buffer = null;
+      if (quiet) {
+        // A hiccup while refreshing in the background: keep the rows; the
+        // next change or poll will try again.
+        return;
+      }
       this.#byName = new Map();
       this.items = [];
       this.refreshing = false;
@@ -197,7 +214,7 @@ export class Folder implements Source {
 
   #apply(changes: Change[], highlight = true) {
     if (changes.some((c) => c.type === "reset")) {
-      void this.load();
+      void this.load({ quiet: true });
       return;
     }
     const bulk = changes.length > BULK_CHANGES;
