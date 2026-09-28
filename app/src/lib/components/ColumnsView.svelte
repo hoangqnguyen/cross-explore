@@ -64,6 +64,29 @@
     handleNavKey(e, tab, { cols: 1, page: 15, reveal: () => requestAnimationFrame(reveal) });
   }
 
+  /**
+   * Right-click in a column other than the focused one: focus that column
+   * (like Finder), select the item under the pointer, then show the same
+   * menu the focused column would.
+   */
+  async function menuIn(ev: MouseEvent, uri: string, name: string | null) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const at = { x: ev.clientX, y: ev.clientY };
+    tab.navigate(uri, name);
+    const end = Date.now() + 3000;
+    const same = () => tab.folder.uri === uri || tab.folder.info?.uri === uri;
+    while (Date.now() < end && !(same() && tab.folder.status === "ready" && (!name || tab.visible.some((x) => x.name === name)))) {
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    if (!same()) return;
+    const fake = new MouseEvent("contextmenu", { clientX: at.x, clientY: at.y });
+    const entry = name ? tab.visible.find((x) => x.name === name) : undefined;
+    current?.focus();
+    if (entry) itemMenu(fake, tab, entry);
+    else blankMenu(fake, tab);
+  }
+
   function renameInput(el: HTMLInputElement, entry: Item) {
     const [a, b] = stemRange(entry.name, entry.isDir);
     el.focus();
@@ -88,9 +111,10 @@
 <div class="columns" bind:this={wrap}>
   {#each ancestors as a (a.uri)}
     {@const f = folderFor(a.uri)}
-    <div class="column" use:dropTarget={{ dest: () => a.uri }}>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="column" use:dropTarget={{ dest: () => a.uri }} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
       {#each visibleOf(f.items) as e (e.name)}
-        <button class="item" class:trail={e.name === a.child} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
+        <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
           <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
           <span>{e.name}</span>
           {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
@@ -146,9 +170,10 @@
 
   {#if next}
     {@const f = folderFor(next)}
-    <div class="column">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="column" oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, next!, null)}>
       {#each visibleOf(f.items) as e (e.name)}
-        <button class="item" onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
+        <button class="item" oncontextmenu={(ev) => menuIn(ev, next!, e.name)} onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
           <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
           <span>{e.name}</span>
           {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
@@ -157,14 +182,16 @@
       {#if f.status === "ready" && !visibleOf(f.items).length}<div class="hint">Empty folder</div>{/if}
     </div>
   {:else if focusEntry && !focusEntry.isDir}
-    <div class="column preview">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="column preview" oncontextmenu={(ev) => focusEntry && !window.getSelection()?.toString() && itemMenu(ev, tab, focusEntry)}>
       {#key tab.uriOf(focusEntry)}
         <Preview entry={focusEntry} uri={tab.uriOf(focusEntry)} />
       {/key}
       <div class="pname">{focusEntry.name}</div>
     </div>
   {/if}
-  <div class="filler" title={uriName(tab.dirUri)}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="filler" title={uriName(tab.dirUri)} oncontextmenu={(ev) => blankMenu(ev, tab)}></div>
 </div>
 
 <style>

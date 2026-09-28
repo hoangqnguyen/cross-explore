@@ -318,6 +318,37 @@ try {
     check("and removing takes it off the sidebar", !(await favs()).includes("Code"));
   }
 
+  // Column view: right-click works in every column, not just the focused one.
+  await t.open("?path=~/Documents");
+  await t.eval(`window.__cx.ws.activeTab.view = "columns"`);
+  await sleep(500);
+  {
+    const menuVisible = () => t.eval(`!!document.querySelector('.menu')`);
+    const closeMenu = async () => { await t.key("Escape"); await sleep(100); };
+    const rclick = async (sel, text) => {
+      const box = await t.eval(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(sel)})].find(e => ${text ? `(e.querySelector('span')?.textContent ?? e.textContent).trim() === ${JSON.stringify(text)}` : "true"}); if (!el) return null; el.scrollIntoView({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + Math.min(40, r.width / 2), y: r.top + Math.min(10, r.height / 2) }; })()`);
+      if (!box) return false;
+      for (const type of ["mousePressed", "mouseReleased"]) await t.send("Input.dispatchMouseEvent", { type, x: box.x, y: box.y, button: "right", buttons: type === "mousePressed" ? 2 : 0, clickCount: 1 });
+      await sleep(400);
+      return true;
+    };
+    await rclick(".columns .column.current .item", "Resume.docx");
+    check("right-click in the focused column shows the menu", await menuVisible());
+    await closeMenu();
+    await rclick(".columns .column:not(.current):not(.preview) .item", "Desktop");
+    check("right-click in a parent column shows the menu", await menuVisible());
+    check("…for the item under the pointer, now selected", JSON.stringify(await t.eval(`[...document.querySelectorAll('.columns .column.current .item.selected span')].map(e => e.textContent)`)) === '["Desktop"]');
+    await closeMenu();
+    await t.eval(`window.__cx.ws.activeTab.navigate(window.__cx.ws.activeTab.dirUri, "Documents")`);
+    await sleep(300);
+    await rclick(".columns .column.current ~ .column:not(.preview) .item", "Invoices");
+    check("right-click in the next-folder column shows the menu", await menuVisible());
+    await closeMenu();
+    await rclick(".columns .filler");
+    check("right-click on the empty area shows the folder menu", await menuVisible());
+    await closeMenu();
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);
