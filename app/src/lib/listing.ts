@@ -151,6 +151,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("file.tags"),
     cmd("file.copyPath"),
     cmd("file.reveal"),
+    ...favoritesItem(tab),
     { separator: true },
     ...(isArchive(item.name) ? [cmd("file.extract")] : []),
     cmd("file.compress"),
@@ -162,6 +163,27 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("file.delete", undefined, true),
   ];
   menu.show(items, e.clientX, e.clientY);
+}
+
+/** Add the selected folders to Favorites (or remove them, when they all are). */
+function favoritesItem(tab: Tab): MenuItem[] {
+  const folders = tab.selectedEntries.filter((x) => x.isDir || isArchive(x.name)).map((x) => ({ name: x.name, uri: tab.uriOf(x) }));
+  if (!folders.length) return [];
+  const saved = (uri: string) => settings.data.bookmarks.some((b) => b.uri === uri);
+  const all = folders.every((f) => saved(f.uri));
+  const what = folders.length === 1 ? "" : ` (${folders.length} folders)`;
+  return [
+    {
+      label: all ? `Remove from Favorites${what}` : `Add to Favorites${what}`,
+      icon: "star",
+      action: () => {
+        const uris = new Set(folders.map((f) => f.uri));
+        settings.data.bookmarks = all
+          ? settings.data.bookmarks.filter((b) => !uris.has(b.uri))
+          : [...settings.data.bookmarks, ...folders.filter((f) => !saved(f.uri))];
+      },
+    },
+  ];
 }
 
 export function blankMenu(e: MouseEvent, tab: Tab) {

@@ -297,6 +297,27 @@ try {
     check("file types look different from each other", looks > count * 0.8, `${looks} distinct icons for ${count} files`);
   }
 
+  // Right-click a folder → Add to Favorites → it shows in the sidebar; again → removed.
+  await t.open("?path=~");
+  {
+    const menuOn = async (name) => {
+      await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')].find(r => r.querySelector('.text')?.textContent === ${JSON.stringify(name)}); r.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 })); })()`);
+      await sleep(150);
+      return t.eval(`[...document.querySelectorAll('.menu button, .menu [role=menuitem]')].map(b => b.textContent.trim())`);
+    };
+    const favs = () => t.eval(`[...document.querySelectorAll('.sidebar .item .label')].map(e => e.textContent)`);
+    const labels = await menuOn("Code");
+    check("folder context menu offers Add to Favorites", labels.some((l) => l.startsWith("Add to Favorites")), JSON.stringify(labels));
+    await t.clickText(".menu button, .menu [role=menuitem]", "Add to Favorites");
+    await sleep(150);
+    check("the folder appears in the sidebar", (await favs()).includes("Code"), JSON.stringify(await favs()));
+    const again = await menuOn("Code");
+    check("then offers Remove from Favorites", again.some((l) => l.startsWith("Remove from Favorites")), JSON.stringify(again));
+    await t.clickText(".menu button, .menu [role=menuitem]", "Remove from Favorites");
+    await sleep(150);
+    check("and removing takes it off the sidebar", !(await favs()).includes("Code"));
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);
