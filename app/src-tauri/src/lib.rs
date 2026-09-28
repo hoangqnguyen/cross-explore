@@ -45,6 +45,7 @@ pub fn run() {
             cmd::files::ui_log,
             cmd::files::subscribe,
             cmd::system::open_entry,
+            cmd::system::stage_for_drag,
             cmd::system::reveal_entry,
             cmd::system::open_terminal,
             cmd::system::os_clipboard_set,
@@ -145,6 +146,16 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     sftp::register(&vfs, &data_dir);
     cx_archive::ArchiveProvider::install(&vfs, cache_dir.join("archives"));
     cmd::office::init(&cache_dir);
+    // Local copies of remote files (opened or dragged out) live a couple of days.
+    let open_cache = cache_dir.join("open");
+    std::thread::spawn(move || {
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 3600);
+        for e in std::fs::read_dir(&open_cache).into_iter().flatten().flatten() {
+            if e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < old) {
+                let _ = std::fs::remove_dir_all(e.path());
+            }
+        }
+    });
 
     let events = Arc::new(events::Events::default());
     let jobs = jobs::Jobs::new(events.clone());

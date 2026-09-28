@@ -198,6 +198,14 @@ export async function selftest() {
     const x = await job(await transfers.submit({ kind: "extract", sources: [zip], dest: dir }));
     if (x.state !== "done") throw new Error(`extract ${x.state}: ${x.errors[0]?.message}`);
     await until("bundle folder", () => has("bundle"));
+
+    // Dragging a non-local file into another app hands over a real local
+    // copy (a file inside a zip stands in for a server file here).
+    const member = `archive://${zip}!/alpha.txt`;
+    const [a, b] = await Promise.all([invoke<string[]>("stage_for_drag", { uris: [member] }), invoke<string[]>("stage_for_drag", { uris: [member] })]);
+    if (a[0] !== b[0] || !a[0].endsWith("alpha.txt") || a[0].startsWith("archive:")) throw new Error(`staged ${a} / ${b}`);
+    const staged = await (await fetch(fileUrl("file://" + (a[0].startsWith("/") ? "" : "/") + a[0].replaceAll("\\", "/")))).text();
+    if (staged !== "hello cross explore\nline two\n") throw new Error(`staged copy has ${JSON.stringify(staged)}`);
   });
 
   await check("tags round trip", async () => {

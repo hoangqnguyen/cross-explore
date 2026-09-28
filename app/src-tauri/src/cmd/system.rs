@@ -25,25 +25,50 @@ pub async fn open_entry(app_handle: AppHandle, uri: String, app: AppState<'_>) -
         .map_err(|e| CxError::Io(format!("cannot open {}: {e}", path.display())))
 }
 
+/// A local copy of a remote file, cached by URI + size + mtime. Concurrent
+/// requests for the same file share one download, and the file only appears
+/// under its real name once complete (so no app ever sees half of it).
 async fn download(app: &AppState<'_>, loc: &Location) -> Result<PathBuf> {
     let provider = app.vfs.provider(loc).await?;
     let entry = provider.stat(loc).await?;
     if entry.is_dir {
         return Err(CxError::Unsupported("opening remote folders in another app".into()));
     }
-    let key = blake3::hash(format!("{}|{}|{:?}", loc.uri(), entry.size, entry.modified).as_bytes()).to_hex();
+    let key = blake3::hash(format!("{}|{}|{:?}", loc.uri(), entry.size, entry.modified).as_bytes()).to_hex().to_string();
     let dir = app.cache_dir.join("open").join(&key[..16]);
     let dest = dir.join(&entry.name);
+
+    static INFLIGHT: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>> = std::sync::OnceLock::new();
+    let lock = INFLIGHT.get_or_init(Default::default).lock().unwrap().entry(key.clone()).or_default().clone();
+    let _guard = lock.lock().await;
+
     if tokio::fs::metadata(&dest).await.map(|m| m.len() == entry.size).unwrap_or(false) {
         return Ok(dest);
     }
     tokio::fs::create_dir_all(&dir).await.map_err(|e| CxError::from_io(e, dir.display()))?;
+    let part = dir.join(format!(".{}.part", entry.name));
     let mut src = provider.open_read(loc, 0).await?;
-    let local = cx_core::Location::local(&dest);
-    let mut dst = app.vfs.local().open_write(&local, WriteMode::Truncate).await?;
+    let mut dst = app.vfs.local().open_write(&cx_core::Location::local(&part), WriteMode::Truncate).await?;
     tokio::io::copy(&mut src, &mut dst).await.map_err(|e| CxError::io("download failed", e))?;
     tokio::io::AsyncWriteExt::shutdown(&mut dst).await.map_err(|e| CxError::io("download failed", e))?;
+    tokio::fs::rename(&part, &dest).await.map_err(|e| CxError::from_io(e, dest.display()))?;
     Ok(dest)
+}
+
+/// Local copies of remote files, for dragging them into other apps as real
+/// files (mail attachments, chat, editors). Local files come back as-is.
+#[tauri::command]
+pub async fn stage_for_drag(uris: Vec<String>, app: AppState<'_>) -> Result<Vec<String>> {
+    let mut out = Vec::with_capacity(uris.len());
+    for uri in uris {
+        let loc = Location::parse(&uri)?;
+        let path = match loc.local_path() {
+            Some(p) => p.to_path_buf(),
+            None => download(&app, &loc).await?,
+        };
+        out.push(path.to_string_lossy().into_owned());
+    }
+    Ok(out)
 }
 
 /// Show the item selected in Finder / Explorer / the Linux file manager.

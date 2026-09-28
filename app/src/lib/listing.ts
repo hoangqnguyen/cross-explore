@@ -9,7 +9,8 @@ import { menu, type MenuItem } from "./menu.svelte";
 import { settings, typeAction } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
-import { inTauri } from "./api";
+import { errorText, inTauri } from "./api";
+import { toasts } from "./toasts.svelte";
 import { invoke } from "@tauri-apps/api/core";
 
 // ---- touch: tap opens, long-press selects (and shows the menu) ----
@@ -59,6 +60,7 @@ export function onItemPointerDown(e: PointerEvent, tab: Tab, item: Item) {
   else if (primary(e)) tab.toggle(key);
   else if (!tab.selection.has(key) || tab.selection.size === 1) tab.selectOnly(key);
   else tab.cursor = key;
+  if (e.pointerType === "mouse" && tab.selection.has(key)) prefetchForDrag(tab);
 }
 
 export function onItemPointerUp(e: PointerEvent, tab: Tab, item: Item) {
@@ -266,6 +268,55 @@ function localPath(uri: string) {
   return /^\/[A-Za-z]:/.test(p) ? p.slice(1).replaceAll("/", "\\") : p;
 }
 
+// ---- remote files as real files in other apps ----
+
+/** Remote files are fetched to a local cache before an OS drag can carry them. */
+const STAGE_LIMIT = 512 << 20;
+const staged = new Map<string, Promise<string>>();
+
+function stage(uris: string[]): Promise<string[]> {
+  const missing = uris.filter((u) => !staged.has(u));
+  if (missing.length) {
+    const all = invoke<string[]>("stage_for_drag", { uris: missing });
+    missing.forEach((u, i) => {
+      const p = all.then((paths) => paths[i]);
+      p.catch(() => staged.delete(u));
+      staged.set(u, p);
+    });
+  }
+  return Promise.all(uris.map((u) => staged.get(u)!));
+}
+
+/** Remote files small enough to fetch for a drag (folders go by address). */
+function stageable(tab: Tab): string[] | null {
+  const sel = tab.selectedEntries;
+  if (!sel.length || sel.some((x) => x.isDir)) return null;
+  const uris = sel.map((x) => tab.uriOf(x));
+  if (uris.every((u) => u.startsWith("file:"))) return null;
+  return sel.reduce((n, x) => n + x.size, 0) <= STAGE_LIMIT ? uris : null;
+}
+
+/** Only this much is fetched on a mere press (a click to select shouldn't download a movie). */
+const PREFETCH_LIMIT = 32 << 20;
+
+/** Pressing on a small remote file starts fetching it, so a drag that follows is instant. */
+function prefetchForDrag(tab: Tab) {
+  if (!inTauri || ui.phone) return;
+  const uris = stageable(tab);
+  if (uris && tab.selectedEntries.reduce((n, x) => n + x.size, 0) <= PREFETCH_LIMIT) void stage(uris).catch(() => {});
+}
+
+function nativeDragOf(uris: string[], paths: string[]) {
+  nativeDrag = { uris };
+  dragIconPath ??= invoke<string>("drag_icon");
+  return Promise.all([dragIconPath, import("@crabnebula/tauri-plugin-drag")]).then(([icon, { startDrag }]) =>
+    startDrag({ item: paths, icon }, () => {
+      // Keep the marker briefly: the drop event may arrive after this.
+      setTimeout(() => (nativeDrag = null), 500);
+    }),
+  );
+}
+
 export function onDragStart(e: DragEvent, tab: Tab, item: Item) {
   const key = keyOf(item);
   if (!tab.selection.has(key)) tab.selectOnly(key);
@@ -274,14 +325,31 @@ export function onDragStart(e: DragEvent, tab: Tab, item: Item) {
   // mail or chat apps too. Drops back into our window arrive via Tauri.
   if (inTauri && !ui.phone && uris.every((u) => u.startsWith("file:"))) {
     e.preventDefault();
-    nativeDrag = { uris };
-    dragIconPath ??= invoke<string>("drag_icon");
-    void Promise.all([dragIconPath, import("@crabnebula/tauri-plugin-drag")]).then(([icon, { startDrag }]) =>
-      startDrag({ item: uris.map(localPath), icon }, () => {
-        // Keep the marker briefly: the drop event may arrive after this.
-        setTimeout(() => (nativeDrag = null), 500);
-      }),
-    );
+    void nativeDragOf(uris, uris.map(localPath));
+    return;
+  }
+  // Remote files: the same real-file drag, from a local copy. Usually it's
+  // ready already (fetching began on mouse down); otherwise the drag starts
+  // as soon as it is, if the button is still held.
+  const remote = inTauri && !ui.phone ? stageable(tab) : null;
+  if (remote) {
+    e.preventDefault();
+    let released = false;
+    const up = () => (released = true);
+    window.addEventListener("pointerup", up, { once: true, capture: true });
+    const slow = setTimeout(() => toasts.show(`Downloading ${remote.length === 1 ? item.name : `${remote.length} files`} to drag…`), 250);
+    stage(remote)
+      .then((paths) => {
+        clearTimeout(slow);
+        window.removeEventListener("pointerup", up, { capture: true });
+        if (released) toasts.show("Ready — drag it again to drop it into another app");
+        else return nativeDragOf(remote, paths);
+      })
+      .catch((err) => {
+        clearTimeout(slow);
+        window.removeEventListener("pointerup", up, { capture: true });
+        toasts.show(`Couldn't download for dragging: ${errorText(err)}`, "error");
+      });
     return;
   }
   dragging = true;
