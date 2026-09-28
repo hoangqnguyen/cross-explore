@@ -101,6 +101,7 @@ export class Folder implements Source {
       flushQueued = false;
       if (gen !== this.#gen) return;
       this.items = acc;
+      this.#byName = map; // what's shown and the index stay in step
       this.status = "ready";
       if (!painted) {
         painted = true;
@@ -220,8 +221,11 @@ export class Folder implements Source {
     const bulk = changes.length > BULK_CHANGES;
     const items = bulk ? this.items : this.items.slice();
     const added: string[] = [];
-    const drop = (e: Entry) => {
-      const i = items.indexOf(e);
+    // Rows are matched by name (a folder can't hold two of the same), so a
+    // change can never leave a duplicate row behind.
+    const drop = (name: string, hint?: Entry) => {
+      let i = hint ? items.indexOf(hint) : -1;
+      if (i < 0 || items[i].name !== name) i = items.findIndex((x) => x.name === name);
       if (i >= 0) items.splice(i, 1);
     };
     for (const c of changes) {
@@ -230,14 +234,13 @@ export class Folder implements Source {
         this.#byName.set(c.entry.name, c.entry);
         if (!prev) added.push(c.entry.name);
         if (!bulk) {
-          if (prev) drop(prev);
+          drop(c.entry.name, prev);
           items.splice(insertionIndex(items, c.entry, this.#cmp), 0, c.entry);
         }
       } else if (c.type === "remove") {
         const prev = this.#byName.get(c.name);
-        if (!prev) continue;
         this.#byName.delete(c.name);
-        if (!bulk) drop(prev);
+        if (!bulk) drop(c.name, prev);
       }
     }
     this.items = bulk ? [...this.#byName.values()].sort(this.#cmp) : items;

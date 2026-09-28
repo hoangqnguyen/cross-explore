@@ -274,13 +274,20 @@ function localPath(uri: string) {
 const STAGE_LIMIT = 512 << 20;
 const staged = new Map<string, Promise<string>>();
 
+/**
+ * Local copies of `uris`. Only a download in flight is shared here (the press
+ * and the drag that follows); every new drag asks the backend again, which
+ * checks the server and re-downloads when the file changed (its cache is keyed
+ * by size and modification time).
+ */
 function stage(uris: string[]): Promise<string[]> {
   const missing = uris.filter((u) => !staged.has(u));
   if (missing.length) {
     const all = invoke<string[]>("stage_for_drag", { uris: missing });
     missing.forEach((u, i) => {
       const p = all.then((paths) => paths[i]);
-      p.catch(() => staged.delete(u));
+      const done = () => staged.get(u) === p && staged.delete(u);
+      p.then(done, done);
       staged.set(u, p);
     });
   }

@@ -26,6 +26,9 @@ async function until<T>(what: string, f: () => T | Promise<T>, ms = 5000): Promi
 export async function selftest() {
   const cfg = await invoke<{ uri: string; remote: boolean } | null>("selftest_config");
   if (!cfg) return;
+  const errors: string[] = [];
+  window.addEventListener("error", (e) => errors.push(String(e.error?.stack ?? e.message).slice(0, 400)));
+  window.addEventListener("unhandledrejection", (e) => errors.push(String((e.reason as Error)?.stack ?? e.reason).slice(0, 400)));
   let failed = 0;
   let passed = 0;
   const check = async (name: string, f: () => Promise<unknown>) => {
@@ -206,6 +209,16 @@ export async function selftest() {
     if (a[0] !== b[0] || !a[0].endsWith("alpha.txt") || a[0].startsWith("archive:")) throw new Error(`staged ${a} / ${b}`);
     const staged = await (await fetch(fileUrl("file://" + (a[0].startsWith("/") ? "" : "/") + a[0].replaceAll("\\", "/")))).text();
     if (staged !== "hello cross explore\nline two\n") throw new Error(`staged copy has ${JSON.stringify(staged)}`);
+
+    // The file changes on the "server": the next drag carries the new version.
+    await invoke("selftest_touch", { name: "alpha.txt" });
+    const del = await job(await transfers.submit({ kind: "delete", sources: [zip] }));
+    if (del.state !== "done") throw new Error(`delete zip ${del.state}`);
+    const c2 = await job(await transfers.submit({ kind: "compress", sources: [childUri(dir, "alpha.txt")], dest: zip }));
+    if (c2.state !== "done") throw new Error(`recompress ${c2.state}: ${c2.errors[0]?.message}`);
+    const [again] = await invoke<string[]>("stage_for_drag", { uris: [member] });
+    const fresh = await (await fetch(fileUrl("file://" + (again.startsWith("/") ? "" : "/") + again.replaceAll("\\", "/")))).text();
+    if (fresh !== "made outside the app\n") throw new Error(`after the change, the drag still carries ${JSON.stringify(fresh)}`);
   });
 
   await check("tags round trip", async () => {
@@ -240,7 +253,10 @@ export async function selftest() {
     for (const v of ["icons", "columns", "gallery", "details"] as const) {
       tab().view = v;
       const cls = v === "details" ? ".details" : `.${v}`;
-      await until(`${v} view`, () => document.querySelector(`.pane.active ${cls}`), 3000);
+      await until(`${v} view`, () => document.querySelector(`.pane.active ${cls}`), 3000).catch((e) => {
+        const pane = document.querySelector(".pane.active");
+        throw new Error(`${e.message} (tab: ${tab().view} ${tab().folder.kind} ${tab().folder.status} ${tab().dirUri}; dialogs: ${dialogs.stack.map((d) => d.kind).join(",") || "none"}; dupes: ${JSON.stringify(Object.entries(tab().folder.items.reduce((m: Record<string, number>, x) => ((m[x.name] = (m[x.name] ?? 0) + 1), m), {})).filter(([, n]) => n > 1))}; errors: ${errors.join(" || ").slice(0, 200) || "none"}; pane: ${pane?.innerHTML.slice(0, 120)})`);
+      });
     }
     tab().selectOnly(keyOf(tab().visible[0]));
   });
