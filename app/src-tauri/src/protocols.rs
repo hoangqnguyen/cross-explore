@@ -96,14 +96,27 @@ async fn serve_thumb(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> 
     }
 }
 
+/// Hand the response to the web view on the main thread. WebKit cancels
+/// requests (an image scrolled away, a thumbnail replaced) on the main
+/// thread; answering from a worker could race with that and answer a task
+/// WebKit had just stopped, which raises an Objective-C exception and took
+/// the whole app down.
+fn respond_on_main(handle: tauri::AppHandle<Wry>, responder: UriSchemeResponder, res: Response<Vec<u8>>) {
+    if let Err(e) = handle.run_on_main_thread(move || responder.respond(res)) {
+        eprintln!("cx: dropping a response, the event loop is gone: {e}");
+    }
+}
+
 pub fn file_protocol(ctx: UriSchemeContext<'_, Wry>, req: Request<Vec<u8>>, responder: UriSchemeResponder) {
-    let app = ctx.app_handle().state::<Arc<App>>().inner().clone();
-    tauri::async_runtime::spawn(async move { responder.respond(serve_file(app, req).await) });
+    let handle = ctx.app_handle().clone();
+    let app = handle.state::<Arc<App>>().inner().clone();
+    tauri::async_runtime::spawn(async move { respond_on_main(handle, responder, serve_file(app, req).await) });
 }
 
 pub fn thumb_protocol(ctx: UriSchemeContext<'_, Wry>, req: Request<Vec<u8>>, responder: UriSchemeResponder) {
-    let app = ctx.app_handle().state::<Arc<App>>().inner().clone();
-    tauri::async_runtime::spawn(async move { responder.respond(serve_thumb(app, req).await) });
+    let handle = ctx.app_handle().clone();
+    let app = handle.state::<Arc<App>>().inner().clone();
+    tauri::async_runtime::spawn(async move { respond_on_main(handle, responder, serve_thumb(app, req).await) });
 }
 
 #[cfg(test)]

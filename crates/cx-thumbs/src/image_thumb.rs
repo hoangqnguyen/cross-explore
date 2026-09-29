@@ -98,3 +98,43 @@ mod tests {
         assert_eq!(fit(10000, 1, 100), (100, 1));
     }
 }
+
+/// Diagnostic, run by hand: decode every image under CX_SCAN_DIRS
+/// (colon-separated) and report any that panic the decoder.
+#[cfg(test)]
+mod scan {
+    #[test]
+    #[ignore]
+    fn scan_for_decoder_panics() {
+        let Ok(dirs) = std::env::var("CX_SCAN_DIRS") else { return };
+        std::panic::set_hook(Box::new(|_| {}));
+        let (mut n, mut bad) = (0, 0);
+        let mut stack: Vec<std::path::PathBuf> = dirs.split(':').map(Into::into).collect();
+        while let Some(d) = stack.pop() {
+            let Ok(rd) = std::fs::read_dir(&d) else { continue };
+            for e in rd.flatten() {
+                let p = e.path();
+                let Ok(ft) = e.file_type() else { continue };
+                if ft.is_dir() {
+                    if stack.len() < 5000 && !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+                        stack.push(p);
+                    }
+                    continue;
+                }
+                let ext = crate::extension(&p.to_string_lossy());
+                if !super::is_decodable(&ext) {
+                    continue;
+                }
+                n += 1;
+                for size in [64u32, 256] {
+                    if std::panic::catch_unwind(|| super::from_path(&p, size)).is_err() {
+                        bad += 1;
+                        println!("PANIC {} @{size}", p.display());
+                        break;
+                    }
+                }
+            }
+        }
+        println!("scanned {n} images, {bad} panicked");
+    }
+}

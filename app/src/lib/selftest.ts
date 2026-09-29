@@ -182,6 +182,32 @@ export async function selftest() {
     }
   });
 
+  await check("requests cancelled mid-flight don't crash the app (thumbnails, file reads)", async () => {
+    // Images added and removed at once (fast scrolling), and aborted fetches:
+    // WebKit stops these tasks while the backend is still producing them.
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:-9999px;top:0;width:10px;height:10px;overflow:hidden";
+    document.body.appendChild(box);
+    for (let round = 0; round < 40; round++) {
+      const imgs = Array.from({ length: 25 }, (_, i) => {
+        const img = new Image();
+        img.src = thumbUrl(childUri(dir, i % 2 ? "photo.png" : "doc.pdf"), 40 + round * 25 + i, round * 1000 + i);
+        box.appendChild(img);
+        return img;
+      });
+      await new Promise((r) => setTimeout(r, round % 3 === 0 ? 0 : 5));
+      imgs.forEach((img) => ((img.src = ""), img.remove()));
+      const ctl = new AbortController();
+      const reads = Array.from({ length: 10 }, () => fetch(fileUrl(childUri(dir, "doc.pdf")), { signal: ctl.signal }).catch(() => null));
+      ctl.abort();
+      await Promise.all(reads);
+    }
+    box.remove();
+    // Still alive and answering.
+    const r = await fetch(fileUrl(childUri(dir, "alpha.txt")));
+    if ((await r.text()) !== (await (await fetch(fileUrl(childUri(dir, "alpha.txt")))).text())) throw new Error("file reads broken after the storm");
+  });
+
   await check("recursive name and content search", async () => {
     const byName: string[] = [];
     await search(dir, { text: "nested" }, (e) => e.type === "hits" && byName.push(...e.hits.map((h) => h.entry.name)));

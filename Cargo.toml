@@ -26,5 +26,8 @@ tempfile = "3"
 lto = true
 codegen-units = 1
 opt-level = 3
-strip = true
-panic = "abort"
+# Keep function names (not debug info): crash reports then name the code.
+strip = "debuginfo"
+# Unwind, don't abort: a bug in one background task fails that task
+# (a thumbnail, a listing) instead of closing the whole app.
+panic = "unwind"

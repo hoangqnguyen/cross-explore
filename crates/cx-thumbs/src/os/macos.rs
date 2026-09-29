@@ -49,9 +49,15 @@ pub(crate) async fn thumbnail(path: &Path, size_px: u32, want: super::Want) -> R
         };
         let tx = Mutex::new(Some(tx));
         let handler = RcBlock::new(move |rep: *mut QLThumbnailRepresentation, err: *mut NSError| {
-            // SAFETY: QuickLook passes either a valid representation or a valid error.
-            let result = unsafe { convert(rep, err) };
-            if let Some(tx) = tx.lock().unwrap().take() {
+            // This runs on a QuickLook queue, called from Objective-C: a panic
+            // must not unwind out of here (that aborts the app), so any
+            // surprise becomes a plain "no thumbnail".
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // SAFETY: QuickLook passes either a valid representation or a valid error.
+                unsafe { convert(rep, err) }
+            }))
+            .unwrap_or_else(|_| Err(CxError::Unsupported("QuickLook: unexpected result".into())));
+            if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
                 let _ = tx.send(result);
             }
         });
@@ -92,6 +98,9 @@ unsafe fn convert(rep: *mut QLThumbnailRepresentation, err: *mut NSError) -> Res
     };
     let cg = rep.CGImage();
     let bitmap = NSBitmapImageRep::initWithCGImage(NSBitmapImageRep::alloc(), &cg);
+    if bitmap.pixelsWide() <= 0 || bitmap.pixelsHigh() <= 0 {
+        return Err(CxError::Unsupported("QuickLook: empty image".into()));
+    }
     let data = bitmap
         .representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
         .ok_or_else(|| CxError::Io("QuickLook: PNG encoding failed".into()))?;
