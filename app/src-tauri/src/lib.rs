@@ -6,6 +6,7 @@ mod menu;
 mod mousenav;
 mod places;
 mod protocols;
+mod remote_bytes;
 mod sftp;
 mod state;
 mod tags;

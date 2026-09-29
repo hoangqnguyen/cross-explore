@@ -51,6 +51,9 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("beta.md"), "# Beta\n\nSome *markdown*.\n").ok()?;
         std::fs::write(base.join("photo.png"), PNG).ok()?;
         std::fs::write(base.join("doc.pdf"), tiny_pdf()).ok()?;
+        // A few MiB of known bytes, for ranged reads of non-local files.
+        std::fs::create_dir_all(base.join("media")).ok()?;
+        std::fs::write(base.join("media").join("clip.bin"), (0..3_600_000u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect::<Vec<u8>>()).ok()?;
         std::fs::write(base.join("sheet.csv"), "Fruit,Qty\nApples,3\nPears,5\n").ok()?;
         std::fs::write(base.join("sub").join("nested.txt"), "deep inside\n").ok()?;
         // Many folders: a big listing arrives in large channel messages.

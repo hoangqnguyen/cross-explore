@@ -44,9 +44,51 @@ fn parse_range(h: &str, size: u64) -> Option<(u64, u64)> {
     (start <= end).then_some((start, end))
 }
 
+/// Largest single range answered for a file on a server: small enough that
+/// the first frame of a video shows quickly, large enough to stream well.
+const REMOTE_RANGE: u64 = 2 * crate::remote_bytes::CHUNK;
+
+fn remote_bytes() -> &'static Arc<crate::remote_bytes::RemoteBytes> {
+    static CACHE: std::sync::OnceLock<Arc<crate::remote_bytes::RemoteBytes>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+/// Files on servers: ranges come from a shared chunk cache with read-ahead.
+async fn serve_remote(app: Arc<App>, req: &Request<Vec<u8>>, loc: Location) -> Result<Response<Vec<u8>>, CxError> {
+    let provider = app.vfs.provider(&loc).await?;
+    let cache = remote_bytes();
+    let entry = cache.stat(provider.as_ref(), &loc).await?;
+    let size = entry.size;
+    let mime = mime_guess::from_path(&entry.name).first_or_octet_stream().to_string();
+    let range = req.headers().get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(|h| parse_range(h, size));
+    let (start, end, partial) = match range {
+        Some((s, e)) => (s, e.min(s + REMOTE_RANGE - 1), true),
+        None if size <= REMOTE_RANGE => (0, size.saturating_sub(1), false),
+        None => (0, REMOTE_RANGE - 1, true),
+    };
+    let len = if size == 0 { 0 } else { end - start + 1 };
+    let buf = cache.read(provider.as_ref(), &loc, &entry, start, len).await?;
+    if size > 0 {
+        cache.read_ahead(provider, loc, entry, end);
+    }
+    let mut res = Response::builder()
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Range, Content-Length, Accept-Ranges")
+        .header(header::CACHE_CONTROL, "no-cache");
+    if partial {
+        res = res.status(StatusCode::PARTIAL_CONTENT).header(header::CONTENT_RANGE, format!("bytes {start}-{}/{size}", start + buf.len().max(1) as u64 - 1));
+    }
+    Ok(res.body(buf).unwrap())
+}
+
 async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let uri = decode(req.uri().path());
     let Ok(loc) = Location::parse(&uri) else { return error(StatusCode::BAD_REQUEST, "bad location") };
+    if loc.local_path().is_none() {
+        return serve_remote(app, &req, loc).await.unwrap_or_else(|e| error(status_for(&e), e.to_string()));
+    }
     let result = async {
         let provider = app.vfs.provider(&loc).await?;
         let entry = provider.stat(&loc).await?;
@@ -68,6 +110,7 @@ async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
             .header(header::CONTENT_TYPE, mime)
             .header(header::ACCEPT_RANGES, "bytes")
             .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Range, Content-Length, Accept-Ranges")
             .header(header::CACHE_CONTROL, "no-cache");
         if partial {
             res = res.status(StatusCode::PARTIAL_CONTENT).header(header::CONTENT_RANGE, format!("bytes {start}-{}/{size}", start + buf.len().max(1) as u64 - 1));

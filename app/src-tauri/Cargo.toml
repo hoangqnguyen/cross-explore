@@ -62,3 +62,4 @@ sysinfo = { version = "0.37", default-features = false, features = ["disk", "sys
 
 [dev-dependencies]
 tempfile.workspace = true
+cx-testkit = { path = "../../crates/cx-testkit" }

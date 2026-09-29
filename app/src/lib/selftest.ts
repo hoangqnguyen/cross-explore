@@ -247,6 +247,26 @@ export async function selftest() {
     if (fresh !== "made outside the app\n") throw new Error(`after the change, the drag still carries ${JSON.stringify(fresh)}`);
   });
 
+  await check("media from a server streams in ranges (shared chunk cache, read-ahead)", async () => {
+    // A file inside a zip is read like one on a server: through the chunk cache.
+    const mediaZip = childUri(dir, "media.zip");
+    const c = await job(await transfers.submit({ kind: "compress", sources: [childUri(childUri(dir, "media"), "clip.bin")], dest: mediaZip }));
+    if (c.state !== "done") throw new Error(`compress ${c.state}: ${c.errors[0]?.message}`);
+    const remote = fileUrl(`archive://${mediaZip}!/clip.bin`);
+    const local = new Uint8Array(await (await fetch(fileUrl(childUri(childUri(dir, "media"), "clip.bin")))).arrayBuffer());
+    if (local.length !== 3_600_000) throw new Error(`local copy is ${local.length} bytes`);
+    const ranges: [number, number][] = [[0, 1], [1048566, 1048585], [3_599_950, 3_599_999], [2_000_000, 2_600_000], [500, 2_500_000]];
+    for (const [a, b] of ranges) {
+      const r = await fetch(remote, { headers: { Range: `bytes=${a}-${b}` } });
+      const got = new Uint8Array(await r.arrayBuffer());
+      const cr = r.headers.get("content-range") ?? "";
+      const m = /bytes (\d+)-(\d+)\/(\d+)/.exec(cr);
+      if (r.status !== 206 || !m || +m[1] !== a || +m[3] !== 3_600_000) throw new Error(`range ${a}-${b}: ${r.status} ${cr}`);
+      if (+m[2] - a + 1 !== got.length || got.length > 2 * 1048576) throw new Error(`range ${a}-${b}: ${got.length} bytes for ${cr}`);
+      for (let i = 0; i < got.length; i++) if (got[i] !== local[a + i]) throw new Error(`range ${a}-${b}: byte ${a + i} differs`);
+    }
+  });
+
   await check("tags round trip", async () => {
     const u = childUri(dir, "beta.md");
     await setTags(u, ["Red", "Work"]);
