@@ -111,6 +111,12 @@ try {
   check("tabs move to the top bar, not each pane", !(await t.eval(`!!document.querySelector('.phead')`)));
   check("the top bar shows a tab strip per pane", (await t.eval(`document.querySelectorAll('.titlebar .pane-tabs').length`)) === 2);
   check("each pane's strip has at least one tab", (await t.eval(`[...document.querySelectorAll('.titlebar .pane-tabs')].every((s) => s.querySelectorAll('.tab').length >= 1)`)));
+  {
+    // The divider between the two tab clusters lands where the two panes
+    // actually meet below — not just roughly, within a pixel.
+    const diff = await t.eval(`Math.abs(document.querySelectorAll('.pane-tabs')[1].getBoundingClientRect().left - document.querySelectorAll('.pane')[1].getBoundingClientRect().left)`);
+    check("the tab-strip divider lines up with the pane divider", diff <= 1, `${diff}px off`);
+  }
 
   // Navigate with Enter into a folder, then up.
   await t.open("?path=~/Documents");
@@ -437,6 +443,28 @@ try {
   }
   const paths = await t.eval(`import('/src/lib/api.ts').then(m => [m.fileUriToPath('file:///C:/Users/PC/Downloads'), m.fileUriToPath('file:///C:'), m.fileUriToPath('file:///Users/me/My%20Docs'), m.fileUriToPath('file://server/share/x'), m.fileUriToPath('sftp://h/x')])`);
   check("file URIs become real OS paths (Windows drive, UNC, POSIX)", JSON.stringify(paths) === JSON.stringify(["C:\\Users\\PC\\Downloads", "C:\\", "/Users/me/My Docs", "\\\\server\\share\\x", "sftp://h/x"]), JSON.stringify(paths));
+
+  // Settings: the toggle switches actually flip the setting (not just
+  // decorative), and a row's icon doesn't collide with Modal's shared
+  // ".row" utility class (it did once: an icon meant to be ~26px square
+  // stretched to fill the row instead).
+  await t.open("?path=~/Downloads");
+  await t.eval(`void window.__cx.dialogs.ask("settings")`);
+  await sleep(300);
+  {
+    const hiddenBefore = await t.eval(`window.__cx.settings.data.showHidden`);
+    await t.eval(`[...document.querySelectorAll('.modal .srow')].find((r) => r.textContent.includes('Show hidden items')).querySelector('input[type=checkbox]').click()`);
+    await sleep(150);
+    check("a Toggle switch flips its setting", (await t.eval(`window.__cx.settings.data.showHidden`)) === !hiddenBefore);
+    await t.clickText(".modal nav button", "Sharing");
+    await sleep(200);
+    await t.eval(`import('/src/lib/stores/devices.svelte.ts').then((m) => (m.devices.peer = { ...m.devices.peer, shares: [{ name: "Downloads", path: "/Users/demo/Downloads", readOnly: false }] }))`);
+    await sleep(200);
+    const iconBox = await t.eval(`(() => { const el = document.querySelector('.modal .entry-icon'); if (!el) return null; const r = el.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+    check("an entry's icon stays a small square, not stretched to fill the row", !!iconBox && iconBox.w <= 30 && iconBox.h <= 30, JSON.stringify(iconBox));
+  }
+  await t.key("Escape");
+  await sleep(200);
 
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {

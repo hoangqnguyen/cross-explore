@@ -1,6 +1,7 @@
 <script lang="ts">
   import { appWindow } from "../api";
   import { run, shortcut } from "../commands.svelte";
+  import { settings } from "../stores/settings.svelte";
   import { transfers } from "../stores/transfers.svelte";
   import { ws } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
@@ -9,11 +10,22 @@
 
   // macOS keeps native traffic lights; Windows gets drawn caption buttons.
   let customCaption = $derived(ws.platform === "windows");
+  // The title bar's own left padding (room for traffic lights) isn't the
+  // sidebar: pad the rest of the way so the tab split lines up with where
+  // the sidebar actually ends, below.
+  let leftPad = $derived(ws.platform === "macos" ? 84 : 8);
+  // .titlebar's flex `gap` adds 8px between the spacer and the tab clusters
+  // that .panes doesn't have, so it comes out of the spacer.
+  let sidebarGap = $derived(Math.max(0, settings.data.sidebarWidth - leftPad - 8));
 </script>
 
 <header class="titlebar" class:mac={ws.platform === "macos"} data-tauri-drag-region>
   {#if ws.dual}
-    <div class="dual-tabs">
+    <div class="sidebar-gap" style:width="{sidebarGap}px" data-tauri-drag-region></div>
+    <!-- Matched to .panes' real rendered width (a separate flex layout with
+         different chrome on its edges), so the divider between the two tab
+         clusters lands exactly where the two panes actually meet. -->
+    <div class="dual-tabs" class:measured={ws.panesWidth > 0} style:width="{ws.panesWidth}px">
       <div class="pane-tabs" class:active={ws.activePane === 0}><TabStrip pane={ws.panes[0]} compact /></div>
       <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact /></div>
     </div>
@@ -53,12 +65,20 @@
   .titlebar.mac {
     padding-left: 84px;
   }
+  .sidebar-gap {
+    flex: none;
+    height: 100%;
+  }
   .dual-tabs {
     display: flex;
     align-items: flex-end;
+    /* Until .panes reports its real width (first frame), fill the space. */
     flex: 1;
     min-width: 0;
     height: 100%;
+  }
+  .dual-tabs.measured {
+    flex: none;
   }
   .pane-tabs {
     display: flex;

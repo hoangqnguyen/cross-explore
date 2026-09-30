@@ -484,6 +484,14 @@ export class Pane {
 export class Workspace {
   panes = $state.raw<Pane[]>([new Pane(0), new Pane(1)]);
   activePane = $state(0);
+  /**
+   * The real rendered width of `.panes` (both panes combined), so the
+   * top-bar tab clusters in dual mode can be sized to match exactly — the
+   * title bar and the content row are separate flex layouts with different
+   * chrome on their edges (traffic lights, the search/settings buttons), so
+   * two independent 50/50 splits don't land on the same pixel.
+   */
+  panesWidth = $state(0);
   places = $state.raw<Places | null>(null);
   platform = $state("macos");
   ready = $state(false);

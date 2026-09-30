@@ -151,7 +151,7 @@
     <AccessBanner />
     <div class="body">
       <Sidebar />
-      <div class="panes">
+      <div class="panes" bind:clientWidth={ws.panesWidth}>
         <PaneView pane={ws.panes[0]} />
         {#if ws.dual}<PaneView pane={ws.panes[1]} />{/if}
       </div>
