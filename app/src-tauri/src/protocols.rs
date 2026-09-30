@@ -61,9 +61,17 @@ async fn serve_remote(app: Arc<App>, req: &Request<Vec<u8>>, loc: Location) -> R
     let size = entry.size;
     let mime = mime_guess::from_path(&entry.name).first_or_octet_stream().to_string();
     let range = req.headers().get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(|h| parse_range(h, size));
+    // A request with no Range header (pdf.js's opening probe, a plain <img>/
+    // fetch) must get the file's true size in Content-Length: for a 206,
+    // that's the length of the partial body, NOT the total, so a client that
+    // only reads Content-Length (as pdf.js does here) would think the whole
+    // document ends wherever we cut it off — pdf.js then never asks for the
+    // real end of the file, where the xref table lives, and shows nothing.
+    // So unranged requests get the whole file, same threshold as local ones;
+    // only an explicit Range (what a <video> seeks with) is served in parts.
     let (start, end, partial) = match range {
         Some((s, e)) => (s, e.min(s + REMOTE_RANGE - 1), true),
-        None if size <= REMOTE_RANGE => (0, size.saturating_sub(1), false),
+        None if size <= MAX_FULL => (0, size.saturating_sub(1), false),
         None => (0, REMOTE_RANGE - 1, true),
     };
     let len = if size == 0 { 0 } else { end - start + 1 };

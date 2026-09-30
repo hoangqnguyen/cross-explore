@@ -265,6 +265,18 @@ export async function selftest() {
       if (+m[2] - a + 1 !== got.length || got.length > 2 * 1048576) throw new Error(`range ${a}-${b}: ${got.length} bytes for ${cr}`);
       for (let i = 0; i < got.length; i++) if (got[i] !== local[a + i]) throw new Error(`range ${a}-${b}: byte ${a + i} differs`);
     }
+    // A request with no Range header at all — how pdf.js's opening probe
+    // fetches a document — must report the file's true size honestly. A
+    // truncated 206 here (Content-Length = only what we felt like sending)
+    // made pdf.js believe remote PDFs ended a couple of MB in, so it never
+    // reached the real end of the file (where the xref table lives) and
+    // rendered nothing.
+    const whole = await fetch(remote);
+    const wholeBytes = new Uint8Array(await whole.arrayBuffer());
+    if (whole.status !== 200) throw new Error(`unranged request: expected 200, got ${whole.status}`);
+    if (whole.headers.get("content-length") !== "3600000") throw new Error(`unranged request: Content-Length is ${whole.headers.get("content-length")}, not the true size`);
+    if (wholeBytes.length !== 3_600_000) throw new Error(`unranged request: got ${wholeBytes.length} bytes`);
+    for (let i = 0; i < wholeBytes.length; i += 99_991) if (wholeBytes[i] !== local[i]) throw new Error(`unranged request: byte ${i} differs`);
   });
 
   await check("tags round trip", async () => {
