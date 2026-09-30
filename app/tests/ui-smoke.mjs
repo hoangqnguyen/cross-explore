@@ -108,7 +108,9 @@ try {
   await t.key("Enter");
   await sleep(300);
   check("dual pane shows two panes", (await t.eval(`document.querySelectorAll('.pane').length`)) === 2);
-  check("each pane has tabs", (await t.eval(`document.querySelectorAll('.phead .tab').length`)) >= 2);
+  check("tabs move to the top bar, not each pane", !(await t.eval(`!!document.querySelector('.phead')`)));
+  check("the top bar shows a tab strip per pane", (await t.eval(`document.querySelectorAll('.titlebar .pane-tabs').length`)) === 2);
+  check("each pane's strip has at least one tab", (await t.eval(`[...document.querySelectorAll('.titlebar .pane-tabs')].every((s) => s.querySelectorAll('.tab').length >= 1)`)));
 
   // Navigate with Enter into a folder, then up.
   await t.open("?path=~/Documents");
@@ -374,6 +376,21 @@ try {
     await rclick(".columns .filler");
     check("right-click on the empty area shows the folder menu", await menuVisible());
     await closeMenu();
+  }
+
+  // Column view: dragging a column's edge resizes every folder column together.
+  {
+    const widths = () => t.eval(`[...document.querySelectorAll('.columns .column:not(.preview)')].map((c) => Math.round(c.getBoundingClientRect().width))`);
+    const before = await widths();
+    check("columns share one width to start", new Set(before).size === 1, JSON.stringify(before));
+    const handle = await t.eval(`(() => { const r = document.querySelector('.columns .column.current .resize').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await t.send("Input.dispatchMouseEvent", { type: "mousePressed", x: handle.x, y: handle.y, button: "left", buttons: 1, clickCount: 1 });
+    await t.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: handle.x + 60, y: handle.y, button: "left", buttons: 1 });
+    await t.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: handle.x + 60, y: handle.y, button: "left", buttons: 0, clickCount: 1 });
+    await sleep(150);
+    const after = await widths();
+    check("dragging widens every column together", after.every((w) => w > before[0]) && new Set(after).size === 1, `${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+    check("the width is remembered in settings", (await t.eval(`window.__cx.settings.data.columnWidth`)) === after[0]);
   }
 
   // Background refreshes are seamless: no spinner, rows never disappear

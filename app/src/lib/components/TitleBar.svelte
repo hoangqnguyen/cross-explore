@@ -13,7 +13,10 @@
 
 <header class="titlebar" class:mac={ws.platform === "macos"} data-tauri-drag-region>
   {#if ws.dual}
-    <div class="app-title" data-tauri-drag-region>Cross Explore</div>
+    <div class="dual-tabs">
+      <div class="pane-tabs" class:active={ws.activePane === 0}><TabStrip pane={ws.panes[0]} compact /></div>
+      <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact /></div>
+    </div>
   {:else}
     <TabStrip pane={ws.panes[0]} />
   {/if}
@@ -50,12 +53,25 @@
   .titlebar.mac {
     padding-left: 84px;
   }
-  .app-title {
+  .dual-tabs {
+    display: flex;
+    align-items: flex-end;
     flex: 1;
-    align-self: center;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-2);
+    min-width: 0;
+    height: 100%;
+  }
+  .pane-tabs {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+  }
+  .pane-tabs.active {
+    /* The tab strip of the pane that has focus reads slightly stronger. */
+    --text-2: var(--text);
+  }
+  .pane-tabs + .pane-tabs {
+    border-left: 1px solid var(--stroke-strong);
   }
   .tools {
     display: flex;

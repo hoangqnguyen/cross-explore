@@ -34,6 +34,8 @@ export interface SettingsData {
   compact: boolean;
   sidebarWidth: number;
   previewWidth: number;
+  /** Column view (Miller columns): width shared by every folder column. */
+  columnWidth: number;
   defaultView: ViewMode;
   iconSize: number;
   keymap: Keymap;
@@ -79,6 +81,7 @@ const defaults: SettingsData = {
   compact: false,
   sidebarWidth: 232,
   previewWidth: 300,
+  columnWidth: 240,
   defaultView: "details",
   iconSize: 96,
   keymap: /Mac|iPhone|iPad/.test(typeof navigator === "undefined" ? "" : navigator.platform) ? "finder" : "explorer",

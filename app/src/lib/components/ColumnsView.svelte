@@ -87,6 +87,22 @@
     else blankMenu(fake, tab);
   }
 
+  // Every folder column (ancestors, the focused one, the next-folder preview)
+  // shares one width, like Finder: drag any column's right edge to resize all.
+  let resizeStartX = 0;
+  let resizeStartWidth = 0;
+  function startResize(e: PointerEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStartX = e.clientX;
+    resizeStartWidth = settings.data.columnWidth;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onResizeMove(e: PointerEvent) {
+    if (e.buttons !== 1) return;
+    settings.data.columnWidth = Math.round(Math.min(480, Math.max(140, resizeStartWidth + (e.clientX - resizeStartX))));
+  }
+
   function renameInput(el: HTMLInputElement, entry: Item) {
     const [a, b] = stemRange(entry.name, entry.isDir);
     el.focus();
@@ -112,7 +128,7 @@
   {#each ancestors as a (a.uri)}
     {@const f = folderFor(a.uri)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="column" use:dropTarget={{ dest: () => a.uri }} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
+    <div class="column" style:width="{settings.data.columnWidth}px" use:dropTarget={{ dest: () => a.uri }} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
       {#each visibleOf(f.items) as e (e.name)}
         <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
           <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
@@ -120,12 +136,15 @@
           {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
         </button>
       {/each}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
     </div>
   {/each}
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="column current file-view"
+    style:width="{settings.data.columnWidth}px"
     tabindex="0"
     role="listbox"
     bind:this={current}
@@ -166,12 +185,14 @@
         {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
       </div>
     {/each}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
   </div>
 
   {#if next}
     {@const f = folderFor(next)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="column" oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, next!, null)}>
+    <div class="column" style:width="{settings.data.columnWidth}px" oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, next!, null)}>
       {#each visibleOf(f.items) as e (e.name)}
         <button class="item" oncontextmenu={(ev) => menuIn(ev, next!, e.name)} onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
           <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
@@ -180,6 +201,8 @@
         </button>
       {/each}
       {#if f.status === "ready" && !visibleOf(f.items).length}<div class="hint">Empty folder</div>{/if}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
     </div>
   {:else if focusEntry && !focusEntry.isDir}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -205,12 +228,29 @@
     overflow-y: hidden;
   }
   .column {
+    position: relative;
     flex: none;
-    width: 240px;
     overflow-y: auto;
     padding: 6px;
     border-right: 1px solid var(--stroke);
     outline: none;
+  }
+  /* Sits just inside the column's own box (not straddling the border): the
+     column clips overflow, so a handle poking outside it would be unclickable
+     right where it matters, at the edge. */
+  .resize {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 2;
+    touch-action: none;
+  }
+  .resize:hover,
+  .resize:active {
+    background: var(--accent-soft);
   }
   /* The file preview takes whatever width is left, instead of a blank strip. */
   .column.preview {

@@ -1237,6 +1237,7 @@ dependencies = [
  "cx-sftp",
  "cx-smb",
  "cx-term",
+ "cx-testkit",
  "cx-thumbs",
  "cx-transfer",
  "cx-webdav",
