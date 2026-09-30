@@ -95,14 +95,12 @@
       <FileIcon name={entry.name} isDir={false} size={96} />
       <audio src={fileUrl(uri)} controls autoplay={large}></audio>
     </div>
+  {:else if kind === "pdf" && !pdfFailed}
+    <!-- pdf.js, not a thumbnail: a remote PDF has no fast native thumbnail
+         (unlike images), so the small preview pane used to just go blank. -->
+    <div class="pdfwrap"><PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} /></div>
   {:else if kind === "pdf"}
-    {#if large && !pdfFailed}
-      <div class="pdfwrap"><PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} /></div>
-    {:else if large}
-      <iframe src={fileUrl(uri)} title={entry.name}></iframe>
-    {:else}
-      <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={(e) => ((e.currentTarget as HTMLElement).style.display = "none")} />
-    {/if}
+    <iframe src={fileUrl(uri)} title={entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "html"}
     <!-- Script-free HTML from cx-office; the empty sandbox also blocks scripts, forms and navigation. -->
     <iframe class="office" class:small={!large} sandbox="" srcdoc={office.html} title={office.title ?? entry.name}></iframe>

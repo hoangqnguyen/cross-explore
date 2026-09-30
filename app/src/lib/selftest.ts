@@ -6,6 +6,7 @@ import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey,
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
+import { settings } from "./stores/settings.svelte";
 import { ws } from "./workspace.svelte";
 import { dialogs } from "./stores/dialogs.svelte";
 
@@ -157,6 +158,31 @@ export async function selftest() {
     } finally {
       quicklook.close();
       document.removeEventListener("securitypolicyviolation", onViolation);
+    }
+  });
+
+  await check("the (small) preview pane also draws a remote PDF, not a broken thumbnail", async () => {
+    // A remote PDF has no fast native thumbnail (unlike images), so the
+    // preview pane used to fall back to a thumbnail image that always
+    // failed to load for non-local files, leaving the pane blank. A file
+    // inside a zip is read like one on a server (not through local_path()).
+    const zip = childUri(dir, "doc.zip");
+    const c = await job(await transfers.submit({ kind: "compress", sources: [childUri(dir, "doc.pdf")], dest: zip }));
+    if (c.state !== "done") throw new Error(`compress ${c.state}: ${c.errors[0]?.message}`);
+    const wasOpen = settings.data.previewPane;
+    settings.data.previewPane = true;
+    try {
+      tab().navigate(`archive://${zip}!/`);
+      await until("archive listing", () => tab().folder.status === "ready" && has("doc.pdf"));
+      tab().selectOnly(keyOf(tab().folder.items.find((e) => e.name === "doc.pdf")!));
+      const canvas = await until("preview-pane pdf page", () => document.querySelector<HTMLCanvasElement>(".pane-preview .preview canvas[data-page='1']")?.width ? document.querySelector<HTMLCanvasElement>(".pane-preview .preview canvas")! : null, 8000);
+      const ctx = canvas!.getContext("2d")!;
+      const px = ctx.getImageData(0, 0, canvas!.width, Math.floor(canvas!.height / 4)).data;
+      let ink = 0;
+      for (let i = 0; i < px.length; i += 4) if (px[i] < 128) ink++;
+      if (!ink) throw new Error("preview pane shows a blank page");
+    } finally {
+      settings.data.previewPane = wasOpen;
     }
   });
 
