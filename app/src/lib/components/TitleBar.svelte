@@ -19,6 +19,12 @@
   let sidebarGap = $derived(Math.max(0, settings.data.sidebarWidth - leftPad - 8));
 </script>
 
+{#snippet splitBtn()}
+  <button class="icon-btn split-btn" class:on={ws.dual} title="Dual pane ({shortcut('pane.dual')})" aria-label="Dual pane" onclick={() => run('pane.dual')}>
+    <Icon name="columns" size={16} />
+  </button>
+{/snippet}
+
 <header class="titlebar" class:mac={ws.platform === "macos"} data-tauri-drag-region>
   {#if ws.dual}
     <div class="sidebar-gap" style:width="{sidebarGap}px" data-tauri-drag-region></div>
@@ -27,10 +33,10 @@
          clusters lands exactly where the two panes actually meet. -->
     <div class="dual-tabs" class:measured={ws.panesWidth > 0} style:width="{ws.panesWidth}px">
       <div class="pane-tabs" class:active={ws.activePane === 0}><TabStrip pane={ws.panes[0]} compact /></div>
-      <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact /></div>
+      <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact trailing={splitBtn} /></div>
     </div>
   {:else}
-    <TabStrip pane={ws.panes[0]} />
+    <TabStrip pane={ws.panes[0]} trailing={splitBtn} />
   {/if}
 
   <div class="tools">
@@ -92,6 +98,23 @@
   }
   .pane-tabs + .pane-tabs {
     border-left: 1px solid var(--stroke-strong);
+  }
+  /* Rendered inside TabStrip's .tabs (as its `trailing` snippet), right after
+     the "+" button, so it sits next to it instead of being pushed away by
+     whatever stretch space .tabs picks up. Margin mirrors .new's own
+     bottom-alignment within that flex-end row. */
+  .split-btn {
+    flex: none;
+    margin: 0 0 3px 4px;
+  }
+  :global(.tabs.compact) .split-btn {
+    margin-bottom: 2px;
+  }
+  .split-btn.on {
+    background: var(--accent-soft);
+  }
+  .split-btn.on :global(svg) {
+    color: var(--accent);
   }
   .tools {
     display: flex;

@@ -118,6 +118,18 @@ try {
     check("the tab-strip divider lines up with the pane divider", diff <= 1, `${diff}px off`);
   }
 
+  // The split-pane button sits right next to the "+" (tab strip's own new-tab
+  // button), not off on the far side of the top bar next to Search/Settings.
+  {
+    const gap = () => t.eval(`(() => { const news = [...document.querySelectorAll('.titlebar .tabs .new')]; const plus = news[news.length - 1]; const split = document.querySelector('.titlebar .split-btn'); return split && plus ? Math.round(split.getBoundingClientRect().left - plus.getBoundingClientRect().right) : null; })()`);
+    check("in dual pane, the split button sits right after the last +", (await gap()) <= 12, `${await gap()}px away`);
+    check("it shows as on while dual pane is active", await t.eval(`document.querySelector('.titlebar .split-btn')?.classList.contains('on')`));
+    await t.eval(`document.querySelector('.titlebar .split-btn').click()`);
+    await sleep(250);
+    check("clicking it turns dual pane back off", (await t.eval(`document.querySelectorAll('.pane').length`)) === 1);
+    check("in single pane, it still sits right after the +", (await gap()) <= 12, `${await gap()}px away`);
+  }
+
   // Navigate with Enter into a folder, then up.
   await t.open("?path=~/Documents");
   await t.focusList();

@@ -107,7 +107,6 @@
   <button class="labeled" onclick={viewMenu}><Icon name={tab.view === "icons" ? "grid" : tab.view === "columns" ? "columns" : tab.view === "gallery" ? "gallery" : "rows"} size={18} /> View <Icon name="chevronDown" size={12} /></button>
   <button title="More" aria-label="More" onclick={moreMenu}><Icon name="more" size={18} stroke={2.4} /></button>
   <span class="spacer"></span>
-  <button class:on={settings.data.dual} title="Dual pane ({shortcut('pane.dual')})" aria-label="Dual pane" onclick={() => run("pane.dual")}><Icon name="columns" size={18} /></button>
   <button class:on={settings.data.previewPane} title="Preview pane ({shortcut('view.preview')})" aria-label="Preview pane" onclick={() => run("view.preview")}><Icon name="sidebarRight" size={18} /></button>
 </div>
 

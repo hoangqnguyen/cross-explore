@@ -1,11 +1,15 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { shortcut } from "../commands.svelte";
   import { dropTarget } from "../listing";
   import { ws, type Pane } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
   import Icon, { type IconName } from "./Icon.svelte";
 
-  let { pane, compact = false }: { pane: Pane; compact?: boolean } = $props();
+  // `trailing`: extra buttons (the split-pane toggle) right after the "+" —
+  // inside the same stretchy row, so they sit next to it instead of being
+  // pushed away by whatever fills the rest of the bar.
+  let { pane, compact = false, trailing }: { pane: Pane; compact?: boolean; trailing?: Snippet } = $props();
 
   let dragId: number | null = null;
 
@@ -77,6 +81,7 @@
   >
     <Icon name="plus" size={14} />
   </button>
+  {@render trailing?.()}
 </div>
 
 <style>
