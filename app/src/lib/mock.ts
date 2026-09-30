@@ -20,6 +20,7 @@ function file(name: string, size: number, age: number, hidden = false, content?:
 
 const readme = `# Cross Explore\n\nA fast, **live** file explorer.\n\n- Dual pane\n- Quick Look\n- Network shares & peers\n`;
 const code = `use std::fs;\n\nfn main() {\n    for e in fs::read_dir(".").unwrap() {\n        println!("{}", e.unwrap().path().display());\n    }\n}\n`;
+const reportHtml = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Run Report</title>\n<style>body{font-family:sans-serif;padding:24px}.status{display:inline-block;padding:4px 12px;border-radius:999px;background:#2fa66a;color:#fff}</style>\n</head>\n<body>\n<h1>Full Run Report</h1>\n<p>Status: <span class="status">All checks passed</span></p>\n</body>\n</html>\n`;
 
 const py = `import sys\n\n\nclass Greeter:\n    def __init__(self, name):\n        self.name = name\n\n    def greet(self):\n        if self.name:\n            print("hi", self.name)\n        else:\n            print("hi")\n\n\nif __name__ == "__main__":\n    Greeter(sys.argv[1]).greet()\n`;
 
@@ -30,7 +31,7 @@ const roots: Record<string, Node> = {
         dir("Desktop", 2 * day, [file("Screenshot 2026-09-25 at 10.41.03.png", 2_400_000, 26 * 3600_000), file("todo.md", 1_200, 3 * min, false, "- [ ] ship Phase 1\n- [x] live updates\n")]),
         dir("Documents", 5 * day, [
           dir("Invoices", 12 * day, Array.from({ length: 24 }, (_, i) => file(`Invoice-2026-${String(i + 1).padStart(3, "0")}.pdf`, 80_000 + i * 913, (i + 3) * day))),
-          dir("Projects", 1 * day, [file("README.md", readme.length, 2 * day, false, readme), file("main.rs", code.length, day, false, code), file("greet.py", py.length, day, false, py)]),
+          dir("Projects", 1 * day, [file("README.md", readme.length, 2 * day, false, readme), file("main.rs", code.length, day, false, code), file("greet.py", py.length, day, false, py), file("report.html", reportHtml.length, day, false, reportHtml)]),
           file("Budget 2026.xlsx", 48_200, 2 * day),
           file("Pitch deck.pptx", 5_800_000, 9 * day),
           file("Resume.docx", 32_100, 40 * day),

@@ -6,13 +6,16 @@
   import { renderMarkdown } from "../markdown";
   import { isArchive } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
+  import Icon from "./Icon.svelte";
   import CodeView from "./CodeView.svelte";
   import PdfView from "./PdfView.svelte";
   import ZoomImage from "./ZoomImage.svelte";
 
   let { entry, uri, large = false }: { entry: Item; uri: string; large?: boolean } = $props();
 
-  const textExts = new Set("txt md markdown log csv tsv json yaml yml toml xml ini cfg conf env sh zsh bash ps1 bat js mjs cjs ts tsx jsx rs go py rb java kt swift c h cc cpp hpp cs php lua dart scala svelte vue html css scss sql gradle gitignore dockerfile makefile".split(" "));
+  const htmlExts = new Set("html htm".split(" "));
+
+  const textExts = new Set("txt md markdown log csv tsv json yaml yml toml xml ini cfg conf env sh zsh bash ps1 bat js mjs cjs ts tsx jsx rs go py rb java kt swift c h cc cpp hpp cs php lua dart scala svelte vue css scss sql gradle gitignore dockerfile makefile".split(" "));
 
   const officeExts = new Set("docx docm dotx dotm doc xlsx xlsm xltx xlsb xls ods pptx pptm potx ppsx ppt odt ott odp otp rtf csv tsv".split(" "));
 
@@ -26,10 +29,15 @@
     if (cat === "audio") return "audio";
     if (cat === "pdf") return "pdf";
     if (cat === "font") return "font";
+    if (htmlExts.has(ext)) return "html";
     if (officeExts.has(ext)) return "office";
     if (textExts.has(ext) || cat === "code" || cat === "text" || !ext) return "text";
     return "other";
   });
+
+  /** A real HTML file (unlike cx-office's converted HTML) can show as a
+   * rendered page or as source. Starts on Preview for each file. */
+  let htmlMode = $state<"preview" | "raw">("preview");
 
   let text = $state<TextPreview | null>(null);
   let textError = $state<string | null>(null);
@@ -51,8 +59,9 @@
     office = null;
     officeFailed = false;
     pdfFailed = false;
+    htmlMode = "preview";
     let stale = false;
-    if (k === "text") {
+    if (k === "text" || k === "html") {
       previewText(u, large ? 1024 * 1024 : 64 * 1024)
         .then((t) => !stale && (text = t))
         .catch(() => !stale && (textError = "No preview available"));
@@ -114,6 +123,25 @@
       <div>The quick brown fox jumps over the lazy dog</div>
       <div class="small">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !?&amp;</div>
     </div>
+  {:else if kind === "html" && text}
+    <div class="htmlview">
+      {#if htmlMode === "preview"}
+        <!-- The page itself, sandboxed: no scripts, forms or navigation — the
+             same posture as cx-office's converted-document preview. -->
+        <iframe sandbox="" srcdoc={text.text} title={entry.name}></iframe>
+      {:else}
+        <CodeView text={text.text} {html} lang={ext} {large} />
+      {/if}
+      <div class="mode-switch" role="tablist" aria-label="Preview or source">
+        <button type="button" role="tab" aria-selected={htmlMode === "preview"} class:active={htmlMode === "preview"} onclick={() => (htmlMode = "preview")}>
+          <Icon name="eye" size={12} /> Preview
+        </button>
+        <button type="button" role="tab" aria-selected={htmlMode === "raw"} class:active={htmlMode === "raw"} onclick={() => (htmlMode = "raw")}>
+          <Icon name="code" size={12} /> Code
+        </button>
+      </div>
+    </div>
+    {#if text.truncated}<div class="note">Preview shows the beginning of the file</div>{/if}
   {:else if kind === "text" && text}
     {#if ext === "md" || ext === "markdown"}
       <div class="md">{@html html}</div>
@@ -310,6 +338,45 @@
     border-radius: 6px;
     overflow: hidden;
     background: var(--pdf-bg, rgb(128 128 128 / 0.18));
+  }
+  .htmlview {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+  }
+  .htmlview iframe {
+    background: #fff;
+  }
+  .mode-switch {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 3;
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--flyout, var(--layer-2));
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.2), 0 0 0 1px var(--stroke);
+  }
+  .mode-switch button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    color: var(--text-2);
+    font-size: 11px;
+  }
+  .mode-switch button:hover {
+    background: var(--hover);
+  }
+  .mode-switch button.active {
+    background: var(--accent);
+    color: var(--accent-text);
   }
   iframe.office {
     box-shadow: 0 0 0 1px var(--border);

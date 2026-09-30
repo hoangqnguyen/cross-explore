@@ -64,6 +64,23 @@ try {
   check("Quick Look renders a Word document", await t.eval(`(() => { const f = document.querySelector('.ql iframe.office'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('Resume.docx'); })()`));
   await t.key("Escape");
 
+  // HTML files: rendered by default, with a Code toggle for the source.
+  await t.open("?path=~/Documents/Projects");
+  await t.focusList();
+  await t.key("Home");
+  for (let k = 0; k < (await t.rows()).indexOf("report.html"); k++) await t.key("ArrowDown");
+  await t.key(" ");
+  await sleep(400);
+  check("Quick Look shows the rendered page by default", await t.eval(`(() => { const f = document.querySelector('.ql .htmlview iframe'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('<h1>Full Run Report</h1>'); })()`));
+  check("…with a Preview/Code switch, Preview active", (await t.eval(`document.querySelector('.ql .mode-switch button.active')?.textContent.trim()`) ?? "").includes("Preview"));
+  await t.clickText(".ql .mode-switch button", "Code");
+  await sleep(150);
+  check("Code shows the source as text, not rendered", await t.eval(`!document.querySelector('.ql .htmlview iframe') && document.querySelector('.ql .htmlview .codeview')?.textContent.includes('<h1>Full Run Report</h1>')`));
+  await t.clickText(".ql .mode-switch button", "Preview");
+  await sleep(150);
+  check("switching back to Preview restores the iframe", await t.eval(`!!document.querySelector('.ql .htmlview iframe')`));
+  await t.key("Escape");
+
   // PDFs: drawn with pdf.js, so pinch/scroll/keys work like images.
   await t.open("?path=~/Documents/Invoices");
   await t.focusList();
