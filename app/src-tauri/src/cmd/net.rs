@@ -4,14 +4,22 @@ use super::AppState;
 use cx_core::{Credentials, CxError, Location, Result};
 
 fn endpoint_of(uri: &str) -> Result<cx_core::Endpoint> {
-    Location::parse(uri)?.endpoint().cloned().ok_or_else(|| CxError::InvalidLocation(format!("{uri} is not a server")))
+    Location::parse(uri)?
+        .endpoint()
+        .cloned()
+        .ok_or_else(|| CxError::InvalidLocation(format!("{uri} is not a server")))
 }
 
 /// Connect (or reconnect) to the server in `uri`. With credentials, a fresh
 /// connection is made with them and, on success, they're remembered — in the
 /// keychain when `remember` is set, otherwise for this session.
 #[tauri::command]
-pub async fn connect_server(uri: String, credentials: Option<Credentials>, remember: bool, app: AppState<'_>) -> Result<()> {
+pub async fn connect_server(
+    uri: String,
+    credentials: Option<Credentials>,
+    remember: bool,
+    app: AppState<'_>,
+) -> Result<()> {
     let mut ep = endpoint_of(&uri)?;
     if let Some(c) = &credentials {
         // Sign-in dialogs may supply a user the URI didn't have.
@@ -44,11 +52,21 @@ pub async fn disconnect_server(uri: String, app: AppState<'_>) -> Result<()> {
 
 #[tauri::command]
 pub fn connections(app: AppState<'_>) -> Vec<String> {
-    app.vfs.connected().into_iter().filter(|e| e.scheme != cx_core::Scheme::Peer).map(|e| format!("{}/", e.uri())).collect()
+    app.vfs
+        .connected()
+        .into_iter()
+        .filter(|e| e.scheme != cx_core::Scheme::Peer)
+        .map(|e| format!("{}/", e.uri()))
+        .collect()
 }
 
 #[tauri::command]
-pub fn trust_host_key(uri: String, key_type: String, fingerprint: String, app: AppState<'_>) -> Result<()> {
+pub fn trust_host_key(
+    uri: String,
+    key_type: String,
+    fingerprint: String,
+    app: AppState<'_>,
+) -> Result<()> {
     crate::sftp::trust(&app, &uri, &key_type, &fingerprint)?;
     app.vfs.clear_failure(&endpoint_of(&uri)?);
     Ok(())

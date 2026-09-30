@@ -58,7 +58,10 @@ pub struct Places {
 
 fn place(path: PathBuf, icon: &'static str) -> Option<Place> {
     path.is_dir().then(|| Place {
-        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        name: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         uri: Location::local(&path).uri(),
         icon,
     })
@@ -75,7 +78,9 @@ fn user_visible_mount(mount: &Path) -> bool {
         true
     } else {
         mount == Path::new("/")
-            || ["/media", "/run/media", "/mnt"].iter().any(|p| mount.starts_with(p))
+            || ["/media", "/run/media", "/mnt"]
+                .iter()
+                .any(|p| mount.starts_with(p))
     }
 }
 
@@ -85,13 +90,20 @@ fn volume_name(mount: &Path, label: &str) -> String {
     }
     if cfg!(windows) {
         let drive = mount.to_string_lossy().trim_end_matches('\\').to_string();
-        let label = if label.is_empty() { "Local Disk" } else { label };
+        let label = if label.is_empty() {
+            "Local Disk"
+        } else {
+            label
+        };
         return format!("{label} ({drive})");
     }
     if mount == Path::new("/") {
         return "File System".into();
     }
-    mount.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| label.to_string())
+    mount
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| label.to_string())
 }
 
 #[tauri::command]
@@ -99,8 +111,22 @@ pub fn places() -> Places {
     let home_dir = cx_core::location::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let phone = cfg!(any(target_os = "ios", target_os = "android"));
     let favorites = [
-        (if phone { Some(home_dir.join("Documents")) } else { None }, "documents"),
-        (if phone { Some(home_dir.join("Downloads")) } else { None }, "downloads"),
+        (
+            if phone {
+                Some(home_dir.join("Documents"))
+            } else {
+                None
+            },
+            "documents",
+        ),
+        (
+            if phone {
+                Some(home_dir.join("Downloads"))
+            } else {
+                None
+            },
+            "downloads",
+        ),
         (dirs::desktop_dir(), "desktop"),
         (dirs::document_dir(), "documents"),
         (dirs::download_dir(), "downloads"),
@@ -121,7 +147,11 @@ pub fn places() -> Places {
     let mut volumes: Vec<Volume> = Vec::new();
     for d in disks.list() {
         let mount = d.mount_point();
-        if !user_visible_mount(mount) || volumes.iter().any(|v| v.uri == Location::local(mount).uri()) {
+        if !user_visible_mount(mount)
+            || volumes
+                .iter()
+                .any(|v| v.uri == Location::local(mount).uri())
+        {
             continue;
         }
         volumes.push(Volume {
@@ -137,7 +167,10 @@ pub fn places() -> Places {
         platform: std::env::consts::OS,
         translucent: TRANSLUCENT.load(Ordering::Relaxed),
         home: Place {
-            name: home_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Home".into()),
+            name: home_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Home".into()),
             uri: Location::local(&home_dir).uri(),
             icon: "home",
         },
@@ -147,11 +180,13 @@ pub fn places() -> Places {
     }
 }
 
-
 fn provider_of(name: &str) -> Option<(&'static str, &'static str)> {
     let n = name.to_ascii_lowercase();
     // The service name, alone or followed by an account ("Dropbox (Work)", "OneDrive - Contoso").
-    let is = |p: &str| n.strip_prefix(p).is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '-', '(']));
+    let is = |p: &str| {
+        n.strip_prefix(p)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '-', '(']))
+    };
     Some(if is("googledrive") || is("google drive") {
         ("google", "Google Drive")
     } else if is("dropbox") {
@@ -178,11 +213,24 @@ fn account_of(dir_name: &str) -> Option<String> {
     // Drop the service's own name first ("Google Drive", "iCloud Drive"), so
     // only what follows it can be an account.
     let lower = dir_name.to_ascii_lowercase();
-    let service = ["googledrive", "google drive", "icloud drive", "iclouddrive", "onedrive", "dropbox", "pclouddrive", "nextcloud", "mega", "box"]
-        .into_iter()
-        .find(|p| lower.starts_with(p))?;
+    let service = [
+        "googledrive",
+        "google drive",
+        "icloud drive",
+        "iclouddrive",
+        "onedrive",
+        "dropbox",
+        "pclouddrive",
+        "nextcloud",
+        "mega",
+        "box",
+    ]
+    .into_iter()
+    .find(|p| lower.starts_with(p))?;
     let rest = &dir_name[service.len()..];
-    let rest = rest.trim_start_matches([' ', '-', '(']).trim_end_matches(')');
+    let rest = rest
+        .trim_start_matches([' ', '-', '('])
+        .trim_end_matches(')');
     let rest = rest.trim();
     (!rest.is_empty()).then(|| rest.to_string())
 }
@@ -193,11 +241,25 @@ fn account_of(dir_name: &str) -> Option<String> {
 fn cloud_places(home: &Path) -> Vec<CloudPlace> {
     type Found = Vec<(PathBuf, &'static str, String, Option<String>)>;
     let mut found: Found = Vec::new();
-    fn add(found: &mut Found, path: PathBuf, dir_name: &str, fixed: Option<(&'static str, &'static str)>) {
-        let Some((provider, label)) = fixed.or_else(|| provider_of(dir_name)) else { return };
+    fn add(
+        found: &mut Found,
+        path: PathBuf,
+        dir_name: &str,
+        fixed: Option<(&'static str, &'static str)>,
+    ) {
+        let Some((provider, label)) = fixed.or_else(|| provider_of(dir_name)) else {
+            return;
+        };
         // `~/Google Drive` is often a link to the CloudStorage folder: list it once.
         let real = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
-        if !path.is_dir() || found.iter().any(|f| f.0 == path || std::fs::canonicalize(&f.0).map(|r| r == real).unwrap_or(false)) {
+        if !path.is_dir()
+            || found.iter().any(|f| {
+                f.0 == path
+                    || std::fs::canonicalize(&f.0)
+                        .map(|r| r == real)
+                        .unwrap_or(false)
+            })
+        {
             return;
         }
         found.push((path, provider, label.to_string(), account_of(dir_name)));
@@ -206,7 +268,10 @@ fn cloud_places(home: &Path) -> Vec<CloudPlace> {
     if cfg!(target_os = "macos") {
         // File Provider apps (Google Drive, Dropbox, OneDrive, Box…) live here.
         if let Ok(rd) = std::fs::read_dir(home.join("Library/CloudStorage")) {
-            let mut names: Vec<String> = rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+            let mut names: Vec<String> = rd
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect();
             names.sort();
             for n in names {
                 let path = home.join("Library/CloudStorage").join(&n);
@@ -218,38 +283,69 @@ fn cloud_places(home: &Path) -> Vec<CloudPlace> {
                 }
             }
         }
-        add(&mut found, home.join("Library/Mobile Documents/com~apple~CloudDocs"), "iCloud Drive", Some(("icloud", "iCloud Drive")));
+        add(
+            &mut found,
+            home.join("Library/Mobile Documents/com~apple~CloudDocs"),
+            "iCloud Drive",
+            Some(("icloud", "iCloud Drive")),
+        );
     }
 
     if cfg!(windows) {
         for var in ["OneDriveConsumer", "OneDriveCommercial", "OneDrive"] {
             if let Some(p) = std::env::var_os(var).map(PathBuf::from) {
-                let n = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let n = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 add(&mut found, p, &n, Some(("onedrive", "OneDrive")));
             }
         }
         // Dropbox records its folder(s) in info.json.
-        for base in [std::env::var_os("LOCALAPPDATA"), std::env::var_os("APPDATA")].into_iter().flatten() {
-            if let Ok(text) = std::fs::read_to_string(PathBuf::from(base).join("Dropbox/info.json")) {
+        for base in [
+            std::env::var_os("LOCALAPPDATA"),
+            std::env::var_os("APPDATA"),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Ok(text) = std::fs::read_to_string(PathBuf::from(base).join("Dropbox/info.json"))
+            {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
                     for (kind, acc) in v.as_object().into_iter().flatten() {
                         if let Some(p) = acc.get("path").and_then(|p| p.as_str()) {
                             let n = format!("Dropbox - {kind}");
-                            add(&mut found, PathBuf::from(p), &n, Some(("dropbox", "Dropbox")));
+                            add(
+                                &mut found,
+                                PathBuf::from(p),
+                                &n,
+                                Some(("dropbox", "Dropbox")),
+                            );
                         }
                     }
                 }
             }
         }
-        add(&mut found, home.join("iCloudDrive"), "iCloud Drive", Some(("icloud", "iCloud Drive")));
+        add(
+            &mut found,
+            home.join("iCloudDrive"),
+            "iCloud Drive",
+            Some(("icloud", "iCloud Drive")),
+        );
     }
 
     // Plain folders in the home directory (Linux clients, older app versions).
     if let Ok(rd) = std::fs::read_dir(home) {
-        let mut names: Vec<String> = rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        let mut names: Vec<String> = rd
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
         names.sort();
         for n in names {
-            if n.starts_with('.') || provider_of(&n).is_none() || n.eq_ignore_ascii_case("box") && !cfg!(windows) {
+            if n.starts_with('.')
+                || provider_of(&n).is_none()
+                || n.eq_ignore_ascii_case("box") && !cfg!(windows)
+            {
                 continue;
             }
             add(&mut found, home.join(&n), &n, None);
@@ -264,7 +360,12 @@ fn cloud_places(home: &Path) -> Vec<CloudPlace> {
             Some(a) if same => format!("{label} ({a})"),
             _ => label.clone(),
         };
-        out.push(CloudPlace { name, uri: Location::local(path).uri(), provider, account: account.clone() });
+        out.push(CloudPlace {
+            name,
+            uri: Location::local(path).uri(),
+            provider,
+            account: account.clone(),
+        });
     }
     out
 }
@@ -275,8 +376,14 @@ mod tests {
 
     #[test]
     fn names_cloud_folders() {
-        assert_eq!(provider_of("GoogleDrive-me@example.com").unwrap().0, "google");
-        assert_eq!(account_of("GoogleDrive-me@example.com").as_deref(), Some("me@example.com"));
+        assert_eq!(
+            provider_of("GoogleDrive-me@example.com").unwrap().0,
+            "google"
+        );
+        assert_eq!(
+            account_of("GoogleDrive-me@example.com").as_deref(),
+            Some("me@example.com")
+        );
         assert_eq!(provider_of("OneDrive - Contoso").unwrap().0, "onedrive");
         assert_eq!(account_of("OneDrive - Contoso").as_deref(), Some("Contoso"));
         assert_eq!(provider_of("Dropbox").unwrap().0, "dropbox");
@@ -294,24 +401,49 @@ mod tests {
         std::fs::create_dir(home.path().join("Dropbox")).unwrap();
         std::fs::create_dir(home.path().join("Documents")).unwrap();
         if cfg!(target_os = "macos") {
-            std::fs::create_dir_all(home.path().join("Library/CloudStorage/GoogleDrive-me@example.com")).unwrap();
-            std::fs::create_dir_all(home.path().join("Library/CloudStorage/OneDrive-Personal")).unwrap();
+            std::fs::create_dir_all(
+                home.path()
+                    .join("Library/CloudStorage/GoogleDrive-me@example.com"),
+            )
+            .unwrap();
+            std::fs::create_dir_all(home.path().join("Library/CloudStorage/OneDrive-Personal"))
+                .unwrap();
         }
         #[cfg(unix)]
         if cfg!(target_os = "macos") {
             // A home link to the CloudStorage folder is the same place.
-            std::os::unix::fs::symlink(home.path().join("Library/CloudStorage/GoogleDrive-me@example.com"), home.path().join("Google Drive")).unwrap();
+            std::os::unix::fs::symlink(
+                home.path()
+                    .join("Library/CloudStorage/GoogleDrive-me@example.com"),
+                home.path().join("Google Drive"),
+            )
+            .unwrap();
         }
         let got = cloud_places(home.path());
         if cfg!(target_os = "macos") {
-            assert_eq!(got.iter().filter(|c| c.provider == "google").count(), 1, "{:?}", got.iter().map(|c| &c.name).collect::<Vec<_>>());
+            assert_eq!(
+                got.iter().filter(|c| c.provider == "google").count(),
+                1,
+                "{:?}",
+                got.iter().map(|c| &c.name).collect::<Vec<_>>()
+            );
         }
         let names: Vec<&str> = got.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"Dropbox"), "{names:?}");
         assert!(!names.contains(&"Documents"));
         if cfg!(target_os = "macos") {
-            assert!(names.contains(&"Google Drive") && names.contains(&"OneDrive"), "{names:?}");
-            assert_eq!(got.iter().find(|c| c.provider == "google").unwrap().account.as_deref(), Some("me@example.com"));
+            assert!(
+                names.contains(&"Google Drive") && names.contains(&"OneDrive"),
+                "{names:?}"
+            );
+            assert_eq!(
+                got.iter()
+                    .find(|c| c.provider == "google")
+                    .unwrap()
+                    .account
+                    .as_deref(),
+                Some("me@example.com")
+            );
         }
     }
 }

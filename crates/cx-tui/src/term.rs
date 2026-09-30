@@ -11,7 +11,10 @@ use crate::app::{App, External};
 use crate::msg::Msg;
 use crate::ui;
 use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags};
+use ratatui::crossterm::event::{
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    Event, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::Terminal;
@@ -100,7 +103,10 @@ impl Screen {
         // Ctrl+Enter and friends become distinguishable.
         let enhanced = terminal::supports_keyboard_enhancement().unwrap_or(false);
         if enhanced {
-            execute!(out, PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES))?;
+            execute!(
+                out,
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )?;
         }
         Ok(Screen { mouse, enhanced })
     }
@@ -113,7 +119,12 @@ impl Screen {
         if self.mouse {
             let _ = execute!(out, DisableMouseCapture);
         }
-        execute!(out, DisableBracketedPaste, LeaveAlternateScreen, ratatui::crossterm::cursor::Show)?;
+        execute!(
+            out,
+            DisableBracketedPaste,
+            LeaveAlternateScreen,
+            ratatui::crossterm::cursor::Show
+        )?;
         terminal::disable_raw_mode()
     }
 }
@@ -122,7 +133,14 @@ fn install_panic_hook() {
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let mut out = io::stdout();
-        let _ = execute!(out, PopKeyboardEnhancementFlags, DisableMouseCapture, DisableBracketedPaste, LeaveAlternateScreen, ratatui::crossterm::cursor::Show);
+        let _ = execute!(
+            out,
+            PopKeyboardEnhancementFlags,
+            DisableMouseCapture,
+            DisableBracketedPaste,
+            LeaveAlternateScreen,
+            ratatui::crossterm::cursor::Show
+        );
         let _ = terminal::disable_raw_mode();
         prev(info);
     }));
@@ -130,14 +148,17 @@ fn install_panic_hook() {
 
 /// Run `ext` in the foreground terminal. Returns an error message if it
 /// couldn't start.
-fn run_external(ext: &External) -> Result<(), String> {
+fn run_external(ext: &External) -> Result<Option<i32>, String> {
     let mut cmd = match ext {
-        External::Shell { argv, cwd } => {
+        External::Shell { argv, cwd, ssh } => {
             let mut c = if argv.is_empty() {
                 #[cfg(windows)]
                 let sh = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
                 #[cfg(not(windows))]
-                let sh = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/sh".into());
+                let sh = std::env::var("SHELL")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "/bin/sh".into());
                 std::process::Command::new(sh)
             } else {
                 let mut c = std::process::Command::new(&argv[0]);
@@ -147,11 +168,28 @@ fn run_external(ext: &External) -> Result<(), String> {
             if let Some(d) = cwd {
                 c.current_dir(d);
             }
-            println!("\r\nCross Explore: shell in {} — type `exit` to come back.\r\n", cwd.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| "the server".into()));
+            let where_ = if let Some(s) = ssh {
+                cx_term::user_at_host(&s.user, &s.host)
+            } else {
+                cwd.as_ref()
+                    .map(|d| d.display().to_string())
+                    .unwrap_or_else(|| "this folder".into())
+            };
+            println!("\r\nCross Explore: shell in {where_} — type `exit` to come back.\r\n");
             c
         }
         External::Edit { path, .. } => {
-            let editor = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| if cfg!(windows) { "notepad".into() } else { "vi".into() });
+            let editor = std::env::var("VISUAL")
+                .or_else(|_| std::env::var("EDITOR"))
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| {
+                    if cfg!(windows) {
+                        "notepad".into()
+                    } else {
+                        "vi".into()
+                    }
+                });
             let mut parts = editor.split_whitespace();
             let mut c = std::process::Command::new(parts.next().unwrap_or("vi"));
             c.args(parts);
@@ -159,7 +197,9 @@ fn run_external(ext: &External) -> Result<(), String> {
             c
         }
     };
-    cmd.status().map(|_| ()).map_err(|e| format!("couldn't start {:?}: {e}", cmd.get_program()))
+    cmd.status()
+        .map(|s| s.code())
+        .map_err(|e| format!("couldn't start {:?}: {e}", cmd.get_program()))
 }
 
 /// Run the UI until the user quits.
@@ -173,7 +213,11 @@ pub async fn run(app: &mut App, mut rx: UnboundedReceiver<Msg>) -> io::Result<()
     let mut animating = app.prepare();
     term.draw(|f| ui::render(f, app))?;
     loop {
-        let tick = if animating { Duration::from_millis(80) } else { Duration::from_millis(500) };
+        let tick = if animating {
+            Duration::from_millis(80)
+        } else {
+            Duration::from_millis(500)
+        };
         tokio::select! {
             Some(ev) = events.recv() => {
                 handle_event(app, &term, ev)?;
@@ -210,9 +254,13 @@ pub async fn run(app: &mut App, mut rx: UnboundedReceiver<Msg>) -> io::Result<()
             input.resume();
             match result {
                 Err(e) => app.error(e),
-                Ok(()) => {
-                    if let External::Edit { path, upload } = ext {
-                        app.edited(path, upload);
+                Ok(code) => {
+                    match ext {
+                        External::Edit { path, upload } => app.edited(path, upload),
+                        External::Shell {
+                            ssh: Some(info), ..
+                        } => app.finish_ssh(info, code),
+                        External::Shell { ssh: None, .. } => {}
                     }
                     app.reload();
                 }
@@ -226,12 +274,19 @@ pub async fn run(app: &mut App, mut rx: UnboundedReceiver<Msg>) -> io::Result<()
     Ok(())
 }
 
-fn handle_event(app: &mut App, term: &Terminal<CrosstermBackend<io::Stdout>>, ev: Event) -> io::Result<()> {
+fn handle_event(
+    app: &mut App,
+    term: &Terminal<CrosstermBackend<io::Stdout>>,
+    ev: Event,
+) -> io::Result<()> {
     match ev {
         Event::Key(k) => app.handle_key(k),
         Event::Mouse(m) => {
             let size = term.size()?;
-            let layout = ui::layout::compute(ratatui::layout::Rect::new(0, 0, size.width, size.height), app);
+            let layout = ui::layout::compute(
+                ratatui::layout::Rect::new(0, 0, size.width, size.height),
+                app,
+            );
             app.handle_mouse(m, &layout);
         }
         Event::Paste(text) => app.paste_text(&text),

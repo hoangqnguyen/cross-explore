@@ -45,7 +45,12 @@ pub fn install(events: Arc<Events>) {
     });
     // SAFETY: called on the main thread during setup; the monitor lives for
     // the rest of the app, so the returned token is intentionally leaked.
-    let monitor = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::OtherMouseDown | NSEventMask::Swipe, &block) };
+    let monitor = unsafe {
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(
+            NSEventMask::OtherMouseDown | NSEventMask::Swipe,
+            &block,
+        )
+    };
     std::mem::forget(monitor);
     std::mem::forget(block);
 }

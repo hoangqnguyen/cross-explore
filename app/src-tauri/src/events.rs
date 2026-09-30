@@ -18,7 +18,9 @@ impl Events {
 
     /// Send `{"type": kind, ...payload}`.
     pub fn emit(&self, kind: &str, payload: impl Serialize) {
-        let Some(ch) = self.channel.lock().unwrap().clone() else { return };
+        let Some(ch) = self.channel.lock().unwrap().clone() else {
+            return;
+        };
         let mut v = serde_json::to_value(payload).unwrap_or(Value::Null);
         if let Value::Object(map) = &mut v {
             map.insert("type".into(), Value::String(kind.into()));

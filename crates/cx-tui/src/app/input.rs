@@ -7,7 +7,9 @@ use crate::dialog::{Dialog, Menu, MenuAction, MenuItem};
 use crate::keys::KeyCombo;
 use crate::settings::{Keymap, ViewMode};
 use crate::ui::layout::{Hit, Layout};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{
+    KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use std::time::{Duration, Instant};
 
 /// Re-exported for the terminal loop.
@@ -158,7 +160,9 @@ impl App {
     /// → in the outline: expand a folder, or step into an expanded one.
     fn outline_right(&mut self) {
         let t = self.tab();
-        let Some(r) = t.cursor_row().cloned() else { return };
+        let Some(r) = t.cursor_row().cloned() else {
+            return;
+        };
         if !t.item(&r).entry.is_dir {
             return;
         }
@@ -205,7 +209,9 @@ impl App {
             }
         };
         match e.code {
-            KeyCode::Esc | KeyCode::F(3) | KeyCode::Char(' ') | KeyCode::Char('q') => self.quicklook = false,
+            KeyCode::Esc | KeyCode::F(3) | KeyCode::Char(' ') | KeyCode::Char('q') => {
+                self.quicklook = false
+            }
             KeyCode::Up => self.tab_mut().move_by(-1, false),
             KeyCode::Down => self.tab_mut().move_by(1, false),
             KeyCode::PageDown | KeyCode::Char('j') => scroll(self, 20),
@@ -218,7 +224,10 @@ impl App {
             _ => {
                 // Quit and help work from Quick Look too.
                 if let Some(combo) = KeyCombo::from_event(&e) {
-                    if let Some(a) = resolve(&combo, self.settings.keymap).into_iter().find(|a| matches!(a, Action::Quit | Action::Help | Action::Palette)) {
+                    if let Some(a) = resolve(&combo, self.settings.keymap)
+                        .into_iter()
+                        .find(|a| matches!(a, Action::Quit | Action::Help | Action::Palette))
+                    {
                         self.quicklook = a != Action::Quit && self.quicklook;
                         self.run(a);
                     }
@@ -237,7 +246,9 @@ impl App {
                 self.transfers_open = false;
             }
             KeyCode::Up => self.transfers_cursor = self.transfers_cursor.saturating_sub(1),
-            KeyCode::Down => self.transfers_cursor = (self.transfers_cursor + 1).min(n.saturating_sub(1)),
+            KeyCode::Down => {
+                self.transfers_cursor = (self.transfers_cursor + 1).min(n.saturating_sub(1))
+            }
             KeyCode::Char(' ') | KeyCode::Char('p') => {
                 if let Some(j) = job {
                     if j.state == "paused" {
@@ -258,14 +269,34 @@ impl App {
                 self.transfers_cursor = 0;
             }
             KeyCode::Enter => {
-                if let Some(c) = job.as_ref().and_then(|j| j.conflict.clone().map(|c| (j.id, c))) {
-                    self.dialogs.push(Dialog::Conflict(crate::dialog::ConflictDlg { job: c.0, conflict: c.1, apply_all: false, cursor: 0 }));
+                if let Some(c) = job
+                    .as_ref()
+                    .and_then(|j| j.conflict.clone().map(|c| (j.id, c)))
+                {
+                    self.dialogs
+                        .push(Dialog::Conflict(crate::dialog::ConflictDlg {
+                            job: c.0,
+                            conflict: c.1,
+                            apply_all: false,
+                            cursor: 0,
+                        }));
                 }
             }
             _ => {
                 // App-wide commands (quit, help, palette, dual…) still work.
                 if let Some(combo) = KeyCombo::from_event(&e) {
-                    if let Some(a) = resolve(&combo, self.settings.keymap).into_iter().find(|a| matches!(a, Action::Quit | Action::Help | Action::Palette | Action::ToggleDual | Action::Settings | Action::Connect | Action::GoTo)) {
+                    if let Some(a) = resolve(&combo, self.settings.keymap).into_iter().find(|a| {
+                        matches!(
+                            a,
+                            Action::Quit
+                                | Action::Help
+                                | Action::Palette
+                                | Action::ToggleDual
+                                | Action::Settings
+                                | Action::Connect
+                                | Action::GoTo
+                        )
+                    }) {
                         self.focus = Focus::List;
                         self.run(a);
                     }
@@ -281,7 +312,10 @@ impl App {
         if !self.dialogs.is_empty() {
             if let MouseEventKind::ScrollDown | MouseEventKind::ScrollUp = e.kind {
                 let down = matches!(e.kind, MouseEventKind::ScrollDown);
-                self.dialog_key(KeyEvent::new(if down { KeyCode::Down } else { KeyCode::Up }, KeyModifiers::NONE));
+                self.dialog_key(KeyEvent::new(
+                    if down { KeyCode::Down } else { KeyCode::Up },
+                    KeyModifiers::NONE,
+                ));
             }
             return;
         }
@@ -290,19 +324,34 @@ impl App {
         let shift = e.modifiers.contains(KeyModifiers::SHIFT);
         match (e.kind, hit) {
             (MouseEventKind::ScrollDown | MouseEventKind::ScrollUp, Hit::Preview) => {
-                let d: isize = if matches!(e.kind, MouseEventKind::ScrollDown) { 3 } else { -3 };
+                let d: isize = if matches!(e.kind, MouseEventKind::ScrollDown) {
+                    3
+                } else {
+                    -3
+                };
                 if let Some(p) = self.preview.as_mut() {
                     p.scroll = (p.scroll as isize + d).max(0) as usize;
                 }
             }
-            (MouseEventKind::ScrollDown | MouseEventKind::ScrollUp, Hit::Row { pane, .. } | Hit::List { pane } | Hit::Pane { pane }) => {
-                let d: isize = if matches!(e.kind, MouseEventKind::ScrollDown) { 3 } else { -3 };
+            (
+                MouseEventKind::ScrollDown | MouseEventKind::ScrollUp,
+                Hit::Row { pane, .. } | Hit::List { pane } | Hit::Pane { pane },
+            ) => {
+                let d: isize = if matches!(e.kind, MouseEventKind::ScrollDown) {
+                    3
+                } else {
+                    -3
+                };
                 self.focus_pane(pane);
                 self.tab_mut().move_by(d, false);
             }
             (MouseEventKind::ScrollDown | MouseEventKind::ScrollUp, Hit::Transfers { .. }) => {
                 let down = matches!(e.kind, MouseEventKind::ScrollDown);
-                self.transfers_cursor = if down { (self.transfers_cursor + 1).min(self.jobs.len().saturating_sub(1)) } else { self.transfers_cursor.saturating_sub(1) };
+                self.transfers_cursor = if down {
+                    (self.transfers_cursor + 1).min(self.jobs.len().saturating_sub(1))
+                } else {
+                    self.transfers_cursor.saturating_sub(1)
+                };
             }
             (MouseEventKind::Down(MouseButton::Left), Hit::Tab { pane, idx }) => {
                 self.focus_pane(pane);
@@ -320,7 +369,9 @@ impl App {
             (MouseEventKind::Down(MouseButton::Left), Hit::Row { pane, row }) => {
                 self.focus_pane(pane);
                 self.focus = Focus::List;
-                let double = self.last_click.is_some_and(|(x, y, t)| x == e.column && y == e.row && t.elapsed() < Duration::from_millis(450));
+                let double = self.last_click.is_some_and(|(x, y, t)| {
+                    x == e.column && y == e.row && t.elapsed() < Duration::from_millis(450)
+                });
                 self.last_click = Some((e.column, e.row, Instant::now()));
                 let t = self.tab_mut();
                 if ctrl {
@@ -329,7 +380,8 @@ impl App {
                     t.move_to(row as isize, true);
                 } else {
                     let key = t.rows().get(row).map(|r| t.key_of(r).to_string());
-                    let single = key.as_ref().is_none_or(|k| !t.selection.contains(k)) || t.selection.len() <= 1;
+                    let single = key.as_ref().is_none_or(|k| !t.selection.contains(k))
+                        || t.selection.len() <= 1;
                     if single {
                         t.select_only(row);
                     } else {
@@ -372,10 +424,19 @@ impl App {
     pub(crate) fn context_menu(&mut self) {
         let many = self.tab().targets().len() > 1;
         let is_dir = self.tab().cursor_item().is_some_and(|i| i.entry.is_dir);
-        let is_archive = self.tab().cursor_item().is_some_and(|i| cx_archive::is_archive(i.name()));
-        let title = self.tab().cursor_item().map(|i| i.name().to_string()).unwrap_or_default();
+        let is_archive = self
+            .tab()
+            .cursor_item()
+            .is_some_and(|i| cx_archive::is_archive(i.name()));
+        let title = self
+            .tab()
+            .cursor_item()
+            .map(|i| i.name().to_string())
+            .unwrap_or_default();
         let km = self.settings.keymap;
-        let located = self.tab().cursor_row().is_some_and(|r| r.depth > 0 || self.tab().cursor_item().is_some_and(|i| i.parent.is_some()));
+        let located = self.tab().cursor_row().is_some_and(|r| {
+            r.depth > 0 || self.tab().cursor_item().is_some_and(|i| i.parent.is_some())
+        });
         let mut actions = vec![Action::Open];
         if located {
             actions.push(Action::ShowInFolder);
@@ -383,12 +444,22 @@ impl App {
         if is_dir || is_archive {
             actions.push(Action::OpenInNewTab);
         }
-        actions.extend([Action::QuickLook, Action::OpenExternal, Action::Edit, Action::Cut, Action::Copy]);
+        actions.extend([
+            Action::QuickLook,
+            Action::OpenExternal,
+            Action::Edit,
+            Action::Cut,
+            Action::Copy,
+        ]);
         if self.dual() {
             actions.extend([Action::CopyToOther, Action::MoveToOther]);
         }
         actions.extend([Action::CopyTo, Action::MoveTo, Action::Duplicate]);
-        actions.push(if many { Action::MultiRename } else { Action::Rename });
+        actions.push(if many {
+            Action::MultiRename
+        } else {
+            Action::Rename
+        });
         actions.extend([Action::Tags, Action::CopyPath, Action::Reveal]);
         if is_archive {
             actions.push(Action::Extract);
@@ -400,7 +471,15 @@ impl App {
         actions.extend([Action::SendTo, Action::Trash, Action::Delete]);
         let items = actions
             .into_iter()
-            .filter_map(|a| crate::commands::by_action(a).map(|c| MenuItem::new(c.label, crate::commands::shortcut(a, km).unwrap_or_default(), MenuAction::Run(a))))
+            .filter_map(|a| {
+                crate::commands::by_action(a).map(|c| {
+                    MenuItem::new(
+                        c.label,
+                        crate::commands::shortcut(a, km).unwrap_or_default(),
+                        MenuAction::Run(a),
+                    )
+                })
+            })
             .collect();
         self.dialogs.push(Dialog::Menu(Menu::new(title, items)));
     }
@@ -417,8 +496,16 @@ impl App {
             Dialog::Palette(p) => Some(&mut p.input),
             Dialog::DestPicker(p) => Some(&mut p.input),
             Dialog::Tags(t) => Some(&mut t.input),
-            Dialog::Search(s) => Some(if s.focus == 1 { &mut s.content } else { &mut s.name }),
-            Dialog::Pair(p) => Some(if p.focus == 1 { &mut p.code } else { &mut p.address }),
+            Dialog::Search(s) => Some(if s.focus == 1 {
+                &mut s.content
+            } else {
+                &mut s.name
+            }),
+            Dialog::Pair(p) => Some(if p.focus == 1 {
+                &mut p.code
+            } else {
+                &mut p.address
+            }),
             Dialog::SignIn(s) => match s.focus {
                 0 => Some(&mut s.user),
                 1 => Some(&mut s.password),

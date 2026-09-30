@@ -15,17 +15,26 @@ use std::collections::BTreeSet;
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuAction {
     /// Open a location, in `pane` (default: the active one).
-    Navigate { uri: String, pane: Option<usize> },
+    Navigate {
+        uri: String,
+        pane: Option<usize>,
+    },
     Run(Action),
     Sort(SortKey),
     Sync(SyncDirection),
-    ActivateTab { pane: usize, id: u64 },
+    ActivateTab {
+        pane: usize,
+        id: u64,
+    },
     /// Reopen a saved workspace (its tabs in both panes).
     Workspace(String),
     /// Offer the files picked for "Send to device" to this device.
     SendTo(String),
     /// Connect dialog prefilled with a host.
-    ConnectTo { scheme: String, host: String },
+    ConnectTo {
+        scheme: String,
+        host: String,
+    },
     None,
 }
 
@@ -39,12 +48,26 @@ pub struct MenuItem {
 }
 
 impl MenuItem {
-    pub fn new(label: impl Into<String>, detail: impl Into<String>, action: MenuAction) -> MenuItem {
-        MenuItem { label: label.into(), detail: detail.into(), action, header: false }
+    pub fn new(
+        label: impl Into<String>,
+        detail: impl Into<String>,
+        action: MenuAction,
+    ) -> MenuItem {
+        MenuItem {
+            label: label.into(),
+            detail: detail.into(),
+            action,
+            header: false,
+        }
     }
 
     pub fn header(label: impl Into<String>) -> MenuItem {
-        MenuItem { label: label.into(), detail: String::new(), action: MenuAction::None, header: true }
+        MenuItem {
+            label: label.into(),
+            detail: String::new(),
+            action: MenuAction::None,
+            header: true,
+        }
     }
 }
 
@@ -59,15 +82,34 @@ pub struct Menu {
 
 impl Menu {
     pub fn new(title: impl Into<String>, items: Vec<MenuItem>) -> Menu {
-        let mut m = Menu { title: title.into(), items, cursor: 0, filter: String::new() };
-        m.cursor = m.visible().into_iter().find(|&i| !m.items[i].header).unwrap_or(0);
+        let mut m = Menu {
+            title: title.into(),
+            items,
+            cursor: 0,
+            filter: String::new(),
+        };
+        m.cursor = m
+            .visible()
+            .into_iter()
+            .find(|&i| !m.items[i].header)
+            .unwrap_or(0);
         m
     }
 
     /// Indices of items passing the filter (headers kept when unfiltered).
     pub fn visible(&self) -> Vec<usize> {
         let q = self.filter.to_lowercase();
-        (0..self.items.len()).filter(|&i| if q.is_empty() { true } else { !self.items[i].header && (self.items[i].label.to_lowercase().contains(&q) || self.items[i].detail.to_lowercase().contains(&q)) }).collect()
+        (0..self.items.len())
+            .filter(|&i| {
+                if q.is_empty() {
+                    true
+                } else {
+                    !self.items[i].header
+                        && (self.items[i].label.to_lowercase().contains(&q)
+                            || self.items[i].detail.to_lowercase().contains(&q))
+                }
+            })
+            .collect()
     }
 
     pub fn step(&mut self, delta: isize) {
@@ -76,7 +118,10 @@ impl Menu {
         if selectable.is_empty() {
             return;
         }
-        let pos = selectable.iter().position(|&i| i == self.cursor).unwrap_or(0) as isize;
+        let pos = selectable
+            .iter()
+            .position(|&i| i == self.cursor)
+            .unwrap_or(0) as isize;
         let next = (pos + delta).clamp(0, selectable.len() as isize - 1) as usize;
         self.cursor = selectable[next];
     }
@@ -84,12 +129,17 @@ impl Menu {
     pub fn fix_cursor(&mut self) {
         let vis = self.visible();
         if !vis.contains(&self.cursor) || self.items.get(self.cursor).is_some_and(|i| i.header) {
-            self.cursor = vis.into_iter().find(|&i| !self.items[i].header).unwrap_or(0);
+            self.cursor = vis
+                .into_iter()
+                .find(|&i| !self.items[i].header)
+                .unwrap_or(0);
         }
     }
 
     pub fn selected(&self) -> Option<&MenuItem> {
-        self.items.get(self.cursor).filter(|i| !i.header && self.visible().contains(&self.cursor))
+        self.items
+            .get(self.cursor)
+            .filter(|i| !i.header && self.visible().contains(&self.cursor))
     }
 }
 
@@ -106,11 +156,25 @@ pub struct Palette {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pending {
     Delete(Vec<String>),
-    Transfer { kind: &'static str, sources: Vec<String>, dests: Vec<String> },
+    Transfer {
+        kind: &'static str,
+        sources: Vec<String>,
+        dests: Vec<String>,
+    },
     Trash(Vec<(String, Vec<String>)>),
-    Upload { local: String, dest_dir: String },
+    Upload {
+        local: String,
+        dest_dir: String,
+    },
     Disconnect(String),
     Quit,
+    /// Install the public key on a server we just signed in to with a password.
+    SshCopyId {
+        user: String,
+        host: String,
+        port: u16,
+        control: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -126,13 +190,45 @@ pub struct Confirm {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PromptKind {
-    Rename { dir: String, from: String },
-    NewFolder { dir: String },
-    Compress { sources: Vec<String>, dir: String },
-    SelectPattern { select: bool },
+    Rename {
+        dir: String,
+        from: String,
+    },
+    NewFolder {
+        dir: String,
+    },
+    Compress {
+        sources: Vec<String>,
+        dir: String,
+    },
+    SelectPattern {
+        select: bool,
+    },
     GoTo,
     Filter,
     SaveWorkspace,
+    /// Ask for the remote account before the first SSH to this server.
+    SshUser {
+        host: String,
+        port: u16,
+        path: String,
+        after: SshAfter,
+    },
+    /// Password for a one-shot key install when this machine has no control socket.
+    SshPassword {
+        user: String,
+        host: String,
+        port: u16,
+    },
+}
+
+/// What to do with the user name from [`PromptKind::SshUser`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SshAfter {
+    /// Suspend the TUI into `ssh`.
+    Shell,
+    /// Open the OS terminal app.
+    Window,
 }
 
 #[derive(Debug, Clone)]
@@ -216,7 +312,9 @@ impl ConnectForm {
     /// Pasting a full URI into the host field fills in everything.
     pub fn absorb_uri(&mut self) {
         let h = self.host.text.trim().to_string();
-        let Some((scheme, rest)) = h.split_once("://") else { return };
+        let Some((scheme, rest)) = h.split_once("://") else {
+            return;
+        };
         let s = match scheme.to_ascii_lowercase().as_str() {
             "webdav" | "http" => "dav".to_string(),
             "webdavs" | "https" => "davs".to_string(),
@@ -263,7 +361,17 @@ impl ConnectForm {
         if host.is_empty() {
             return None;
         }
-        Some(build_uri(self.scheme(), host, self.port.text.trim(), if self.anonymous { "" } else { self.user.text.trim() }, self.path.text.trim()))
+        Some(build_uri(
+            self.scheme(),
+            host,
+            self.port.text.trim(),
+            if self.anonymous {
+                ""
+            } else {
+                self.user.text.trim()
+            },
+            self.path.text.trim(),
+        ))
     }
 }
 
@@ -301,15 +409,30 @@ pub fn build_uri(scheme: &str, host: &str, port: &str, user: &str, path: &str) -
     let h = host.trim();
     let h = h.split_once("://").map(|(_, r)| r).unwrap_or(h);
     let h = h.split('/').next().unwrap_or(h);
-    let u = if user.is_empty() { String::new() } else { format!("{}@", encode(user)) };
+    let u = if user.is_empty() {
+        String::new()
+    } else {
+        format!("{}@", encode(user))
+    };
     let def = PROTOCOLS.iter().find(|p| p.0 == scheme).map(|p| p.2);
     let pt = match port.parse::<u16>() {
         Ok(p) if Some(p) != def => format!(":{p}"),
         _ => String::new(),
     };
     let p = path.trim().trim_start_matches('/');
-    let p = if p.is_empty() { "/".to_string() } else { format!("/{}", p.split('/').map(encode).collect::<Vec<_>>().join("/")) };
-    let h = if h.contains(':') && !h.starts_with('[') { format!("[{h}]") } else { h.to_string() };
+    let p = if p.is_empty() {
+        "/".to_string()
+    } else {
+        format!(
+            "/{}",
+            p.split('/').map(encode).collect::<Vec<_>>().join("/")
+        )
+    };
+    let h = if h.contains(':') && !h.starts_with('[') {
+        format!("[{h}]")
+    } else {
+        h.to_string()
+    };
     format!("{scheme}://{u}{h}{pt}{p}")
 }
 
@@ -371,21 +494,45 @@ impl DestPicker {
     pub fn visible(&self) -> Vec<usize> {
         let q = self.input.text.trim().to_lowercase();
         // A typed location is a destination of its own, not a filter.
-        let is_path = q.starts_with('/') || q.starts_with('~') || q.contains("://") || q.starts_with("\\\\") || (q.len() > 1 && q.as_bytes()[1] == b':');
-        (0..self.items.len()).filter(|&i| q.is_empty() || is_path || self.items[i].label.to_lowercase().contains(&q) || self.items[i].detail.to_lowercase().contains(&q)).collect()
+        let is_path = q.starts_with('/')
+            || q.starts_with('~')
+            || q.contains("://")
+            || q.starts_with("\\\\")
+            || (q.len() > 1 && q.as_bytes()[1] == b':');
+        (0..self.items.len())
+            .filter(|&i| {
+                q.is_empty()
+                    || is_path
+                    || self.items[i].label.to_lowercase().contains(&q)
+                    || self.items[i].detail.to_lowercase().contains(&q)
+            })
+            .collect()
     }
 
     /// The chosen destinations: ticked items, else the typed location, else
     /// the cursor item.
     pub fn chosen(&self) -> Vec<String> {
         let typed = self.input.text.trim();
-        let mut out: Vec<String> = self.checked.iter().filter_map(|&i| self.items.get(i)).map(|d| d.uri.clone()).collect();
-        let typed_is_location = typed.starts_with('/') || typed.starts_with('~') || typed.contains("://") || typed.starts_with("\\\\") || (typed.len() > 1 && typed.as_bytes()[1] == b':');
+        let mut out: Vec<String> = self
+            .checked
+            .iter()
+            .filter_map(|&i| self.items.get(i))
+            .map(|d| d.uri.clone())
+            .collect();
+        let typed_is_location = typed.starts_with('/')
+            || typed.starts_with('~')
+            || typed.contains("://")
+            || typed.starts_with("\\\\")
+            || (typed.len() > 1 && typed.as_bytes()[1] == b':');
         if typed_is_location {
             out.push(typed.to_string());
         }
         if out.is_empty() {
-            if let Some(d) = self.visible().get(self.cursor).and_then(|&i| self.items.get(i)) {
+            if let Some(d) = self
+                .visible()
+                .get(self.cursor)
+                .and_then(|&i| self.items.get(i))
+            {
                 out.push(d.uri.clone());
             }
         }
@@ -444,7 +591,15 @@ impl MultiRename {
     }
 
     pub fn plan(&self) -> Vec<crate::rename::Planned> {
-        let sources: Vec<crate::rename::Source> = self.items.iter().map(|i| crate::rename::Source { name: &i.name, is_dir: i.is_dir, modified: i.modified }).collect();
+        let sources: Vec<crate::rename::Source> = self
+            .items
+            .iter()
+            .map(|i| crate::rename::Source {
+                name: &i.name,
+                is_dir: i.is_dir,
+                modified: i.modified,
+            })
+            .collect();
         let others: Vec<&str> = self.others.iter().map(String::as_str).collect();
         crate::rename::plan(&self.spec(), &sources, &others)
     }
@@ -531,9 +686,15 @@ mod tests {
 
     #[test]
     fn uris_like_the_desktop_connect_dialog() {
-        assert_eq!(build_uri("sftp", "nas", "22", "pi", "home/pi"), "sftp://pi@nas/home/pi");
+        assert_eq!(
+            build_uri("sftp", "nas", "22", "pi", "home/pi"),
+            "sftp://pi@nas/home/pi"
+        );
         assert_eq!(build_uri("sftp", "nas", "2222", "", ""), "sftp://nas:2222/");
-        assert_eq!(build_uri("smb", "::1", "", "a b", "My Share"), "smb://a%20b@[::1]/My%20Share");
+        assert_eq!(
+            build_uri("smb", "::1", "", "a b", "My Share"),
+            "smb://a%20b@[::1]/My%20Share"
+        );
         let mut f = ConnectForm::new("smb", "");
         f.host.set("ssh://me@box.local:2200/srv/data");
         f.absorb_uri();
@@ -548,10 +709,27 @@ mod tests {
     #[test]
     fn dest_picker_choices() {
         let items = vec![
-            DestItem { label: "Other pane".into(), detail: String::new(), uri: "file:///a".into(), section: "Panes" },
-            DestItem { label: "Docs".into(), detail: String::new(), uri: "file:///docs".into(), section: "Favorites" },
+            DestItem {
+                label: "Other pane".into(),
+                detail: String::new(),
+                uri: "file:///a".into(),
+                section: "Panes",
+            },
+            DestItem {
+                label: "Docs".into(),
+                detail: String::new(),
+                uri: "file:///docs".into(),
+                section: "Favorites",
+            },
         ];
-        let mut p = DestPicker { moving: false, sources: vec![], items, checked: BTreeSet::new(), cursor: 1, input: TextInput::default() };
+        let mut p = DestPicker {
+            moving: false,
+            sources: vec![],
+            items,
+            checked: BTreeSet::new(),
+            cursor: 1,
+            input: TextInput::default(),
+        };
         assert_eq!(p.chosen(), vec!["file:///docs"]);
         p.checked.insert(0);
         p.checked.insert(1);
@@ -565,7 +743,14 @@ mod tests {
 
     #[test]
     fn menus_skip_headers() {
-        let mut m = Menu::new("t", vec![MenuItem::header("H"), MenuItem::new("a", "", MenuAction::None), MenuItem::new("b", "", MenuAction::None)]);
+        let mut m = Menu::new(
+            "t",
+            vec![
+                MenuItem::header("H"),
+                MenuItem::new("a", "", MenuAction::None),
+                MenuItem::new("b", "", MenuAction::None),
+            ],
+        );
         assert_eq!(m.cursor, 1);
         m.step(-1);
         assert_eq!(m.cursor, 1);

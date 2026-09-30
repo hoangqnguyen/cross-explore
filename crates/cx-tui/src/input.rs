@@ -17,11 +17,18 @@ impl TextInput {
     pub fn new(text: impl Into<String>) -> TextInput {
         let text = text.into();
         let cursor = text.chars().count();
-        TextInput { text, cursor, secret: false }
+        TextInput {
+            text,
+            cursor,
+            secret: false,
+        }
     }
 
     pub fn secret() -> TextInput {
-        TextInput { secret: true, ..Default::default() }
+        TextInput {
+            secret: true,
+            ..Default::default()
+        }
     }
 
     pub fn set(&mut self, text: impl Into<String>) {
@@ -34,7 +41,11 @@ impl TextInput {
     }
 
     fn byte_at(&self, char_idx: usize) -> usize {
-        self.text.char_indices().nth(char_idx).map(|(i, _)| i).unwrap_or(self.text.len())
+        self.text
+            .char_indices()
+            .nth(char_idx)
+            .map(|(i, _)| i)
+            .unwrap_or(self.text.len())
     }
 
     fn len(&self) -> usize {

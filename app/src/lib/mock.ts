@@ -651,6 +651,8 @@ const handlers: Record<string, (a: Args) => unknown> = {
     terms.delete(id);
   },
   term_cwd: () => null,
+  ssh_saved_user: () => null,
+  ssh_copy_id: () => "Copied the public key (preview).",
   ui_log: () => undefined,
 };
 

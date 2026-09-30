@@ -53,7 +53,13 @@ impl Session {
     /// Start `cmd`. `on_exit` runs on the pump thread once the child has
     /// exited (before the final `Exit` event), so the owner can drop the
     /// session and with it the PTY.
-    pub fn spawn(cmd: &ShellCommand, cols: u16, rows: u16, listener: Listener, on_exit: Box<dyn FnOnce() + Send>) -> Result<Session> {
+    pub fn spawn(
+        cmd: &ShellCommand,
+        cols: u16,
+        rows: u16,
+        listener: Listener,
+        on_exit: Box<dyn FnOnce() + Send>,
+    ) -> Result<Session> {
         if let Some(dir) = &cmd.cwd {
             // portable-pty silently falls back to $HOME for a bad cwd; a
             // terminal opened "here" must not quietly open elsewhere.
@@ -65,7 +71,11 @@ impl Session {
             .openpty(size(cols, rows))
             .map_err(|e| CxError::io("open pty", e))?;
 
-        let mut builder = if cmd.argv.is_empty() { CommandBuilder::new_default_prog() } else { CommandBuilder::from_argv(cmd.argv.iter().map(Into::into).collect()) };
+        let mut builder = if cmd.argv.is_empty() {
+            CommandBuilder::new_default_prog()
+        } else {
+            CommandBuilder::from_argv(cmd.argv.iter().map(Into::into).collect())
+        };
         if let Some(dir) = &cmd.cwd {
             builder.cwd(dir);
             // Shells trust $PWD when it names their cwd, so `pwd` and the
@@ -77,20 +87,33 @@ impl Session {
         builder.env("COLORTERM", "truecolor");
         // GUI apps on macOS start without a locale; shells then fall back to
         // ASCII and mangle every non-English file name.
-        if cfg!(unix) && ["LC_ALL", "LC_CTYPE", "LANG"].iter().all(|k| std::env::var_os(k).is_none()) {
+        if cfg!(unix)
+            && ["LC_ALL", "LC_CTYPE", "LANG"]
+                .iter()
+                .all(|k| std::env::var_os(k).is_none())
+        {
             builder.env("LANG", "en_US.UTF-8");
         }
 
         let program = cmd.argv.first().map(String::as_str).unwrap_or("shell");
-        let mut child = pty.slave.spawn_command(builder).map_err(|e| CxError::io(format!("start {program}"), e))?;
+        let mut child = pty
+            .slave
+            .spawn_command(builder)
+            .map_err(|e| CxError::io(format!("start {program}"), e))?;
         // The child has its own copies of the slave side; ours must go or the
         // reader never sees EOF.
         drop(pty.slave);
 
         let pid = child.process_id();
         let killer = child.clone_killer();
-        let mut reader = pty.master.try_clone_reader().map_err(|e| CxError::io("pty reader", e))?;
-        let writer = pty.master.take_writer().map_err(|e| CxError::io("pty writer", e))?;
+        let mut reader = pty
+            .master
+            .try_clone_reader()
+            .map_err(|e| CxError::io("pty reader", e))?;
+        let writer = pty
+            .master
+            .take_writer()
+            .map_err(|e| CxError::io("pty writer", e))?;
         let exited = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel::<Msg>();
 
@@ -150,12 +173,16 @@ impl Session {
 
     pub fn write(&self, data: &[u8]) -> Result<()> {
         let mut w = self.writer.lock().unwrap_or_else(|e| e.into_inner());
-        w.write_all(data).and_then(|_| w.flush()).map_err(|e| CxError::io("write to terminal", e))
+        w.write_all(data)
+            .and_then(|_| w.flush())
+            .map_err(|e| CxError::io("write to terminal", e))
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {
         let master = self.master.lock().unwrap_or_else(|e| e.into_inner());
-        master.resize(size(cols, rows)).map_err(|e| CxError::io("resize terminal", e))
+        master
+            .resize(size(cols, rows))
+            .map_err(|e| CxError::io("resize terminal", e))
     }
 
     pub fn cwd(&self) -> Option<PathBuf> {
@@ -179,17 +206,19 @@ impl Session {
         // SAFETY: plain syscall; a stale group just yields ESRCH.
         unsafe { libc::killpg(pgid, libc::SIGHUP) };
         let exited = self.exited.clone();
-        let _ = thread::Builder::new().name("cx-term-reap".into()).spawn(move || {
-            let until = Instant::now() + KILL_GRACE;
-            while Instant::now() < until {
-                if exited.load(Ordering::SeqCst) {
-                    return;
+        let _ = thread::Builder::new()
+            .name("cx-term-reap".into())
+            .spawn(move || {
+                let until = Instant::now() + KILL_GRACE;
+                while Instant::now() < until {
+                    if exited.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(25));
                 }
-                thread::sleep(Duration::from_millis(25));
-            }
-            // SAFETY: as above.
-            unsafe { libc::killpg(pgid, libc::SIGKILL) };
-        });
+                // SAFETY: as above.
+                unsafe { libc::killpg(pgid, libc::SIGKILL) };
+            });
     }
 
     /// Terminating the shell and then closing the pseudo console (when the
@@ -201,7 +230,12 @@ impl Session {
 }
 
 fn size(cols: u16, rows: u16) -> PtySize {
-    PtySize { rows: rows.max(1), cols: cols.max(1), pixel_width: 0, pixel_height: 0 }
+    PtySize {
+        rows: rows.max(1),
+        cols: cols.max(1),
+        pixel_width: 0,
+        pixel_height: 0,
+    }
 }
 
 fn pump(rx: mpsc::Receiver<Msg>, listener: Listener, on_exit: Box<dyn FnOnce() + Send>) {
@@ -265,5 +299,7 @@ fn pump(rx: mpsc::Receiver<Msg>, listener: Listener, on_exit: Box<dyn FnOnce() +
     if let Some(f) = on_exit.take() {
         f();
     }
-    listener(TermEvent::Exit { code: exit.flatten() });
+    listener(TermEvent::Exit {
+        code: exit.flatten(),
+    });
 }

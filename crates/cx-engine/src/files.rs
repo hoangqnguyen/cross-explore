@@ -3,7 +3,10 @@
 
 use crate::Engine;
 use cx_core::poll::poll_watch_from;
-use cx_core::{Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem, WatchGuard, WatchSink};
+use cx_core::{
+    Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem,
+    WatchGuard, WatchSink,
+};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,14 +18,26 @@ use tokio::sync::mpsc;
 const BASELINE_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Serialize, Clone)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ListEvent {
     /// Sent twice: before connecting (default capabilities, so the tab and
     /// breadcrumb are named even when the server is slow or fails) and once
     /// the provider is known.
-    Meta { info: LocationInfo, capabilities: Capabilities },
-    Batch { entries: Vec<Entry> },
-    Done { total: usize, elapsed_ms: f64 },
+    Meta {
+        info: LocationInfo,
+        capabilities: Capabilities,
+    },
+    Batch {
+        entries: Vec<Entry>,
+    },
+    Done {
+        total: usize,
+        elapsed_ms: f64,
+    },
 }
 
 /// The last full listing of each polled (non-live) folder: the baseline its
@@ -32,7 +47,10 @@ pub struct RecentListings(Mutex<HashMap<String, (Instant, Vec<Entry>)>>);
 
 impl RecentListings {
     pub fn put(&self, uri: String, entries: Vec<Entry>) {
-        self.0.lock().unwrap().insert(uri, (Instant::now(), entries));
+        self.0
+            .lock()
+            .unwrap()
+            .insert(uri, (Instant::now(), entries));
     }
 
     pub fn take(&self, uri: &str) -> Option<Vec<Entry>> {
@@ -93,13 +111,23 @@ impl Engine {
     /// when nobody is listening any more, which cancels the listing.
     /// Returns the number of entries. Polled folders keep the listing as the
     /// baseline for a following [`Engine::watch_dir`].
-    pub async fn list_dir(&self, uri: &str, mut on_event: impl FnMut(ListEvent) -> bool + Send) -> Result<usize> {
+    pub async fn list_dir(
+        &self,
+        uri: &str,
+        mut on_event: impl FnMut(ListEvent) -> bool + Send,
+    ) -> Result<usize> {
         let started = Instant::now();
         let loc = Location::parse(uri)?;
-        on_event(ListEvent::Meta { info: loc.info(), capabilities: Capabilities::default() });
+        on_event(ListEvent::Meta {
+            info: loc.info(),
+            capabilities: Capabilities::default(),
+        });
         let provider = self.vfs.provider(&loc).await?;
         let caps = provider.capabilities();
-        on_event(ListEvent::Meta { info: loc.info(), capabilities: caps });
+        on_event(ListEvent::Meta {
+            info: loc.info(),
+            capabilities: caps,
+        });
 
         let (tx, mut rx) = mpsc::channel(8);
         let key = loc.uri();
@@ -118,7 +146,10 @@ impl Engine {
         if let Some(k) = kept {
             self.recent.put(key, k);
         }
-        on_event(ListEvent::Done { total, elapsed_ms: started.elapsed().as_secs_f64() * 1e3 });
+        on_event(ListEvent::Done {
+            total,
+            elapsed_ms: started.elapsed().as_secs_f64() * 1e3,
+        });
         Ok(total)
     }
 
@@ -133,14 +164,19 @@ impl Engine {
         // paths against the folder it was given: watch the resolved folder.
         // Changes carry names only, so the caller never sees the difference.
         let watch_loc = match &loc {
-            Location::Local(p) => std::fs::canonicalize(p).map(Location::Local).unwrap_or_else(|_| loc.clone()),
+            Location::Local(p) => std::fs::canonicalize(p)
+                .map(Location::Local)
+                .unwrap_or_else(|_| loc.clone()),
             _ => loc.clone(),
         };
         let (guard, mode) = match provider.watch(&watch_loc, sink.clone()).await? {
             Some(g) => (g, WatchMode::Live),
             None => {
                 let baseline = self.recent.take(&loc.uri());
-                (poll_watch_from(provider, loc, sink, self.config.poll, baseline), WatchMode::Polling)
+                (
+                    poll_watch_from(provider, loc, sink, self.config.poll, baseline),
+                    WatchMode::Polling,
+                )
             }
         };
         let id = self.watches.next.fetch_add(1, Ordering::Relaxed);
@@ -149,7 +185,11 @@ impl Engine {
     }
 
     /// Like [`Engine::watch_dir`] with a closure sink.
-    pub async fn watch_dir_with(&self, uri: &str, sink: impl Fn(Vec<Change>) + Send + Sync + 'static) -> Result<WatchInfo> {
+    pub async fn watch_dir_with(
+        &self,
+        uri: &str,
+        sink: impl Fn(Vec<Change>) + Send + Sync + 'static,
+    ) -> Result<WatchInfo> {
         self.watch_dir(uri, Arc::new(sink)).await
     }
 
@@ -187,14 +227,20 @@ impl Engine {
 
     /// Total size of a folder (recursively, through any provider), reported
     /// every 100 ms while counting. `on_progress` returning false cancels.
-    pub async fn dir_size(&self, uri: &str, mut on_progress: impl FnMut(SizeProgress) -> bool + Send) -> Result<u64> {
+    pub async fn dir_size(
+        &self,
+        uri: &str,
+        mut on_progress: impl FnMut(SizeProgress) -> bool + Send,
+    ) -> Result<u64> {
         let root = Location::parse(uri)?;
         let provider = self.vfs.provider(&root).await?;
         let mut p = SizeProgress::default();
         let mut queue = VecDeque::from([root]);
         let mut last = Instant::now();
         while let Some(dir) = queue.pop_front() {
-            let Ok(entries) = cx_core::provider::list_all(provider.as_ref(), &dir).await else { continue };
+            let Ok(entries) = cx_core::provider::list_all(provider.as_ref(), &dir).await else {
+                continue;
+            };
             for e in entries {
                 if e.kind == cx_core::EntryKind::Dir {
                     p.dirs += 1;
@@ -220,7 +266,12 @@ impl Engine {
     pub async fn preview_text(&self, uri: &str, max_bytes: usize) -> Result<TextPreview> {
         let loc = Location::parse(uri)?;
         let t = cx_thumbs::preview_text(&self.vfs, &loc, max_bytes).await?;
-        Ok(TextPreview { text: t.text, truncated: t.truncated, encoding: t.encoding.to_string(), language: t.language_guess.map(|l| l.to_string()) })
+        Ok(TextPreview {
+            text: t.text,
+            truncated: t.truncated,
+            encoding: t.encoding.to_string(),
+            language: t.language_guess.map(|l| l.to_string()),
+        })
     }
 
     /// Image dimensions and EXIF basics.
@@ -238,11 +289,22 @@ impl Engine {
     pub async fn tags_find(&self, tag: &str) -> Vec<crate::tags::TaggedHit> {
         let mut out = Vec::new();
         for uri in self.tags.find(tag) {
-            let Ok(loc) = Location::parse(&uri) else { continue };
-            let Ok(provider) = self.vfs.provider(&loc).await else { continue };
-            let Ok(entry) = provider.stat(&loc).await else { continue };
+            let Ok(loc) = Location::parse(&uri) else {
+                continue;
+            };
+            let Ok(provider) = self.vfs.provider(&loc).await else {
+                continue;
+            };
+            let Ok(entry) = provider.stat(&loc).await else {
+                continue;
+            };
             let parent = loc.parent().map(|p| p.uri()).unwrap_or_default();
-            out.push(crate::tags::TaggedHit { rel_path: entry.name.clone(), uri, parent, entry });
+            out.push(crate::tags::TaggedHit {
+                rel_path: entry.name.clone(),
+                uri,
+                parent,
+                entry,
+            });
         }
         out
     }

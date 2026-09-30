@@ -38,11 +38,28 @@ impl Item {
                 _ => lname.len(),
             }
         };
-        Item { entry, lname, ext_at, uri: None, parent: None, detail: None }
+        Item {
+            entry,
+            lname,
+            ext_at,
+            uri: None,
+            parent: None,
+            detail: None,
+        }
     }
 
-    pub fn located(entry: Entry, uri: String, parent: Option<String>, detail: Option<String>) -> Item {
-        Item { uri: Some(uri), parent, detail, ..Item::new(entry) }
+    pub fn located(
+        entry: Entry,
+        uri: String,
+        parent: Option<String>,
+        detail: Option<String>,
+    ) -> Item {
+        Item {
+            uri: Some(uri),
+            parent,
+            detail,
+            ..Item::new(entry)
+        }
     }
 
     /// Lower-cased extension, "" for folders.
@@ -140,7 +157,13 @@ impl Folder {
     }
 
     /// A finished, static listing (home page, search results, tags).
-    pub fn with_items(token: u64, uri: impl Into<String>, sort: SortSpec, items: Vec<Item>, keep_order: bool) -> Folder {
+    pub fn with_items(
+        token: u64,
+        uri: impl Into<String>,
+        sort: SortSpec,
+        items: Vec<Item>,
+        keep_order: bool,
+    ) -> Folder {
         let mut f = Folder::new(token, uri, sort);
         f.keep_order = keep_order;
         f.status = Status::Ready;
@@ -151,7 +174,10 @@ impl Folder {
     /// The canonical URI (after the provider normalised it), for building
     /// child URIs.
     pub fn dir_uri(&self) -> &str {
-        self.info.as_ref().map(|i| i.uri.as_str()).unwrap_or(&self.uri)
+        self.info
+            .as_ref()
+            .map(|i| i.uri.as_str())
+            .unwrap_or(&self.uri)
     }
 
     /// A listing is running (first load or reload).
@@ -265,7 +291,11 @@ impl Folder {
             self.sort_items(&mut new);
             let before: HashSet<&str> = self.items.iter().map(|i| i.entry.name.as_str()).collect();
             let now = Instant::now();
-            let fresh: Vec<String> = new.iter().filter(|i| !before.contains(i.entry.name.as_str())).map(|i| i.entry.name.clone()).collect();
+            let fresh: Vec<String> = new
+                .iter()
+                .filter(|i| !before.contains(i.entry.name.as_str()))
+                .map(|i| i.entry.name.clone())
+                .collect();
             added = fresh.len();
             // Only a reload of a folder that was shown fine gets here; a
             // flood of new names (a big copy landing) isn't worth flashing.
@@ -322,7 +352,8 @@ impl Folder {
             self.items.len()
         } else {
             let spec = self.sort;
-            self.items.partition_point(|x| compare(spec, x, &item).is_le())
+            self.items
+                .partition_point(|x| compare(spec, x, &item).is_le())
         };
         self.items.insert(at, item);
         self.bump();
@@ -358,7 +389,8 @@ impl Folder {
                 self.queued.clear();
                 return true;
             }
-            self.queued.extend(changes.into_iter().map(|c| (c, mark_fresh)));
+            self.queued
+                .extend(changes.into_iter().map(|c| (c, mark_fresh)));
             return false;
         }
         let mut reset = false;
@@ -434,7 +466,11 @@ impl Folder {
     }
 
     pub fn is_fresh(&self, name: &str) -> bool {
-        !self.fresh.is_empty() && self.fresh.get(name).is_some_and(|t| t.elapsed() < FRESH_FOR)
+        !self.fresh.is_empty()
+            && self
+                .fresh
+                .get(name)
+                .is_some_and(|t| t.elapsed() < FRESH_FOR)
     }
 }
 
@@ -445,11 +481,31 @@ pub(crate) mod tests {
     use cx_core::EntryKind;
 
     pub fn file(name: &str, size: u64, modified: i64) -> Entry {
-        Entry { name: name.into(), kind: EntryKind::File, is_dir: false, size, modified: Some(modified), created: None, hidden: name.starts_with('.'), readonly: false, executable: false }
+        Entry {
+            name: name.into(),
+            kind: EntryKind::File,
+            is_dir: false,
+            size,
+            modified: Some(modified),
+            created: None,
+            hidden: name.starts_with('.'),
+            readonly: false,
+            executable: false,
+        }
     }
 
     pub fn dir(name: &str) -> Entry {
-        Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: Some(0), created: None, hidden: name.starts_with('.'), readonly: false, executable: false }
+        Entry {
+            name: name.into(),
+            kind: EntryKind::Dir,
+            is_dir: true,
+            size: 0,
+            modified: Some(0),
+            created: None,
+            hidden: name.starts_with('.'),
+            readonly: false,
+            executable: false,
+        }
     }
 
     fn names(f: &Folder) -> Vec<&str> {
@@ -465,14 +521,28 @@ pub(crate) mod tests {
         assert_eq!(f.items.len(), 5, "merged on settle");
         f.finish_load(1.0);
         assert_eq!(names(&f), vec!["adir", "zdir", "a", "b2", "b10"]);
-        f.set_sort(SortSpec { key: SortKey::Size, desc: true });
+        f.set_sort(SortSpec {
+            key: SortKey::Size,
+            desc: true,
+        });
         assert_eq!(names(&f)[..2], ["adir", "zdir"]);
     }
 
     #[test]
     fn changes_patch_in_place_and_mark_fresh() {
-        let mut f = Folder::with_items(1, "file:///x", SortSpec::default(), vec![Item::new(file("a", 1, 0)), Item::new(file("c", 1, 0))], false);
-        let reset = f.apply(vec![Change::Upsert { entry: file("b", 1, 0) }, Change::Remove { name: "a".into() }]);
+        let mut f = Folder::with_items(
+            1,
+            "file:///x",
+            SortSpec::default(),
+            vec![Item::new(file("a", 1, 0)), Item::new(file("c", 1, 0))],
+            false,
+        );
+        let reset = f.apply(vec![
+            Change::Upsert {
+                entry: file("b", 1, 0),
+            },
+            Change::Remove { name: "a".into() },
+        ]);
         assert!(!reset);
         assert_eq!(names(&f), vec!["b", "c"]);
         assert!(f.is_fresh("b"));
@@ -482,7 +552,13 @@ pub(crate) mod tests {
 
     #[test]
     fn reload_keeps_rows_until_done_and_highlights_new_ones() {
-        let mut f = Folder::with_items(1, "file:///x", SortSpec::default(), vec![Item::new(file("a", 1, 0))], false);
+        let mut f = Folder::with_items(
+            1,
+            "file:///x",
+            SortSpec::default(),
+            vec![Item::new(file("a", 1, 0))],
+            false,
+        );
         f.begin_load(true);
         f.add_batch(vec![file("a", 1, 0), file("new", 1, 0)]);
         assert_eq!(names(&f), vec!["a"], "old rows stay while reloading");

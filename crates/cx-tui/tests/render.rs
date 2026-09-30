@@ -17,15 +17,22 @@ async fn sample(h: &mut Harness, name: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(dir.join("Photos")).unwrap();
     write(&dir.join("Documents/report.pdf"), &[0u8; 120_000]);
     write(&dir.join("notes.md"), b"# Notes\n\nSome `code` here.\n");
-    write(&dir.join("main.rs"), b"fn main() {\n    println!(\"hi\");\n}\n");
+    write(
+        &dir.join("main.rs"),
+        b"fn main() {\n    println!(\"hi\");\n}\n",
+    );
     write(&dir.join("archive.zip"), b"PK");
     write(&dir.join("photo.jpg"), &[0u8; 2_500_000]);
     for d in ["Documents", "Photos"] {
         let f = std::fs::File::open(dir.join(d)).unwrap();
-        let _ = f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_614_859_200));
+        let _ =
+            f.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_614_859_200));
     }
     h.app.start(&[uri(&dir)]);
-    h.until("listing", |a| a.tab().folder.is_ready() && a.tab().rows().len() == 6).await;
+    h.until("listing", |a| {
+        a.tab().folder.is_ready() && a.tab().rows().len() == 6
+    })
+    .await;
     h.wait_live().await;
     dir
 }
@@ -70,12 +77,18 @@ async fn outline_and_brief() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn dual_pane_commander() {
-    let settings = Settings { keymap: Keymap::Commander, ..Default::default() };
+    let settings = Settings {
+        keymap: Keymap::Commander,
+        ..Default::default()
+    };
     let mut h = Harness::with_settings(settings).await;
     let dir = sample(&mut h, "dual").await;
     h.app.run(Action::ToggleDual);
     h.app.navigate_in(1, &uri(&dir.join("Documents")), None);
-    h.until("right pane", |a| a.panes[1].tab().folder.is_ready() && a.panes[1].tab().rows().len() == 1).await;
+    h.until("right pane", |a| {
+        a.panes[1].tab().folder.is_ready() && a.panes[1].tab().rows().len() == 1
+    })
+    .await;
     h.app.run(Action::NewTab);
     h.wait_live().await;
     let s = h.screen(120, 14);
@@ -93,7 +106,10 @@ async fn dialogs() {
     // Destination picker.
     h.select("notes.md");
     h.app.places = None; // machine-specific drives stay out of snapshots
-    h.app.settings.bookmarks.push(cx_tui::settings::Bookmark { name: "Docs".into(), uri: uri(&dir.join("Documents")) });
+    h.app.settings.bookmarks.push(cx_tui::settings::Bookmark {
+        name: "Docs".into(),
+        uri: uri(&dir.join("Documents")),
+    });
     h.app.run(Action::CopyTo);
     let s = h.screen(100, 24);
     println!("{s}");
@@ -118,10 +134,26 @@ async fn dialogs() {
     h.app.dialogs.clear();
 
     // Conflict.
-    let e = |name: &str, size, ms| cx_core::Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size, modified: Some(ms), created: None, hidden: false, readonly: false, executable: false };
+    let e = |name: &str, size, ms| cx_core::Entry {
+        name: name.into(),
+        kind: cx_core::EntryKind::File,
+        is_dir: false,
+        size,
+        modified: Some(ms),
+        created: None,
+        hidden: false,
+        readonly: false,
+        executable: false,
+    };
     h.app.dialogs.push(Dialog::Conflict(ConflictDlg {
         job: 1,
-        conflict: cx_engine::JobConflict { id: 1, source: e("notes.md", 2048, 1_700_000_000_000), source_uri: uri(&dir.join("notes.md")), dest: e("notes.md", 1024, 1_600_000_000_000), dest_uri: uri(&dir.join("Documents/notes.md")) },
+        conflict: cx_engine::JobConflict {
+            id: 1,
+            source: e("notes.md", 2048, 1_700_000_000_000),
+            source_uri: uri(&dir.join("notes.md")),
+            dest: e("notes.md", 1024, 1_600_000_000_000),
+            dest_uri: uri(&dir.join("Documents/notes.md")),
+        },
         apply_all: true,
         cursor: 2,
     }));
@@ -139,9 +171,17 @@ async fn dialogs() {
     println!("{s}");
     assert!(s.contains("Keyboard shortcuts"));
     assert!(s.contains("Alt+F1"));
-    let all: Vec<String> = cx_tui::ui::dialogs::help_lines(&h.app, &cx_tui::ui::theme::Theme::dark(), 100).iter().map(|l| l.to_string()).collect();
-    assert!(all.iter().any(|l| l.contains("Copy to…") && l.contains("Alt+C")));
-    assert!(all.iter().any(|l| l.contains("Command palette") && l.contains("Ctrl+P")));
+    let all: Vec<String> =
+        cx_tui::ui::dialogs::help_lines(&h.app, &cx_tui::ui::theme::Theme::dark(), 100)
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
+    assert!(all
+        .iter()
+        .any(|l| l.contains("Copy to…") && l.contains("Alt+C")));
+    assert!(all
+        .iter()
+        .any(|l| l.contains("Command palette") && l.contains("Ctrl+P")));
     snapshot("help", &s);
     h.app.dialogs.clear();
 
@@ -185,7 +225,12 @@ async fn transfers_panel_and_preview() {
     h.app.run(Action::Transfers);
     h.select("main.rs");
     h.app.run(Action::TogglePreview);
-    h.until("preview", |a| a.preview.as_ref().is_some_and(|p| matches!(p.content, cx_tui::preview::Content::Text { .. }))).await;
+    h.until("preview", |a| {
+        a.preview
+            .as_ref()
+            .is_some_and(|p| matches!(p.content, cx_tui::preview::Content::Text { .. }))
+    })
+    .await;
     // Birth times depend on the file system; keep them out of the snapshot.
     if let Some(p) = h.app.preview.as_mut() {
         p.entry.created = None;
@@ -204,14 +249,44 @@ async fn transfers_panel_and_preview() {
 /// never panic or hang (long names in narrow panes once looped forever).
 #[tokio::test(flavor = "multi_thread")]
 async fn renders_at_any_size() {
-    let settings = Settings { dual: true, preview_pane: true, ..Default::default() };
+    let settings = Settings {
+        dual: true,
+        preview_pane: true,
+        ..Default::default()
+    };
     let mut h = Harness::with_settings(settings).await;
     let dir = sample(&mut h, "a-rather-long-folder-name-for-narrow-panes").await;
-    write(&dir.join("an extremely long file name that will never fit in a narrow terminal pane.txt"), b"x");
+    write(
+        &dir.join("an extremely long file name that will never fit in a narrow terminal pane.txt"),
+        b"x",
+    );
     h.app.transfers_open = true;
     h.typ("n");
-    let dialogs: Vec<Action> = vec![Action::Help, Action::Connect, Action::CopyTo, Action::MultiRename, Action::Search, Action::Settings, Action::Palette, Action::PlacesLeft, Action::SortMenu, Action::Tags, Action::Pair, Action::PeerSettings];
-    let sizes = [(1u16, 1u16), (3, 2), (10, 5), (20, 8), (33, 12), (47, 15), (80, 24), (132, 43), (250, 80)];
+    let dialogs: Vec<Action> = vec![
+        Action::Help,
+        Action::Connect,
+        Action::CopyTo,
+        Action::MultiRename,
+        Action::Search,
+        Action::Settings,
+        Action::Palette,
+        Action::PlacesLeft,
+        Action::SortMenu,
+        Action::Tags,
+        Action::Pair,
+        Action::PeerSettings,
+    ];
+    let sizes = [
+        (1u16, 1u16),
+        (3, 2),
+        (10, 5),
+        (20, 8),
+        (33, 12),
+        (47, 15),
+        (80, 24),
+        (132, 43),
+        (250, 80),
+    ];
     let mut screens = 0;
     for step in 0..=dialogs.len() {
         h.app.dialogs.clear();

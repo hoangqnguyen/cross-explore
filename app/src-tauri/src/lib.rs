@@ -88,6 +88,8 @@ pub fn run() {
             cmd::term::term_resize,
             cmd::term::term_close,
             cmd::term::term_cwd,
+            cmd::term::ssh_saved_user,
+            cmd::term::ssh_copy_id,
             places::places,
             cmd::selftest::selftest_config,
             cmd::selftest::selftest_touch,
@@ -151,8 +153,15 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
     let open_cache = cache_dir.join("open");
     std::thread::spawn(move || {
         let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 3600);
-        for e in std::fs::read_dir(&open_cache).into_iter().flatten().flatten() {
-            if e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < old) {
+        for e in std::fs::read_dir(&open_cache)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if e.metadata()
+                .and_then(|m| m.modified())
+                .is_ok_and(|t| t < old)
+            {
                 let _ = std::fs::remove_dir_all(e.path());
             }
         }
@@ -165,14 +174,18 @@ fn build_state(app: &tauri::App) -> Result<Arc<state::App>, Box<dyn std::error::
         let vfs = vfs.clone();
         let dir = data_dir.join("transfers");
         // The manager spawns onto the current runtime, so build it inside one.
-        tauri::async_runtime::block_on(async move { cx_transfer::TransferManager::new(vfs, dir, move |e| jobs.on_transfer(e)) })
+        tauri::async_runtime::block_on(async move {
+            cx_transfer::TransferManager::new(vfs, dir, move |e| jobs.on_transfer(e))
+        })
     };
     // Jobs interrupted by a quit come back paused, ready to resume.
     for job in transfers.restore_pending() {
         jobs.on_transfer(cx_transfer::TransferEvent::JobAdded { job });
     }
     let thumbs = cx_thumbs::Thumbnailer::new(cache_dir.join("thumbs"), 512 << 20)?;
-    Ok(Arc::new(state::App::new(vfs, events, jobs, transfers, thumbs, data_dir, cache_dir)))
+    Ok(Arc::new(state::App::new(
+        vfs, events, jobs, transfers, thumbs, data_dir, cache_dir,
+    )))
 }
 
 /// Translucent materials where the OS has them: vibrancy on macOS (the
@@ -183,7 +196,12 @@ fn style_window(window: &tauri::WebviewWindow) {
     {
         places::set_translucent(true);
         use tauri::window::{Effect, EffectState, EffectsBuilder};
-        let _ = window.set_effects(EffectsBuilder::new().effect(Effect::Sidebar).state(EffectState::FollowsWindowActiveState).build());
+        let _ = window.set_effects(
+            EffectsBuilder::new()
+                .effect(Effect::Sidebar)
+                .state(EffectState::FollowsWindowActiveState)
+                .build(),
+        );
     }
     #[cfg(windows)]
     {
@@ -191,8 +209,14 @@ fn style_window(window: &tauri::WebviewWindow) {
         let _ = window.set_decorations(false);
         let _ = window.set_shadow(true);
         // Mica needs Windows 11 (build 22000+); older systems get a solid window.
-        let build: u32 = sysinfo::System::kernel_version().and_then(|v| v.parse().ok()).unwrap_or(0);
-        if build >= 22000 && window.set_effects(EffectsBuilder::new().effect(Effect::Mica).build()).is_ok() {
+        let build: u32 = sysinfo::System::kernel_version()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        if build >= 22000
+            && window
+                .set_effects(EffectsBuilder::new().effect(Effect::Mica).build())
+                .is_ok()
+        {
             places::set_translucent(true);
         }
     }

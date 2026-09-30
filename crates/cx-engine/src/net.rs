@@ -42,11 +42,20 @@ fn register_cloud(vfs: &Vfs, data_dir: &Path) {
         client_secret: Option<String>,
     }
     let saved: std::collections::HashMap<String, Saved> =
-        std::fs::read(data_dir.join("cloud.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        std::fs::read(data_dir.join("cloud.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
     for service in cx_cloud::Service::ALL {
-        let Some(scheme) = Scheme::parse(service.scheme()) else { continue };
-        let c = cx_cloud::CloudConnector::new(service, scheme).with_store(vfs.credentials().clone());
-        if let Some(s) = saved.get(service.scheme()).filter(|s| !s.client_id.trim().is_empty()) {
+        let Some(scheme) = Scheme::parse(service.scheme()) else {
+            continue;
+        };
+        let c =
+            cx_cloud::CloudConnector::new(service, scheme).with_store(vfs.credentials().clone());
+        if let Some(s) = saved
+            .get(service.scheme())
+            .filter(|s| !s.client_id.trim().is_empty())
+        {
             let mut cfg = cx_cloud::ClientConfig::new(service, s.client_id.trim());
             if let Some(secret) = s.client_secret.as_deref().filter(|x| !x.trim().is_empty()) {
                 cfg = cfg.with_secret(secret.trim());
@@ -60,17 +69,26 @@ fn register_cloud(vfs: &Vfs, data_dir: &Path) {
 /// Record a server key as trusted (what the host-key prompt's "Trust" does).
 pub fn trust_host_key(data_dir: &Path, uri: &str, key_type: &str, fingerprint: &str) -> Result<()> {
     let loc = Location::parse(uri)?;
-    let ep = loc.endpoint().ok_or_else(|| CxError::InvalidLocation(uri.into()))?;
+    let ep = loc
+        .endpoint()
+        .ok_or_else(|| CxError::InvalidLocation(uri.into()))?;
     let port = ep.port_or_default();
     match ep.scheme {
-        Scheme::Sftp => cx_sftp::trust_host_key(&ssh_store(data_dir), &ep.host, port, key_type, fingerprint),
-        Scheme::Ftp | Scheme::Ftps => cx_ftp::trust_host_key(&tls_store(data_dir), &ep.host, port, key_type, fingerprint),
+        Scheme::Sftp => {
+            cx_sftp::trust_host_key(&ssh_store(data_dir), &ep.host, port, key_type, fingerprint)
+        }
+        Scheme::Ftp | Scheme::Ftps => {
+            cx_ftp::trust_host_key(&tls_store(data_dir), &ep.host, port, key_type, fingerprint)
+        }
         other => Err(CxError::Unsupported(format!("trusting {other} keys"))),
     }
 }
 
 pub fn endpoint_of(uri: &str) -> Result<Endpoint> {
-    Location::parse(uri)?.endpoint().cloned().ok_or_else(|| CxError::InvalidLocation(format!("{uri} is not a server")))
+    Location::parse(uri)?
+        .endpoint()
+        .cloned()
+        .ok_or_else(|| CxError::InvalidLocation(format!("{uri} is not a server")))
 }
 
 impl Engine {
@@ -79,7 +97,12 @@ impl Engine {
     /// remembered — in the keychain when `remember` is set, otherwise for
     /// this session. Fails with `AuthRequired` / `HostKeyUnknown` for the
     /// front end to prompt and retry.
-    pub async fn connect_server(&self, uri: &str, credentials: Option<Credentials>, remember: bool) -> Result<()> {
+    pub async fn connect_server(
+        &self,
+        uri: &str,
+        credentials: Option<Credentials>,
+        remember: bool,
+    ) -> Result<()> {
         let mut ep = endpoint_of(uri)?;
         if let Some(c) = &credentials {
             // Sign-in dialogs may supply a user the URI didn't have.
@@ -111,7 +134,12 @@ impl Engine {
 
     /// Open server connections as `scheme://[user@]host[:port]/` (peers excluded).
     pub fn connections(&self) -> Vec<String> {
-        self.vfs.connected().into_iter().filter(|e| e.scheme != Scheme::Peer).map(|e| format!("{}/", e.uri())).collect()
+        self.vfs
+            .connected()
+            .into_iter()
+            .filter(|e| e.scheme != Scheme::Peer)
+            .map(|e| format!("{}/", e.uri()))
+            .collect()
     }
 
     /// Trust the key the server presented, and forget the remembered

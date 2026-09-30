@@ -45,7 +45,10 @@ pub struct Places {
 
 fn place(path: PathBuf, icon: &'static str) -> Option<Place> {
     path.is_dir().then(|| Place {
-        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        name: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         uri: Location::local(&path).uri(),
         icon,
     })
@@ -61,7 +64,10 @@ fn user_visible_mount(mount: &Path) -> bool {
     } else if cfg!(windows) {
         true
     } else {
-        mount == Path::new("/") || ["/media", "/run/media", "/mnt"].iter().any(|p| mount.starts_with(p))
+        mount == Path::new("/")
+            || ["/media", "/run/media", "/mnt"]
+                .iter()
+                .any(|p| mount.starts_with(p))
     }
 }
 
@@ -71,13 +77,20 @@ fn volume_name(mount: &Path, label: &str) -> String {
     }
     if cfg!(windows) {
         let drive = mount.to_string_lossy().trim_end_matches('\\').to_string();
-        let label = if label.is_empty() { "Local Disk" } else { label };
+        let label = if label.is_empty() {
+            "Local Disk"
+        } else {
+            label
+        };
         return format!("{label} ({drive})");
     }
     if mount == Path::new("/") {
         return "File System".into();
     }
-    mount.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| label.to_string())
+    mount
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| label.to_string())
 }
 
 /// Home, the standard user folders that exist, and mounted volumes. Reads
@@ -86,8 +99,22 @@ pub fn places() -> Places {
     let home_dir = cx_core::location::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let phone = cfg!(any(target_os = "ios", target_os = "android"));
     let favorites = [
-        (if phone { Some(home_dir.join("Documents")) } else { None }, "documents"),
-        (if phone { Some(home_dir.join("Downloads")) } else { None }, "downloads"),
+        (
+            if phone {
+                Some(home_dir.join("Documents"))
+            } else {
+                None
+            },
+            "documents",
+        ),
+        (
+            if phone {
+                Some(home_dir.join("Downloads"))
+            } else {
+                None
+            },
+            "downloads",
+        ),
         (dirs::desktop_dir(), "desktop"),
         (dirs::document_dir(), "documents"),
         (dirs::download_dir(), "downloads"),
@@ -108,7 +135,11 @@ pub fn places() -> Places {
     let mut volumes: Vec<Volume> = Vec::new();
     for d in disks.list() {
         let mount = d.mount_point();
-        if !user_visible_mount(mount) || volumes.iter().any(|v| v.uri == Location::local(mount).uri()) {
+        if !user_visible_mount(mount)
+            || volumes
+                .iter()
+                .any(|v| v.uri == Location::local(mount).uri())
+        {
             continue;
         }
         volumes.push(Volume {
@@ -124,7 +155,10 @@ pub fn places() -> Places {
         platform: std::env::consts::OS,
         translucent: TRANSLUCENT.load(Ordering::Relaxed),
         home: Place {
-            name: home_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Home".into()),
+            name: home_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Home".into()),
             uri: Location::local(&home_dir).uri(),
             icon: "home",
         },

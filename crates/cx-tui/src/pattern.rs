@@ -7,7 +7,14 @@ pub struct Wildcards(Vec<Vec<char>>);
 
 impl Wildcards {
     pub fn new(pattern: &str) -> Wildcards {
-        Wildcards(pattern.split([';', ',']).map(str::trim).filter(|p| !p.is_empty()).map(|p| p.to_lowercase().chars().collect()).collect())
+        Wildcards(
+            pattern
+                .split([';', ','])
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .map(|p| p.to_lowercase().chars().collect())
+                .collect(),
+        )
     }
 
     pub fn is_empty(&self) -> bool {

@@ -44,7 +44,9 @@ pub fn plural(n: usize, one: &str, many: &str) -> String {
 /// "Mar 4 10:00" this year, "2021-03-04" before. Always 16 chars or fewer.
 pub fn date(ms: Option<i64>) -> String {
     let Some(ms) = ms else { return String::new() };
-    let Some(t) = Local.timestamp_millis_opt(ms).single() else { return String::new() };
+    let Some(t) = Local.timestamp_millis_opt(ms).single() else {
+        return String::new();
+    };
     let now = Local::now();
     let days = (now.date_naive() - t.date_naive()).num_days();
     match days {
@@ -57,7 +59,9 @@ pub fn date(ms: Option<i64>) -> String {
 
 /// Full timestamp for info panes.
 pub fn date_long(ms: Option<i64>) -> String {
-    ms.and_then(|ms| Local.timestamp_millis_opt(ms).single()).map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_else(|| "—".into())
+    ms.and_then(|ms| Local.timestamp_millis_opt(ms).single())
+        .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|| "—".into())
 }
 
 pub fn duration(secs: f64) -> String {
@@ -104,11 +108,18 @@ pub fn category(e: &Entry) -> Category {
         return Category::Archive;
     }
     match x {
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff" | "heic" | "heif" | "svg" | "ico" | "raw" | "cr2" | "nef" | "dng" | "avif" | "psd" => Category::Image,
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff" | "heic" | "heif"
+        | "svg" | "ico" | "raw" | "cr2" | "nef" | "dng" | "avif" | "psd" => Category::Image,
         "mp3" | "wav" | "flac" | "aac" | "m4a" | "ogg" | "opus" | "aiff" | "wma" => Category::Audio,
-        "mp4" | "mkv" | "mov" | "avi" | "webm" | "m4v" | "wmv" | "flv" | "mpg" | "mpeg" => Category::Video,
-        "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" | "rtf" | "txt" | "md" | "markdown" | "pages" | "numbers" | "key" | "epub" | "csv" => Category::Document,
-        "exe" | "msi" | "app" | "dmg" | "pkg" | "deb" | "rpm" | "appimage" | "bat" | "cmd" | "com" => Category::Executable,
+        "mp4" | "mkv" | "mov" | "avi" | "webm" | "m4v" | "wmv" | "flv" | "mpg" | "mpeg" => {
+            Category::Video
+        }
+        "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp"
+        | "rtf" | "txt" | "md" | "markdown" | "pages" | "numbers" | "key" | "epub" | "csv" => {
+            Category::Document
+        }
+        "exe" | "msi" | "app" | "dmg" | "pkg" | "deb" | "rpm" | "appimage" | "bat" | "cmd"
+        | "com" => Category::Executable,
         _ if cx_thumbs::language_for_name(&e.name).is_some() => Category::Code,
         _ if e.kind == cx_core::EntryKind::Symlink => Category::Symlink,
         _ => Category::Other,
@@ -118,11 +129,19 @@ pub fn category(e: &Entry) -> Category {
 /// "Folder", "PDF document", "PNG image", "Rust source", …
 pub fn type_label(e: &Entry) -> String {
     if e.is_dir {
-        return if e.kind == cx_core::EntryKind::Symlink { "Folder alias".into() } else { "Folder".into() };
+        return if e.kind == cx_core::EntryKind::Symlink {
+            "Folder alias".into()
+        } else {
+            "Folder".into()
+        };
     }
     let x = ext(&e.name);
     if x.is_empty() {
-        return if e.kind == cx_core::EntryKind::Symlink { "Alias".into() } else { "File".into() };
+        return if e.kind == cx_core::EntryKind::Symlink {
+            "Alias".into()
+        } else {
+            "File".into()
+        };
     }
     let up = x.to_ascii_uppercase();
     match category(e) {

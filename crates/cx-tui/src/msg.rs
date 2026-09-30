@@ -13,11 +13,28 @@ pub type Update = Box<dyn FnOnce(&mut App) + Send>;
 // would add an allocation per batch for nothing.
 #[allow(clippy::large_enum_variant)]
 pub enum Msg {
-    List { token: u64, seq: u64, event: ListEvent },
-    ListFailed { token: u64, seq: u64, error: CxError },
-    Changes { token: u64, changes: Vec<Change> },
-    Watching { token: u64, result: Result<WatchInfo, CxError> },
-    Search { token: u64, event: SearchEvent },
+    List {
+        token: u64,
+        seq: u64,
+        event: ListEvent,
+    },
+    ListFailed {
+        token: u64,
+        seq: u64,
+        error: CxError,
+    },
+    Changes {
+        token: u64,
+        changes: Vec<Change>,
+    },
+    Watching {
+        token: u64,
+        result: Result<WatchInfo, CxError>,
+    },
+    Search {
+        token: u64,
+        event: SearchEvent,
+    },
     Engine(EngineEvent),
     Apply(Update),
 }

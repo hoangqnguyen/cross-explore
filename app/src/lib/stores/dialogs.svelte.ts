@@ -54,8 +54,8 @@ class Dialogs {
     return (await this.ask<boolean>("confirm", { title, message, ok, danger })) === true;
   }
 
-  prompt(title: string, label: string, value = "", ok = "OK"): Promise<string | null> {
-    return this.ask<string>("prompt", { title, label, value, ok });
+  prompt(title: string, label: string, value = "", ok = "OK", secret = false, selectAll = false): Promise<string | null> {
+    return this.ask<string>("prompt", { title, label, value, ok, secret, selectAll });
   }
 }
 

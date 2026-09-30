@@ -5,7 +5,10 @@ use std::collections::HashMap;
 
 #[tauri::command]
 pub fn tags_get(uris: Vec<String>, app: AppState<'_>) -> HashMap<String, Vec<String>> {
-    uris.into_iter().map(|u| (app.tags.get(&u), u)).map(|(t, u)| (u, t)).collect()
+    uris.into_iter()
+        .map(|u| (app.tags.get(&u), u))
+        .map(|(t, u)| (u, t))
+        .collect()
 }
 
 #[tauri::command]
@@ -26,11 +29,22 @@ pub struct TaggedHit {
 pub async fn tags_find(tag: String, app: AppState<'_>) -> Result<Vec<TaggedHit>> {
     let mut out = Vec::new();
     for uri in app.tags.find(&tag) {
-        let Ok(loc) = Location::parse(&uri) else { continue };
-        let Ok(provider) = app.vfs.provider(&loc).await else { continue };
-        let Ok(entry) = provider.stat(&loc).await else { continue };
+        let Ok(loc) = Location::parse(&uri) else {
+            continue;
+        };
+        let Ok(provider) = app.vfs.provider(&loc).await else {
+            continue;
+        };
+        let Ok(entry) = provider.stat(&loc).await else {
+            continue;
+        };
         let parent = loc.parent().map(|p| p.uri()).unwrap_or_default();
-        out.push(TaggedHit { rel_path: entry.name.clone(), uri, parent, entry });
+        out.push(TaggedHit {
+            rel_path: entry.name.clone(),
+            uri,
+            parent,
+            entry,
+        });
     }
     Ok(out)
 }

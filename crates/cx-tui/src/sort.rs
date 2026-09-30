@@ -42,9 +42,15 @@ impl SortSpec {
     /// newest / largest first on the first click.
     pub fn toggled(self, key: SortKey) -> SortSpec {
         if self.key == key {
-            SortSpec { key, desc: !self.desc }
+            SortSpec {
+                key,
+                desc: !self.desc,
+            }
         } else {
-            SortSpec { key, desc: matches!(key, SortKey::Modified | SortKey::Size) }
+            SortSpec {
+                key,
+                desc: matches!(key, SortKey::Modified | SortKey::Size),
+            }
         }
     }
 }
@@ -72,7 +78,9 @@ pub fn natural(a: &str, b: &str) -> Ordering {
                 j += 1;
             }
             // Longer run of significant digits is the larger number.
-            let ord = (i - ni).cmp(&(j - nj)).then_with(|| a[ni..i].cmp(&b[nj..j]));
+            let ord = (i - ni)
+                .cmp(&(j - nj))
+                .then_with(|| a[ni..i].cmp(&b[nj..j]));
             if ord != Ordering::Equal {
                 return ord;
             }
@@ -94,16 +102,26 @@ pub fn natural(a: &str, b: &str) -> Ordering {
 
 pub fn compare(spec: SortSpec, a: &Item, b: &Item) -> Ordering {
     if a.entry.is_dir != b.entry.is_dir {
-        return if a.entry.is_dir { Ordering::Less } else { Ordering::Greater };
+        return if a.entry.is_dir {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        };
     }
     let by_key = match spec.key {
         SortKey::Name => natural(&a.lname, &b.lname),
         SortKey::Size => a.entry.size.cmp(&b.entry.size),
-        SortKey::Modified => a.entry.modified.unwrap_or(0).cmp(&b.entry.modified.unwrap_or(0)),
+        SortKey::Modified => a
+            .entry
+            .modified
+            .unwrap_or(0)
+            .cmp(&b.entry.modified.unwrap_or(0)),
         SortKey::Type => a.lext().cmp(b.lext()),
     };
     let by_key = if spec.desc { by_key.reverse() } else { by_key };
-    by_key.then_with(|| natural(&a.lname, &b.lname)).then_with(|| a.entry.name.cmp(&b.entry.name))
+    by_key
+        .then_with(|| natural(&a.lname, &b.lname))
+        .then_with(|| a.entry.name.cmp(&b.entry.name))
 }
 
 #[cfg(test)]
@@ -120,8 +138,26 @@ mod tests {
     #[test]
     fn toggling() {
         let s = SortSpec::default();
-        assert_eq!(s.toggled(SortKey::Name), SortSpec { key: SortKey::Name, desc: true });
-        assert_eq!(s.toggled(SortKey::Size), SortSpec { key: SortKey::Size, desc: true });
-        assert_eq!(s.toggled(SortKey::Type), SortSpec { key: SortKey::Type, desc: false });
+        assert_eq!(
+            s.toggled(SortKey::Name),
+            SortSpec {
+                key: SortKey::Name,
+                desc: true
+            }
+        );
+        assert_eq!(
+            s.toggled(SortKey::Size),
+            SortSpec {
+                key: SortKey::Size,
+                desc: true
+            }
+        );
+        assert_eq!(
+            s.toggled(SortKey::Type),
+            SortSpec {
+                key: SortKey::Type,
+                desc: false
+            }
+        );
     }
 }

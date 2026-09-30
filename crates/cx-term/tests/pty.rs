@@ -33,6 +33,7 @@ impl Probe {
             match ev {
                 TermEvent::Output(b) => log.out.extend(b),
                 TermEvent::Exit { code } => log.exit = Some(code),
+                TermEvent::Authenticated { .. } => {}
             }
         }
     }
@@ -49,7 +50,10 @@ impl Probe {
             }
             thread::sleep(Duration::from_millis(20));
         }
-        panic!("timed out waiting for {what}; output so far:\n{}", self.text());
+        panic!(
+            "timed out waiting for {what}; output so far:\n{}",
+            self.text()
+        );
     }
 
     fn wait_output(&self, needle: &str) {
@@ -73,7 +77,14 @@ fn temp_dir() -> (tempfile::TempDir, PathBuf) {
 }
 
 fn open(terms: &Terminals, dir: &Path, probe: &Probe) -> u64 {
-    terms.open(&Location::Local(dir.to_path_buf()), 200, 50, probe.listener()).unwrap()
+    terms
+        .open(
+            &Location::Local(dir.to_path_buf()),
+            200,
+            50,
+            probe.listener(),
+        )
+        .unwrap()
 }
 
 #[test]
@@ -84,7 +95,11 @@ fn shell_runs_in_folder() {
     let id = open(&terms, &dir, &probe);
 
     terms.write(id, format!("pwd{NL}").as_bytes()).unwrap();
-    let echo = if cfg!(windows) { "echo \"cx-$(1+1)\"" } else { "echo cx-$((1+1))" };
+    let echo = if cfg!(windows) {
+        "echo \"cx-$(1+1)\""
+    } else {
+        "echo cx-$((1+1))"
+    };
     terms.write(id, format!("{echo}{NL}").as_bytes()).unwrap();
 
     probe.wait_output("cx-2");
@@ -105,7 +120,9 @@ fn resize() {
     terms.resize(id, 101, 37).unwrap();
     #[cfg(unix)]
     {
-        terms.write(id, format!("stty size{NL}").as_bytes()).unwrap();
+        terms
+            .write(id, format!("stty size{NL}").as_bytes())
+            .unwrap();
         probe.wait_output("37 101");
     }
     assert!(terms.resize(id + 1000, 80, 24).is_err());
@@ -121,7 +138,9 @@ fn close_kills_child_and_frees_session() {
     let id = open(&terms, &dir, &probe);
     // A job that ignores nothing but would outlive a shell-only kill.
     #[cfg(unix)]
-    terms.write(id, format!("sleep 1000 &{NL}echo started{NL}").as_bytes()).unwrap();
+    terms
+        .write(id, format!("sleep 1000 &{NL}echo started{NL}").as_bytes())
+        .unwrap();
     #[cfg(unix)]
     probe.wait_output("started");
     assert_eq!(terms.ids(), vec![id]);
@@ -166,7 +185,9 @@ fn dropping_terminals_closes_sessions() {
 fn missing_folder_is_not_found() {
     let (_tmp, dir) = temp_dir();
     let terms = Terminals::new();
-    let err = terms.open(&Location::Local(dir.join("nope")), 80, 24, |_| {}).unwrap_err();
+    let err = terms
+        .open(&Location::Local(dir.join("nope")), 80, 24, |_| {})
+        .unwrap_err();
     assert!(matches!(err, CxError::NotFound(_)), "{err:?}");
 }
 
@@ -181,10 +202,20 @@ fn cwd_follows_cd() {
     let id = open(&terms, &dir, &probe);
     assert_eq!(terms.cwd(id), Some(dir.clone()));
 
-    terms.write(id, format!("cd {}{NL}", cx_term::posix_quote("it's a dir")).as_bytes()).unwrap();
+    terms
+        .write(
+            id,
+            format!("cd {}{NL}", cx_term::posix_quote("it's a dir")).as_bytes(),
+        )
+        .unwrap();
     let start = Instant::now();
     while terms.cwd(id).as_deref() != Some(sub.as_path()) {
-        assert!(start.elapsed() < TIMEOUT, "cwd stayed {:?}; output:\n{}", terms.cwd(id), probe.text());
+        assert!(
+            start.elapsed() < TIMEOUT,
+            "cwd stayed {:?}; output:\n{}",
+            terms.cwd(id),
+            probe.text()
+        );
         thread::sleep(Duration::from_millis(20));
     }
     terms.close(id);

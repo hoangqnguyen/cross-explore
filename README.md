@@ -3,8 +3,9 @@
 A fast, **live**, cross-platform file explorer for your computer, your network and your
 tailnet. It has the look of Windows 11 Explorer, the live updates and Quick Look of the
 macOS Finder, and the power tools of Total Commander and Commander One. It speaks
-SMB, SFTP, FTP/FTPS, WebDAV and S3, finds shares on your LAN and Tailscale tailnet by
-itself, and lets your own devices browse each other directly (peer mode).
+SMB, SFTP, FTP/FTPS, WebDAV, S3, Google Drive, Dropbox and OneDrive, finds shares
+on your LAN and Tailscale tailnet by itself, and lets your own devices browse each
+other directly (peer mode).
 
 Built with Rust (Tauri 2) and Svelte 5. The macOS installer is about 9 MB, and the app is
 17 MB installed.
@@ -39,7 +40,9 @@ Built with Rust (Tauri 2) and Svelte 5. The macOS installer is about 9 MB, and t
 
 **Finder niceties**
 - Quick Look with the space bar: images, video, audio, PDF, code with highlighting,
-  Markdown, fonts, archive contents and folders. Arrow keys flip through items while it's open.
+  Markdown, fonts, archive contents, folders, and Office documents (Word, Excel,
+  PowerPoint, OpenDocument, RTF, CSV — as sanitized HTML, or a PDF when LibreOffice
+  is installed). Arrow keys flip through items while it's open.
 - Column (Miller) view and gallery view with a filmstrip.
 - A preview/info pane, colored tags (real Finder tags on macOS) and spring-loaded folders.
 
@@ -52,6 +55,9 @@ Built with Rust (Tauri 2) and Svelte 5. The macOS installer is about 9 MB, and t
 - Archives as folders (zip, tar.*, 7z) plus compress and extract.
 - Folder sizes, recursive name and content search, and a hotlist plus saved workspaces.
 - An embedded terminal (Ctrl+\`) that opens in the current folder, or as SSH for SFTP folders.
+  The first SSH login asks for the remote user name — it does not assume your local account —
+  remembers it after a successful login, and if you signed in with a password offers to copy
+  your SSH key so later sessions don't ask.
 
 **Transfers**
 - A job queue with progress, speed sparkline, ETA, and pause/resume/cancel.
@@ -65,6 +71,7 @@ Built with Rust (Tauri 2) and Svelte 5. The macOS installer is about 9 MB, and t
 - A Connect dialog for SMB, SFTP (password, key file, ssh-agent or `~/.ssh` keys), FTP/FTPS,
   WebDAV (Basic/Digest) and S3-compatible storage (AWS, R2, B2, Wasabi, MinIO).
 - Passwords are stored in the OS keychain. SSH host keys, and FTPS certificates that aren't publicly trusted, are shown for review before you trust them.
+- Google Drive, Dropbox and OneDrive, spoken to directly over their HTTP APIs (OAuth with PKCE, tokens in the keychain). You supply the OAuth client id (`CX_GDRIVE_CLIENT_ID` / `CX_GDRIVE_CLIENT_SECRET`, `CX_DROPBOX_APP_KEY`, `CX_ONEDRIVE_CLIENT_ID`, or the in-app settings). Changes on those drives are found by polling.
 - **Nearby** devices appear on their own via mDNS, Tailscale, SSDP, WS-Discovery, NetBIOS and port probes, with
   one-click shares. Nothing connects without you.
 
@@ -100,10 +107,10 @@ crates/
   cx-archive    Archives as folders, compress/extract
   cx-search     Name and content search, fuzzy ranking
   cx-thumbs     Thumbnails (image crate + QuickLook / shell / CLI), text previews
-  cx-term       PTY sessions for the embedded terminal
+  cx-term       PTY sessions for the embedded terminal. SSH asks for the remote user, remembers it after a successful login, and can install a public key
   cx-cloud      Google Drive, Dropbox, OneDrive (HTTP APIs, OAuth + PKCE browser sign-in)
   cx-office     Word/Excel/PowerPoint/OpenDocument/RTF/CSV previews as safe HTML (LibreOffice PDF optional)
-  cx-engine     Everything but the GUI wired together (connectors, transfers, search, peer…)
+  cx-engine     Backend the terminal UI runs (connectors including cloud, transfers, search, discovery, peer). The desktop app wires the same crates itself in app/src-tauri and does not call this crate.
   cx-tui        Terminal UI on cx-engine: panes, tabs, transfers, palette, Explorer/Commander keys
   cx-cli        `cx` headless peer server and client
   cx-testkit    In-memory provider for tests
@@ -237,8 +244,8 @@ The in-app self test covers:
 - **Linux:** the Linux build and its tests pass in Docker, but the UI hasn't been run on a Linux desktop.
 - **Phones:** the apps are mainly network and peer clients. They browse their own app storage only
   (no system-wide file access), and there's no trash, terminal or drag-out.
-- **Remote watching:** SFTP, FTP, WebDAV and S3 folders update by polling; only SMB and peers push changes.
+- **Remote watching:** SFTP, FTP, WebDAV, S3, Google Drive, Dropbox and OneDrive update by polling; only SMB and peers push changes.
 - **Speed:** FTP and FTPS transfers set up a data connection each time, so they are slower than the other protocols for small files.
-- **Not built yet:** rsync-style delta sync, cloud drives beyond S3 (Google Drive, OneDrive), a plugin API and an auto-updater.
+- **Not built yet:** rsync-style delta sync, a plugin API and an auto-updater.
 - **Untested:** native drag-out to other apps and the OS-clipboard file exchange have only been
   checked to compile; they need a real mouse and clipboard.

@@ -34,15 +34,22 @@ impl ShellCommand {
             Location::Local(dir) => Ok(ShellCommand::login_shell(dir.clone())),
             Location::Archive { container, .. } => match container.as_ref() {
                 Location::Local(file) => {
-                    let dir = file.parent().ok_or_else(|| CxError::InvalidLocation(file.display().to_string()))?;
+                    let dir = file
+                        .parent()
+                        .ok_or_else(|| CxError::InvalidLocation(file.display().to_string()))?;
                     Ok(ShellCommand::login_shell(dir.to_path_buf()))
                 }
-                _ => Err(CxError::Unsupported("a terminal can't be opened inside a remote archive".into())),
+                _ => Err(CxError::Unsupported(
+                    "a terminal can't be opened inside a remote archive".into(),
+                )),
             },
-            Location::Remote { endpoint, path } if endpoint.scheme == Scheme::Sftp => ShellCommand::ssh(endpoint, path),
-            Location::Remote { endpoint, .. } => {
-                Err(CxError::Unsupported(format!("a terminal can't be opened on {} locations", endpoint.scheme.label())))
+            Location::Remote { endpoint, path } if endpoint.scheme == Scheme::Sftp => {
+                ShellCommand::ssh(endpoint, path)
             }
+            Location::Remote { endpoint, .. } => Err(CxError::Unsupported(format!(
+                "a terminal can't be opened on {} locations",
+                endpoint.scheme.label()
+            ))),
         }
     }
 
@@ -52,7 +59,11 @@ impl ShellCommand {
     /// people want as a terminal: prefer PowerShell 7 (`pwsh`), then Windows
     /// PowerShell (always present), then `COMSPEC`.
     pub fn login_shell(dir: PathBuf) -> ShellCommand {
-        ShellCommand { argv: default_shell_argv(), cwd: Some(dir), local: true }
+        ShellCommand {
+            argv: default_shell_argv(),
+            cwd: Some(dir),
+            local: true,
+        }
     }
 
     /// `ssh -t [-p port] -- [user@]host "cd '<path>'; exec $SHELL -l"`.
@@ -61,6 +72,10 @@ impl ShellCommand {
     /// `~/.ssh/config`, agent, known_hosts and interactive password/2FA
     /// prompts (which happen right in the terminal) for free.
     ///
+    /// When `endpoint` has no user, none is sent and OpenSSH assumes the
+    /// local account. The embedded terminal does not use that path: it asks
+    /// for a user and calls [`ssh_with`](ShellCommand::ssh_with).
+    ///
     /// The remote command is parsed by the remote login shell, so the path is
     /// single-quoted POSIX style (also valid in fish and csh). `;` rather than
     /// `&&` so a folder that vanished still leaves the user in a shell (with
@@ -68,21 +83,37 @@ impl ShellCommand {
     /// and the leading-dash check keep a hostile host name from being read
     /// as an ssh option.
     pub fn ssh(endpoint: &Endpoint, path: &str) -> Result<ShellCommand> {
-        let bad = |s: &str| s.is_empty() || s.starts_with('-') || s.chars().any(|c| c.is_whitespace() || c.is_control());
-        if bad(&endpoint.host) {
-            return Err(CxError::InvalidLocation(format!("bad ssh host: {:?}", endpoint.host)));
+        ShellCommand::ssh_with(endpoint, path, None, &[])
+    }
+
+    /// [`ssh`](ShellCommand::ssh), with `user` forced onto the destination
+    /// (when set) and extra client arguments inserted before `--`.
+    pub fn ssh_with(
+        endpoint: &Endpoint,
+        path: &str,
+        user: Option<&str>,
+        options: &[String],
+    ) -> Result<ShellCommand> {
+        if !acceptable_ssh_token(&endpoint.host) {
+            return Err(CxError::InvalidLocation(format!(
+                "bad ssh host: {:?}",
+                endpoint.host
+            )));
         }
-        let mut dest = String::new();
-        if let Some(user) = &endpoint.user {
-            if bad(user) {
+        let user = user.or(endpoint.user.as_deref());
+        if let Some(user) = user {
+            if !acceptable_ssh_token(user) {
                 return Err(CxError::InvalidLocation(format!("bad ssh user: {user:?}")));
             }
-            dest.push_str(user);
-            dest.push('@');
         }
-        dest.push_str(&endpoint.host);
+        // IPv6 needs brackets once a user is present: `pi@::1` is not a host.
+        let dest = match user {
+            Some(user) => user_at_host(user, &endpoint.host),
+            None => endpoint.host.clone(),
+        };
 
         let mut argv = vec!["ssh".to_string(), "-t".to_string()];
+        argv.extend(options.iter().cloned());
         if let Some(port) = endpoint.port {
             argv.push("-p".into());
             argv.push(port.to_string());
@@ -91,8 +122,31 @@ impl ShellCommand {
         argv.push(dest);
         let path = if path.is_empty() { "/" } else { path };
         argv.push(format!("cd {}; exec $SHELL -l", posix_quote(path)));
-        Ok(ShellCommand { argv, cwd: None, local: false })
+        Ok(ShellCommand {
+            argv,
+            cwd: None,
+            local: false,
+        })
     }
+}
+
+/// `user@host`, with an IPv6 host in brackets (`user@[::1]`).
+pub fn user_at_host(user: &str, host: &str) -> String {
+    if host.contains(':') {
+        format!("{user}@[{host}]")
+    } else {
+        format!("{user}@{host}")
+    }
+}
+
+/// A host or user safe to place on an `ssh` command line: not empty, not an
+/// option (`-o…`), and no whitespace or `@` that would change how ssh splits
+/// `user@host`.
+pub fn acceptable_ssh_token(s: &str) -> bool {
+    !(s.is_empty()
+        || s.starts_with('-')
+        || s.chars()
+            .any(|c| c == '@' || c.is_whitespace() || c.is_control()))
 }
 
 /// Quote `s` as one word for a POSIX shell: wrap in single quotes (inside
@@ -119,7 +173,8 @@ fn default_shell_argv() -> Vec<String> {
 #[cfg(windows)]
 fn default_shell_argv() -> Vec<String> {
     let on_path = |exe: &str| {
-        std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(exe).is_file()))
+        std::env::var_os("PATH")
+            .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(exe).is_file()))
     };
     let prog = if on_path("pwsh.exe") {
         "pwsh.exe".to_string()
@@ -140,7 +195,9 @@ mod tests {
     use super::*;
 
     fn sftp(uri: &str) -> Vec<String> {
-        ShellCommand::for_location(&Location::parse(uri).unwrap()).unwrap().argv
+        ShellCommand::for_location(&Location::parse(uri).unwrap())
+            .unwrap()
+            .argv
     }
 
     #[test]
@@ -152,7 +209,10 @@ mod tests {
 
     #[test]
     fn ssh_plain() {
-        assert_eq!(sftp("sftp://nas/home/pi"), ["ssh", "-t", "--", "nas", "cd '/home/pi'; exec $SHELL -l"]);
+        assert_eq!(
+            sftp("sftp://nas/home/pi"),
+            ["ssh", "-t", "--", "nas", "cd '/home/pi'; exec $SHELL -l"]
+        );
     }
 
     #[test]
@@ -160,20 +220,45 @@ mod tests {
         let argv = sftp("sftp://pi@nas:2222/srv/it's%20a%20\"dir\"%20$(rm%20-rf)");
         assert_eq!(
             argv,
-            ["ssh", "-t", "-p", "2222", "--", "pi@nas", "cd '/srv/it'\\''s a \"dir\" $(rm -rf)'; exec $SHELL -l"]
+            [
+                "ssh",
+                "-t",
+                "-p",
+                "2222",
+                "--",
+                "pi@nas",
+                "cd '/srv/it'\\''s a \"dir\" $(rm -rf)'; exec $SHELL -l"
+            ]
         );
     }
 
     #[test]
     fn ssh_ipv6_and_root() {
-        assert_eq!(sftp("sftp://[::1]/"), ["ssh", "-t", "--", "::1", "cd '/'; exec $SHELL -l"]);
+        assert_eq!(
+            sftp("sftp://[::1]/"),
+            ["ssh", "-t", "--", "::1", "cd '/'; exec $SHELL -l"]
+        );
+        assert_eq!(
+            sftp("sftp://pi@[::1]/home"),
+            ["ssh", "-t", "--", "pi@[::1]", "cd '/home'; exec $SHELL -l"]
+        );
     }
 
     #[test]
     fn ssh_rejects_option_injection() {
-        let ep = Endpoint { scheme: Scheme::Sftp, user: None, host: "-oProxyCommand=x".into(), port: None };
+        let ep = Endpoint {
+            scheme: Scheme::Sftp,
+            user: None,
+            host: "-oProxyCommand=x".into(),
+            port: None,
+        };
         assert!(ShellCommand::ssh(&ep, "/").is_err());
-        let ep = Endpoint { scheme: Scheme::Sftp, user: Some("-x".into()), host: "h".into(), port: None };
+        let ep = Endpoint {
+            scheme: Scheme::Sftp,
+            user: Some("-x".into()),
+            host: "h".into(),
+            port: None,
+        };
         assert!(ShellCommand::ssh(&ep, "/").is_err());
     }
 
@@ -184,10 +269,16 @@ mod tests {
         assert!(cmd.local);
         assert_eq!(cmd.cwd, Some(tmp.clone()));
 
-        let zip = Location::Archive { container: Box::new(Location::Local(tmp.join("x.zip"))), inner: "/docs".into() };
+        let zip = Location::Archive {
+            container: Box::new(Location::Local(tmp.join("x.zip"))),
+            inner: "/docs".into(),
+        };
         assert_eq!(ShellCommand::for_location(&zip).unwrap().cwd, Some(tmp));
 
         let smb = Location::parse("smb://host/share").unwrap();
-        assert!(matches!(ShellCommand::for_location(&smb), Err(CxError::Unsupported(_))));
+        assert!(matches!(
+            ShellCommand::for_location(&smb),
+            Err(CxError::Unsupported(_))
+        ));
     }
 }

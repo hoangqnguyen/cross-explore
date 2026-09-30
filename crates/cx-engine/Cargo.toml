@@ -1,6 +1,6 @@
 [package]
 name = "cx-engine"
-description = "The Cross Explore engine without a GUI: the VFS with every connector, transfers, archives, search, tags, discovery and peer mode, wired together once for the desktop app and the terminal UI"
+description = "Cross Explore backend used by the terminal UI: VFS, transfers, archives, search, tags, discovery, peer mode and cloud drives. The desktop app wires the same crates in its own shell."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -2,7 +2,7 @@
 //! archive tasks (compress / extract) and peer offers are folded into one
 //! snapshot per job, and each change is emitted as [`EngineEvent::Job`].
 
-use crate::events::{EngineEvent, Emitter};
+use crate::events::{Emitter, EngineEvent};
 use cx_core::Entry;
 use cx_transfer::{FileError, JobSnapshot, TransferEvent, UndoOp};
 use serde::Serialize;
@@ -47,12 +47,18 @@ pub struct JobView {
 }
 
 fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 /// The serde name of a unit enum value ("waitingForConflict").
 pub(crate) fn name_of<T: Serialize>(v: &T) -> String {
-    serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
+    serde_json::to_value(v)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 impl JobView {
@@ -121,7 +127,10 @@ pub struct Jobs {
 
 impl Jobs {
     pub fn new(events: Arc<Emitter>) -> Arc<Jobs> {
-        Arc::new(Jobs { map: Mutex::new(HashMap::new()), events })
+        Arc::new(Jobs {
+            map: Mutex::new(HashMap::new()),
+            events,
+        })
     }
 
     /// Newest first.
@@ -155,7 +164,9 @@ impl Jobs {
     pub fn on_transfer(&self, e: TransferEvent) {
         match e {
             TransferEvent::JobAdded { job } => self.insert(JobView::from_snapshot(&job)),
-            TransferEvent::Progress { id, progress } => self.update(id.0, |j| j.apply_progress(&progress)),
+            TransferEvent::Progress { id, progress } => {
+                self.update(id.0, |j| j.apply_progress(&progress))
+            }
             // A finished state is reported once, by `Finished` (which the
             // manager sends right after), complete with errors and undo.
             TransferEvent::StateChanged { state, .. } if state.is_finished() => {}
@@ -175,7 +186,13 @@ impl Jobs {
                 });
             }),
             TransferEvent::FileError { id, error } => self.update(id.0, |j| j.errors.push(error)),
-            TransferEvent::Finished { id, state, error, undo, errors } => self.update(id.0, |j| {
+            TransferEvent::Finished {
+                id,
+                state,
+                error,
+                undo,
+                errors,
+            } => self.update(id.0, |j| {
                 j.state = name_of(&state);
                 j.conflict = None;
                 j.speed = 0.0;
@@ -183,7 +200,10 @@ impl Jobs {
                 j.errors = errors;
                 if let Some(e) = error {
                     if j.errors.is_empty() {
-                        j.errors.push(FileError { uri: j.sources.first().cloned().unwrap_or_default(), message: e });
+                        j.errors.push(FileError {
+                            uri: j.sources.first().cloned().unwrap_or_default(),
+                            message: e,
+                        });
                     }
                 }
                 j.undo = undo;
@@ -212,9 +232,23 @@ mod tests {
             }
         }));
         let jobs = Jobs::new(events);
-        jobs.insert(JobView::new(7, "copy", vec!["file:///a".into()], Some("file:///b".into())));
-        jobs.on_transfer(TransferEvent::StateChanged { id: JobId(7), state: JobState::Running });
-        jobs.on_transfer(TransferEvent::Finished { id: JobId(7), state: JobState::Failed, error: Some("boom".into()), undo: None, errors: vec![] });
+        jobs.insert(JobView::new(
+            7,
+            "copy",
+            vec!["file:///a".into()],
+            Some("file:///b".into()),
+        ));
+        jobs.on_transfer(TransferEvent::StateChanged {
+            id: JobId(7),
+            state: JobState::Running,
+        });
+        jobs.on_transfer(TransferEvent::Finished {
+            id: JobId(7),
+            state: JobState::Failed,
+            error: Some("boom".into()),
+            undo: None,
+            errors: vec![],
+        });
         let j = jobs.get(7).unwrap();
         assert_eq!(j.state, "failed");
         assert_eq!(j.errors[0].message, "boom");

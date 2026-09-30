@@ -17,9 +17,19 @@ pub const MAX_LISTING: usize = 500;
 #[derive(Debug, Clone)]
 pub enum Content {
     Loading,
-    Text { lines: Vec<Line>, language: Option<String>, truncated: bool, encoding: String },
-    Listing { entries: Vec<Entry>, total: usize },
-    Image { info: Vec<(String, String)> },
+    Text {
+        lines: Vec<Line>,
+        language: Option<String>,
+        truncated: bool,
+        encoding: String,
+    },
+    Listing {
+        entries: Vec<Entry>,
+        total: usize,
+    },
+    Image {
+        info: Vec<(String, String)>,
+    },
     None,
     Error(String),
 }
@@ -34,16 +44,66 @@ pub struct Preview {
 
 fn binary_ext(name: &str) -> bool {
     matches!(
-        format::category(&Entry { name: name.into(), kind: cx_core::EntryKind::File, is_dir: false, size: 0, modified: None, created: None, hidden: false, readonly: false, executable: false }),
-        format::Category::Image | format::Category::Audio | format::Category::Video | format::Category::Executable
-    ) || matches!(format::ext(name).to_ascii_lowercase().as_str(), "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "pages" | "numbers" | "key" | "epub" | "odt" | "ods" | "odp" | "so" | "dylib" | "dll" | "o" | "a" | "class" | "pyc" | "wasm" | "ttf" | "otf" | "woff" | "woff2" | "sqlite" | "db" | "iso" | "img" | "bin")
+        format::category(&Entry {
+            name: name.into(),
+            kind: cx_core::EntryKind::File,
+            is_dir: false,
+            size: 0,
+            modified: None,
+            created: None,
+            hidden: false,
+            readonly: false,
+            executable: false
+        }),
+        format::Category::Image
+            | format::Category::Audio
+            | format::Category::Video
+            | format::Category::Executable
+    ) || matches!(
+        format::ext(name).to_ascii_lowercase().as_str(),
+        "pdf"
+            | "doc"
+            | "docx"
+            | "xls"
+            | "xlsx"
+            | "ppt"
+            | "pptx"
+            | "pages"
+            | "numbers"
+            | "key"
+            | "epub"
+            | "odt"
+            | "ods"
+            | "odp"
+            | "so"
+            | "dylib"
+            | "dll"
+            | "o"
+            | "a"
+            | "class"
+            | "pyc"
+            | "wasm"
+            | "ttf"
+            | "otf"
+            | "woff"
+            | "woff2"
+            | "sqlite"
+            | "db"
+            | "iso"
+            | "img"
+            | "bin"
+    )
 }
 
 /// Load a preview for `entry` at `uri`.
 pub async fn load(engine: Arc<Engine>, uri: String, entry: Entry) -> Content {
     let is_archive = !entry.is_dir && cx_archive::is_archive(&entry.name);
     if entry.is_dir || is_archive {
-        let target = if is_archive { format!("archive://{uri}!/") } else { uri.clone() };
+        let target = if is_archive {
+            format!("archive://{uri}!/")
+        } else {
+            uri.clone()
+        };
         let mut entries = Vec::new();
         let result = engine
             .list_dir(&target, |ev| {
@@ -55,9 +115,17 @@ pub async fn load(engine: Arc<Engine>, uri: String, entry: Entry) -> Content {
             .await;
         return match result {
             Ok(total) => {
-                let mut items: Vec<crate::folder::Item> = entries.into_iter().map(crate::folder::Item::new).collect();
+                let mut items: Vec<crate::folder::Item> =
+                    entries.into_iter().map(crate::folder::Item::new).collect();
                 items.sort_by(|a, b| crate::sort::compare(Default::default(), a, b));
-                Content::Listing { entries: items.into_iter().take(MAX_LISTING).map(|i| i.entry).collect(), total }
+                Content::Listing {
+                    entries: items
+                        .into_iter()
+                        .take(MAX_LISTING)
+                        .map(|i| i.entry)
+                        .collect(),
+                    total,
+                }
             }
             Err(e) => Content::Error(e.to_string()),
         };
@@ -72,7 +140,18 @@ pub async fn load(engine: Arc<Engine>, uri: String, entry: Entry) -> Content {
                 if let (Some(w), Some(h)) = (m.width, m.height) {
                     info.push(("Dimensions".into(), format!("{w} × {h}")));
                 }
-                for (k, v) in [("Taken", m.date_taken), ("Camera", m.camera_make.map(|mk| format!("{mk} {}", m.camera_model.clone().unwrap_or_default()).trim().to_string())), ("Lens", m.lens_model)] {
+                for (k, v) in [
+                    ("Taken", m.date_taken),
+                    (
+                        "Camera",
+                        m.camera_make.map(|mk| {
+                            format!("{mk} {}", m.camera_model.clone().unwrap_or_default())
+                                .trim()
+                                .to_string()
+                        }),
+                    ),
+                    ("Lens", m.lens_model),
+                ] {
                     if let Some(v) = v {
                         info.push((k.into(), v));
                     }
@@ -90,9 +169,17 @@ pub async fn load(engine: Arc<Engine>, uri: String, entry: Entry) -> Content {
     }
     match engine.preview_text(&uri, MAX_TEXT).await {
         Ok(t) => {
-            let language = t.language.clone().or_else(|| cx_thumbs::language_for_name(&entry.name).map(str::to_owned));
+            let language = t
+                .language
+                .clone()
+                .or_else(|| cx_thumbs::language_for_name(&entry.name).map(str::to_owned));
             let lines = highlight(&t.text, language.as_deref());
-            Content::Text { lines, language, truncated: t.truncated, encoding: t.encoding }
+            Content::Text {
+                lines,
+                language,
+                truncated: t.truncated,
+                encoding: t.encoding,
+            }
         }
         Err(cx_core::CxError::Unsupported(_)) => Content::None,
         Err(e) => Content::Error(e.to_string()),
@@ -100,20 +187,39 @@ pub async fn load(engine: Arc<Engine>, uri: String, entry: Entry) -> Content {
 }
 
 /// Key facts about an entry, for the info block.
-pub fn facts(uri: &str, e: &Entry, tags: &[String], dir_size: Option<u64>) -> Vec<(String, String)> {
+pub fn facts(
+    uri: &str,
+    e: &Entry,
+    tags: &[String],
+    dir_size: Option<u64>,
+) -> Vec<(String, String)> {
     let mut out = vec![("Kind".to_string(), format::type_label(e))];
     if e.is_dir {
         if let Some(s) = dir_size {
-            out.push(("Size".into(), format!("{} ({} bytes)", format::size(s), format::count(s as usize))));
+            out.push((
+                "Size".into(),
+                format!("{} ({} bytes)", format::size(s), format::count(s as usize)),
+            ));
         }
     } else {
-        out.push(("Size".into(), format!("{} ({} bytes)", format::size(e.size), format::count(e.size as usize))));
+        out.push((
+            "Size".into(),
+            format!(
+                "{} ({} bytes)",
+                format::size(e.size),
+                format::count(e.size as usize)
+            ),
+        ));
     }
     out.push(("Modified".into(), format::date_long(e.modified)));
     if e.created.is_some() {
         out.push(("Created".into(), format::date_long(e.created)));
     }
-    let where_ = Location::parse(uri).ok().and_then(|l| l.parent()).map(|p| crate::util::display(&p.uri())).unwrap_or_default();
+    let where_ = Location::parse(uri)
+        .ok()
+        .and_then(|l| l.parent())
+        .map(|p| crate::util::display(&p.uri()))
+        .unwrap_or_default();
     out.push(("Where".into(), where_));
     if !tags.is_empty() {
         out.push(("Tags".into(), tags.join(", ")));

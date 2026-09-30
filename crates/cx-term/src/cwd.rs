@@ -19,7 +19,13 @@ pub fn process_cwd(pid: u32) -> Option<PathBuf> {
     let size = std::mem::size_of::<libc::proc_vnodepathinfo>() as libc::c_int;
     // SAFETY: `info` is a properly sized, writable proc_vnodepathinfo.
     let n = unsafe {
-        libc::proc_pidinfo(pid as libc::c_int, libc::PROC_PIDVNODEPATHINFO, 0, (&mut info as *mut libc::proc_vnodepathinfo).cast(), size)
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDVNODEPATHINFO,
+            0,
+            (&mut info as *mut libc::proc_vnodepathinfo).cast(),
+            size,
+        )
     };
     if n != size {
         return None;
@@ -27,7 +33,9 @@ pub fn process_cwd(pid: u32) -> Option<PathBuf> {
     // vip_path is a MAXPATHLEN char array declared as [[c_char; 32]; 32].
     let raw = &info.pvi_cdir.vip_path;
     // SAFETY: the nested array is one contiguous MAXPATHLEN-byte buffer.
-    let bytes: &[u8] = unsafe { std::slice::from_raw_parts(raw.as_ptr().cast::<u8>(), std::mem::size_of_val(raw)) };
+    let bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(raw.as_ptr().cast::<u8>(), std::mem::size_of_val(raw))
+    };
     let path = CStr::from_bytes_until_nul(bytes).ok()?;
     let path = std::ffi::OsStr::from_bytes(path.to_bytes());
     (!path.is_empty()).then(|| PathBuf::from(path))

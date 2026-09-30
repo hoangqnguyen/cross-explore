@@ -179,7 +179,10 @@ impl Settings {
     }
 
     pub fn load(path: &Path) -> Settings {
-        std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        std::fs::read(path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
@@ -211,7 +214,10 @@ impl Settings {
             self.bookmarks.retain(|b| b.uri != uri);
             false
         } else {
-            self.bookmarks.push(Bookmark { name: name.into(), uri: uri.into() });
+            self.bookmarks.push(Bookmark {
+                name: name.into(),
+                uri: uri.into(),
+            });
             true
         }
     }
@@ -225,7 +231,10 @@ mod tests {
     fn round_trip_and_tolerant_loading() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sub/tui.json");
-        let mut s = Settings { keymap: Keymap::Commander, ..Default::default() };
+        let mut s = Settings {
+            keymap: Keymap::Commander,
+            ..Default::default()
+        };
         assert!(s.toggle_bookmark("Docs", "file:///docs"));
         s.add_recent("file:///a");
         s.add_recent("file:///b");

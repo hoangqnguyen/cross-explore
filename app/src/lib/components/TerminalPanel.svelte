@@ -4,7 +4,8 @@
   import { FitAddon } from "@xterm/addon-fit";
   import { Terminal } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
-  import { errorText, termClose, termCwd, termOpen, termResize, termWrite } from "../api";
+  import { errorText, termClose, termCwd, termOpen, termResize, termWrite, type TermEvent } from "../api";
+  import { offerSshKey, resolveSshUri, sftpTarget } from "../ssh";
   import { ui } from "../stores/ui.svelte";
   import { ws } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
@@ -29,43 +30,82 @@
 
   $effect(() => {
     if (!host) return;
-    const term = new Terminal({ fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace', fontSize: 12.5, cursorBlink: true, theme: theme(), allowProposedApi: true, scrollback: 5000 });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(host);
-    fit.fit();
+    const el = host;
     let disposed = false;
+    let term: Terminal | null = null;
+    let input: { dispose: () => void } | null = null;
+    let ro: ResizeObserver | null = null;
+    let mq: MediaQueryList | null = null;
+    let retheme: (() => void) | null = null;
     const dir = ws.activeTab.folder.kind === "folder" ? ws.activeTab.dirUri : (ws.places?.home.uri ?? "~");
     startedIn = ws.activeTab.title;
-    termOpen(dir, term.cols, term.rows, (e) => {
-      if (e.kind === "output") term.write(decode(e.data));
-      else {
-        status = `Process exited${e.code != null ? ` (${e.code})` : ""}`;
-        id = null;
+    const ssh = sftpTarget(dir);
+    let offered = false;
+
+    void (async () => {
+      const target = await resolveSshUri(dir);
+      if (disposed) return;
+      if (!target) {
+        ui.terminalOpen = false;
+        return;
       }
-    })
-      .then((sid) => {
-        if (disposed) void termClose(sid);
-        else id = sid;
-      })
-      .catch((e) => (status = errorText(e)));
-    const input = term.onData((d) => id != null && void termWrite(id, d));
-    const ro = new ResizeObserver(() => {
+      if (ssh) {
+        const user = sftpTarget(target)?.user;
+        if (user) startedIn = `${ws.activeTab.title} (${user})`;
+      }
+      term = new Terminal({ fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace', fontSize: 12.5, cursorBlink: true, theme: theme(), allowProposedApi: true, scrollback: 5000 });
+      const fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(el);
       fit.fit();
-      if (id != null) void termResize(id, term.cols, term.rows);
-    });
-    ro.observe(host);
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    const retheme = () => (term.options.theme = theme());
-    mq.addEventListener("change", retheme);
-    term.focus();
+      let queued: TermEvent | null = null;
+      const onAuth = (sid: number, e: TermEvent) => {
+        if (offered || e.kind !== "authenticated" || !ssh) return;
+        offered = true;
+        const user = sftpTarget(target)?.user ?? ssh.user ?? "";
+        void offerSshKey(sid, e.method, e.copyId, user, ssh.host);
+      };
+      termOpen(target, term.cols, term.rows, (e) => {
+        if (!term) return;
+        if (e.kind === "output") term.write(decode(e.data));
+        else if (e.kind === "authenticated") {
+          if (id != null) onAuth(id, e);
+          else queued = e;
+        } else {
+          status = `Process exited${e.code != null ? ` (${e.code})` : ""}`;
+          id = null;
+        }
+      })
+        .then((sid) => {
+          if (disposed) void termClose(sid);
+          else {
+            id = sid;
+            if (queued) onAuth(sid, queued);
+          }
+        })
+        .catch((e) => (status = errorText(e)));
+      input = term.onData((d) => id != null && void termWrite(id, d));
+      ro = new ResizeObserver(() => {
+        fit.fit();
+        if (id != null && term) void termResize(id, term.cols, term.rows);
+      });
+      ro.observe(el);
+      mq = matchMedia("(prefers-color-scheme: dark)");
+      retheme = () => {
+        if (term) term.options.theme = theme();
+      };
+      mq.addEventListener("change", retheme);
+      term.focus();
+    })();
+
     return () => {
       disposed = true;
-      ro.disconnect();
-      input.dispose();
-      mq.removeEventListener("change", retheme);
+      ro?.disconnect();
+      input?.dispose();
+      if (mq && retheme) mq.removeEventListener("change", retheme);
       if (id != null) void termClose(id);
-      term.dispose();
+      id = null;
+      term?.dispose();
     };
   });
 

@@ -15,11 +15,29 @@ use cx_transfer::DiffKind;
 use std::collections::HashSet;
 
 fn nav_entry(name: &str) -> Entry {
-    Entry { name: name.into(), kind: EntryKind::Dir, is_dir: true, size: 0, modified: None, created: None, hidden: false, readonly: false, executable: false }
+    Entry {
+        name: name.into(),
+        kind: EntryKind::Dir,
+        is_dir: true,
+        size: 0,
+        modified: None,
+        created: None,
+        hidden: false,
+        readonly: false,
+        executable: false,
+    }
 }
 
 pub fn search_uri(root: &str, text: &str, content: bool, hidden: bool) -> String {
-    cx_uri("search", &[("root", root), ("q", text), ("content", if content { "1" } else { "0" }), ("hidden", if hidden { "1" } else { "0" })])
+    cx_uri(
+        "search",
+        &[
+            ("root", root),
+            ("q", text),
+            ("content", if content { "1" } else { "0" }),
+            ("hidden", if hidden { "1" } else { "0" }),
+        ],
+    )
 }
 
 pub fn compare_uri(left: &str, right: &str) -> String {
@@ -41,7 +59,10 @@ impl App {
         let sort = self.settings.sort;
         if uri == HOME_URI {
             let items = self.home_items();
-            return (Folder::with_items(token, HOME_URI, sort, items, true), Source::Home);
+            return (
+                Folder::with_items(token, HOME_URI, sort, items, true),
+                Source::Home,
+            );
         }
         if uri.starts_with("cx:search") {
             let root = param(uri, "root").unwrap_or_default();
@@ -50,7 +71,19 @@ impl App {
             let hidden = param(uri, "hidden").as_deref() == Some("1");
             let mut f = Folder::new(token, uri, sort);
             f.info = Location::parse(&root).ok().map(|l| l.info());
-            let req = if content { SearchRequest { content: Some(text.clone()), include_hidden: hidden, ..Default::default() } } else { SearchRequest { text: text.clone(), include_hidden: hidden, ..Default::default() } };
+            let req = if content {
+                SearchRequest {
+                    content: Some(text.clone()),
+                    include_hidden: hidden,
+                    ..Default::default()
+                }
+            } else {
+                SearchRequest {
+                    text: text.clone(),
+                    include_hidden: hidden,
+                    ..Default::default()
+                }
+            };
             let tx = self.tx.clone();
             let task = match self.engine.search_start(&root, req, move |event| {
                 let _ = tx.send(Msg::Search { token, event });
@@ -61,14 +94,32 @@ impl App {
                     None
                 }
             };
-            return (f, Source::Search { root, text, content, task, scanned: 0, truncated: false });
+            return (
+                f,
+                Source::Search {
+                    root,
+                    text,
+                    content,
+                    task,
+                    scanned: 0,
+                    truncated: false,
+                },
+            );
         }
         if uri.starts_with("cx:compare") {
             let left = param(uri, "left").unwrap_or_default();
             let right = param(uri, "right").unwrap_or_default();
             let f = Folder::new(token, uri, sort);
             self.run_compare(token, left.clone(), right.clone(), false);
-            return (f, Source::Compare { left, right, by_content: false, diff: Vec::new() });
+            return (
+                f,
+                Source::Compare {
+                    left,
+                    right,
+                    by_content: false,
+                    diff: Vec::new(),
+                },
+            );
         }
         if uri.starts_with("cx:tag") {
             let name = param(uri, "name").unwrap_or_default();
@@ -78,7 +129,12 @@ impl App {
                 let hits = engine.tags_find(&tag).await;
                 Box::new(move |app: &mut App| {
                     if let Some(f) = app.folder_mut(token) {
-                        let items = hits.into_iter().map(|h| Item::located(h.entry, h.uri, Some(h.parent), Some(h.rel_path))).collect();
+                        let items = hits
+                            .into_iter()
+                            .map(|h| {
+                                Item::located(h.entry, h.uri, Some(h.parent), Some(h.rel_path))
+                            })
+                            .collect();
                         f.set_items(items);
                         f.finish_load(0.0);
                     }
@@ -88,7 +144,11 @@ impl App {
         }
         // A plain location: canonicalise what was typed (~, paths, UNC).
         let canonical = Location::parse(uri).map(|l| l.uri());
-        let mut f = Folder::new(token, canonical.clone().unwrap_or_else(|_| uri.to_string()), sort);
+        let mut f = Folder::new(
+            token,
+            canonical.clone().unwrap_or_else(|_| uri.to_string()),
+            sort,
+        );
         match canonical {
             Ok(u) => {
                 self.load(token, 0, &u);
@@ -103,7 +163,13 @@ impl App {
         (f, Source::Folder)
     }
 
-    pub(crate) fn run_compare(&mut self, token: u64, left: String, right: String, by_content: bool) {
+    pub(crate) fn run_compare(
+        &mut self,
+        token: u64,
+        left: String,
+        right: String,
+        by_content: bool,
+    ) {
         self.spawn(move |engine| async move {
             let result = engine.compare_dirs(&left, &right, by_content).await;
             Box::new(move |app: &mut App| app.on_compared(token, result)) as Update
@@ -111,7 +177,9 @@ impl App {
     }
 
     fn on_compared(&mut self, token: u64, result: cx_core::Result<Vec<cx_transfer::DiffItem>>) {
-        let Some((p, i, _)) = self.locate(token) else { return };
+        let Some((p, i, _)) = self.locate(token) else {
+            return;
+        };
         let tab = &mut self.panes[p].tabs[i];
         match result {
             Ok(diff) => {
@@ -119,7 +187,11 @@ impl App {
                     .iter()
                     .filter(|d| d.kind != DiffKind::Same)
                     .map(|d| {
-                        let e = d.left.clone().or_else(|| d.right.clone()).unwrap_or_else(|| nav_entry(&d.rel_path));
+                        let e = d
+                            .left
+                            .clone()
+                            .or_else(|| d.right.clone())
+                            .unwrap_or_else(|| nav_entry(&d.rel_path));
                         let label = match d.kind {
                             DiffKind::LeftOnly => "left only",
                             DiffKind::RightOnly => "right only",
@@ -128,7 +200,15 @@ impl App {
                             DiffKind::Different => "different",
                             DiffKind::Same => "same",
                         };
-                        let mut item = Item::located(Entry { name: d.rel_path.clone(), ..e }, d.rel_path.clone(), None, Some(label.into()));
+                        let mut item = Item::located(
+                            Entry {
+                                name: d.rel_path.clone(),
+                                ..e
+                            },
+                            d.rel_path.clone(),
+                            None,
+                            Some(label.into()),
+                        );
                         item.entry.hidden = false;
                         item
                     })
@@ -151,7 +231,12 @@ impl App {
         let mut seen = HashSet::new();
         let mut add = |label: String, uri: String, section: &str| {
             if seen.insert(uri.clone()) {
-                out.push(Item::located(nav_entry(&label), uri, None, Some(section.to_string())));
+                out.push(Item::located(
+                    nav_entry(&label),
+                    uri,
+                    None,
+                    Some(section.to_string()),
+                ));
             }
         };
         for b in &self.settings.bookmarks {
@@ -193,7 +278,11 @@ impl App {
     pub(crate) fn refresh_home(&mut self) {
         let items = self.home_items();
         for p in 0..2 {
-            for t in self.panes[p].tabs.iter_mut().filter(|t| t.source == Source::Home) {
+            for t in self.panes[p]
+                .tabs
+                .iter_mut()
+                .filter(|t| t.source == Source::Home)
+            {
                 t.folder.set_items(items.clone());
             }
         }
@@ -201,7 +290,9 @@ impl App {
 
     pub(crate) fn load_places(&mut self) {
         self.spawn(|_| async move {
-            let places = tokio::task::spawn_blocking(cx_engine::places::places).await.ok();
+            let places = tokio::task::spawn_blocking(cx_engine::places::places)
+                .await
+                .ok();
             Box::new(move |app: &mut App| {
                 app.places = places;
                 app.refresh_home();
@@ -285,7 +376,9 @@ impl App {
     pub fn navigate_in(&mut self, pane: usize, uri: &str, select: Option<String>) {
         let same = {
             let t = self.panes[pane].tab();
-            let canon = Location::parse(uri).map(|l| l.uri()).unwrap_or_else(|_| uri.to_string());
+            let canon = Location::parse(uri)
+                .map(|l| l.uri())
+                .unwrap_or_else(|_| uri.to_string());
             t.uri() == uri || t.dir_uri() == canon
         };
         if same {
@@ -321,7 +414,9 @@ impl App {
     }
 
     pub fn go_history(&mut self, delta: isize) {
-        let Some(target) = self.tab().history_target(delta).map(str::to_owned) else { return };
+        let Some(target) = self.tab().history_target(delta).map(str::to_owned) else {
+            return;
+        };
         let (folder, source) = self.make(&target);
         let tab = self.tab_mut();
         let expanded = std::mem::take(&mut tab.expanded);
@@ -342,7 +437,12 @@ impl App {
             Source::Search { root, .. } => Some(root.clone()),
             _ => None,
         };
-        let select = t.folder.info.as_ref().and_then(|i| i.crumbs.last().map(|c| c.label.clone())).filter(|_| t.is_folder());
+        let select = t
+            .folder
+            .info
+            .as_ref()
+            .and_then(|i| i.crumbs.last().map(|c| c.label.clone()))
+            .filter(|_| t.is_folder());
         if let Some(p) = parent {
             self.navigate_select(&p, select);
         }
@@ -355,14 +455,21 @@ impl App {
 
     /// Re-list one folder (keeping its rows on screen until done).
     pub(crate) fn reload_token(&mut self, token: u64) {
-        let Some((p, i, _)) = self.locate(token) else { return };
+        let Some((p, i, _)) = self.locate(token) else {
+            return;
+        };
         let tab = &self.panes[p].tabs[i];
         match tab.source.clone() {
             Source::Home => {
                 let items = self.home_items();
                 self.panes[p].tabs[i].folder.set_items(items);
             }
-            Source::Compare { left, right, by_content, .. } => {
+            Source::Compare {
+                left,
+                right,
+                by_content,
+                ..
+            } => {
                 let tab = &mut self.panes[p].tabs[i];
                 let _ = tab.folder.begin_load(true);
                 let tok = tab.folder.token;
@@ -379,7 +486,9 @@ impl App {
                 tab.source = source;
             }
             Source::Folder => {
-                let Some(f) = self.folder_mut(token) else { return };
+                let Some(f) = self.folder_mut(token) else {
+                    return;
+                };
                 let seq = f.begin_load(true);
                 let uri = f.uri.clone();
                 let watching = f.watch.is_some() || f.watch_pending;
@@ -399,7 +508,11 @@ impl App {
         let uri = uri.to_string();
         tokio::spawn(async move {
             let tx2 = tx.clone();
-            let r = engine.list_dir(&uri, move |event| tx2.send(Msg::List { token, seq, event }).is_ok()).await;
+            let r = engine
+                .list_dir(&uri, move |event| {
+                    tx2.send(Msg::List { token, seq, event }).is_ok()
+                })
+                .await;
             if let Err(error) = r {
                 let _ = tx.send(Msg::ListFailed { token, seq, error });
             }
@@ -422,7 +535,10 @@ impl App {
     }
 
     pub(crate) fn on_watching(&mut self, token: u64, result: Result<WatchInfo, CxError>) {
-        let visible = self.locate(token).map(|(p, i, _)| self.is_visible(p, i)).unwrap_or(false);
+        let visible = self
+            .locate(token)
+            .map(|(p, i, _)| self.is_visible(p, i))
+            .unwrap_or(false);
         let engine = self.engine.clone();
         let mut relist = false;
         match (self.folder_mut(token), result) {
@@ -495,10 +611,15 @@ impl App {
     }
 
     pub(crate) fn on_list(&mut self, token: u64, event: ListEvent) {
-        let Some((p, i, main)) = self.locate(token) else { return };
+        let Some((p, i, main)) = self.locate(token) else {
+            return;
+        };
         let visible = self.is_visible(p, i);
-        let recursive = matches!(event, ListEvent::Done { .. }) && self.expand_recursive.remove(&token);
-        let Some(f) = self.folder_mut(token) else { return };
+        let recursive =
+            matches!(event, ListEvent::Done { .. }) && self.expand_recursive.remove(&token);
+        let Some(f) = self.folder_mut(token) else {
+            return;
+        };
         match event {
             ListEvent::Meta { info, capabilities } => f.set_meta(info, capabilities),
             ListEvent::Batch { entries } => f.add_batch(entries),
@@ -510,7 +631,15 @@ impl App {
                     // Polled folders diff against this listing.
                     f.watch_pending = true;
                 }
-                let children: Vec<String> = if recursive { f.items.iter().filter(|c| c.entry.is_dir && !c.entry.hidden).map(|c| child_uri(&uri, &c.entry.name)).collect() } else { Vec::new() };
+                let children: Vec<String> = if recursive {
+                    f.items
+                        .iter()
+                        .filter(|c| c.entry.is_dir && !c.entry.hidden)
+                        .map(|c| child_uri(&uri, &c.entry.name))
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 if needs_watch {
                     self.start_watch(token, &uri);
                 }
@@ -528,9 +657,14 @@ impl App {
     }
 
     pub(crate) fn on_list_failed(&mut self, token: u64, error: CxError) {
-        let Some((p, i, main)) = self.locate(token) else { return };
+        let Some((p, i, main)) = self.locate(token) else {
+            return;
+        };
         let visible = self.is_visible(p, i) && p == self.active;
-        let uri = self.folder_mut(token).map(|f| f.uri.clone()).unwrap_or_default();
+        let uri = self
+            .folder_mut(token)
+            .map(|f| f.uri.clone())
+            .unwrap_or_default();
         if let Some(f) = self.folder_mut(token) {
             f.fail(error.clone());
         }
@@ -538,10 +672,25 @@ impl App {
             return;
         }
         match error {
-            CxError::AuthRequired { uri: _, user, reason } => {
-                if !self.dialogs.iter().any(|d| matches!(d, Dialog::SignIn(_) | Dialog::HostKey(_) | Dialog::Connect(_))) {
+            CxError::AuthRequired {
+                uri: _,
+                user,
+                reason,
+            } => {
+                if !self.dialogs.iter().any(|d| {
+                    matches!(
+                        d,
+                        Dialog::SignIn(_) | Dialog::HostKey(_) | Dialog::Connect(_)
+                    )
+                }) {
                     let loc = Location::parse(&uri).ok();
-                    let user = user.or_else(|| loc.as_ref().and_then(|l| l.endpoint()).and_then(|e| e.user.clone())).unwrap_or_default();
+                    let user = user
+                        .or_else(|| {
+                            loc.as_ref()
+                                .and_then(|l| l.endpoint())
+                                .and_then(|e| e.user.clone())
+                        })
+                        .unwrap_or_default();
                     self.dialogs.push(Dialog::SignIn(SignIn {
                         uri,
                         user: TextInput::new(user.clone()),
@@ -556,9 +705,23 @@ impl App {
                     }));
                 }
             }
-            CxError::HostKeyUnknown { uri: key_uri, host, key_type, fingerprint, changed } => {
+            CxError::HostKeyUnknown {
+                uri: key_uri,
+                host,
+                key_type,
+                fingerprint,
+                changed,
+            } => {
                 if !self.dialogs.iter().any(|d| matches!(d, Dialog::HostKey(_))) {
-                    self.dialogs.push(Dialog::HostKey(HostKey { uri: if key_uri.is_empty() { uri } else { key_uri }, host, key_type, fingerprint, changed, then: AfterAuth::Reload, on_trust: !changed }));
+                    self.dialogs.push(Dialog::HostKey(HostKey {
+                        uri: if key_uri.is_empty() { uri } else { key_uri },
+                        host,
+                        key_type,
+                        fingerprint,
+                        changed,
+                        then: AfterAuth::Reload,
+                        on_trust: !changed,
+                    }));
                 }
             }
             _ => {}
@@ -566,26 +729,41 @@ impl App {
     }
 
     pub(crate) fn on_search(&mut self, token: u64, event: SearchEvent) {
-        let Some((p, i, _)) = self.locate(token) else { return };
+        let Some((p, i, _)) = self.locate(token) else {
+            return;
+        };
         let tab = &mut self.panes[p].tabs[i];
         match event {
             SearchEvent::Hits { hits } => {
                 let content = matches!(tab.source, Source::Search { content: true, .. });
-                let items: Vec<Item> = hits.into_iter().map(|h: SearchHitView| {
-                    let detail = match (content, h.line, &h.snippet) {
-                        (true, Some(l), Some(s)) => format!("{}:{l}: {}", h.rel_path, s.trim()),
-                        _ => h.rel_path.clone(),
-                    };
-                    Item::located(h.entry, h.uri, Some(h.parent), Some(detail))
-                }).collect();
+                let items: Vec<Item> = hits
+                    .into_iter()
+                    .map(|h: SearchHitView| {
+                        let detail = match (content, h.line, &h.snippet) {
+                            (true, Some(l), Some(s)) => format!("{}:{l}: {}", h.rel_path, s.trim()),
+                            _ => h.rel_path.clone(),
+                        };
+                        Item::located(h.entry, h.uri, Some(h.parent), Some(detail))
+                    })
+                    .collect();
                 tab.folder.add_batch(Vec::new());
                 let mut all = std::mem::take(&mut tab.folder.items);
                 all.extend(items);
                 tab.folder.loaded = all.len();
                 tab.folder.set_items(all);
             }
-            SearchEvent::Done { scanned: n, truncated: t, elapsed_ms } => {
-                if let Source::Search { scanned, truncated, task, .. } = &mut tab.source {
+            SearchEvent::Done {
+                scanned: n,
+                truncated: t,
+                elapsed_ms,
+            } => {
+                if let Source::Search {
+                    scanned,
+                    truncated,
+                    task,
+                    ..
+                } = &mut tab.source
+                {
                     *scanned = n;
                     *truncated = t;
                     *task = None;

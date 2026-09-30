@@ -51,7 +51,10 @@ impl CredentialStore for KeychainCredentials {
 
 #[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
 fn keychain_get(account: &str) -> Option<String> {
-    keyring::Entry::new(SERVICE, account).ok()?.get_password().ok()
+    keyring::Entry::new(SERVICE, account)
+        .ok()?
+        .get_password()
+        .ok()
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]

@@ -5,7 +5,10 @@ use super::AppState;
 use crate::jobs::UiJob;
 use crate::state::App;
 use cx_core::{CxError, Location, Result};
-use cx_transfer::{CompareBy, CompareOptions, ConflictPolicy, DiffItem, JobId, JobKind, JobRequest, Resolution, UndoOp};
+use cx_transfer::{
+    CompareBy, CompareOptions, ConflictPolicy, DiffItem, JobId, JobKind, JobRequest, Resolution,
+    UndoOp,
+};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -28,14 +31,34 @@ pub async fn transfer_submit(req: UiJobRequest, app: AppState<'_>) -> Result<u64
         "move" => JobKind::Move,
         "delete" => JobKind::Delete,
         "trash" => JobKind::Trash,
-        "compress" => return Ok(compress(app.inner().clone(), req.sources, req.dest.ok_or_else(|| CxError::InvalidLocation("missing destination".into()))?)),
-        "extract" => return Ok(extract(app.inner().clone(), req.sources, req.dest.ok_or_else(|| CxError::InvalidLocation("missing destination".into()))?)),
+        "compress" => {
+            return Ok(compress(
+                app.inner().clone(),
+                req.sources,
+                req.dest
+                    .ok_or_else(|| CxError::InvalidLocation("missing destination".into()))?,
+            ))
+        }
+        "extract" => {
+            return Ok(extract(
+                app.inner().clone(),
+                req.sources,
+                req.dest
+                    .ok_or_else(|| CxError::InvalidLocation("missing destination".into()))?,
+            ))
+        }
         other => return Err(CxError::Unsupported(format!("{other} jobs"))),
     };
     for s in &req.sources {
         Location::parse(s)?;
     }
-    let id = app.transfers.submit(JobRequest { kind, sources: req.sources, dest: req.dest, conflict: req.conflict, verify: req.verify });
+    let id = app.transfers.submit(JobRequest {
+        kind,
+        sources: req.sources,
+        dest: req.dest,
+        conflict: req.conflict,
+        verify: req.verify,
+    });
     Ok(id.0)
 }
 
@@ -67,8 +90,15 @@ pub fn transfer_cancel(id: u64, app: AppState<'_>) {
 }
 
 #[tauri::command]
-pub fn transfer_resolve(id: u64, conflict_id: u64, resolution: Resolution, apply_to_all: bool, app: AppState<'_>) {
-    app.transfers.resolve(JobId(id), conflict_id, resolution, apply_to_all);
+pub fn transfer_resolve(
+    id: u64,
+    conflict_id: u64,
+    resolution: Resolution,
+    apply_to_all: bool,
+    app: AppState<'_>,
+) {
+    app.transfers
+        .resolve(JobId(id), conflict_id, resolution, apply_to_all);
 }
 
 #[tauri::command]
@@ -82,8 +112,20 @@ pub async fn undo(op: UndoOp, app: AppState<'_>) -> Result<()> {
 }
 
 #[tauri::command]
-pub async fn compare_dirs(left: String, right: String, by_content: bool, app: AppState<'_>) -> Result<Vec<DiffItem>> {
-    let opts = CompareOptions { recursive: true, by: if by_content { CompareBy::Content } else { CompareBy::SizeAndTime } };
+pub async fn compare_dirs(
+    left: String,
+    right: String,
+    by_content: bool,
+    app: AppState<'_>,
+) -> Result<Vec<DiffItem>> {
+    let opts = CompareOptions {
+        recursive: true,
+        by: if by_content {
+            CompareBy::Content
+        } else {
+            CompareBy::SizeAndTime
+        },
+    };
     app.transfers.compare(&left, &right, opts).await
 }
 
@@ -96,7 +138,8 @@ fn progress_to(j: &mut UiJob, p: &cx_archive::Progress, started: std::time::Inst
     j.current = Some(p.current.clone()).filter(|c| !c.is_empty());
     let secs = started.elapsed().as_secs_f64().max(0.001);
     j.speed = p.bytes_done as f64 / secs;
-    j.eta = (j.speed > 0.0 && p.bytes_total > p.bytes_done).then(|| (p.bytes_total - p.bytes_done) as f64 / j.speed);
+    j.eta = (j.speed > 0.0 && p.bytes_total > p.bytes_done)
+        .then(|| (p.bytes_total - p.bytes_done) as f64 / j.speed);
 }
 
 fn finish(app: &App, id: u64, result: Result<Option<serde_json::Value>>) {
@@ -113,7 +156,10 @@ fn finish(app: &App, id: u64, result: Result<Option<serde_json::Value>>) {
             Err(CxError::Cancelled) => j.state = "cancelled".into(),
             Err(e) => {
                 j.state = "failed".into();
-                j.errors.push(cx_transfer::FileError { uri: j.sources.first().cloned().unwrap_or_default(), message: e.to_string() });
+                j.errors.push(cx_transfer::FileError {
+                    uri: j.sources.first().cloned().unwrap_or_default(),
+                    message: e.to_string(),
+                });
             }
         }
     });
@@ -121,15 +167,36 @@ fn finish(app: &App, id: u64, result: Result<Option<serde_json::Value>>) {
 
 fn compress(app: Arc<App>, sources: Vec<String>, dest: String) -> u64 {
     let (id, cancel) = app.task();
-    app.jobs.insert(UiJob::new(id, "compress", sources.clone(), Location::parse(&dest).ok().and_then(|l| l.parent()).map(|p| p.uri())));
+    app.jobs.insert(UiJob::new(
+        id,
+        "compress",
+        sources.clone(),
+        Location::parse(&dest)
+            .ok()
+            .and_then(|l| l.parent())
+            .map(|p| p.uri()),
+    ));
     tauri::async_runtime::spawn(async move {
         let started = std::time::Instant::now();
         let result = async {
-            let locs = sources.iter().map(|s| Location::parse(s)).collect::<Result<Vec<_>>>()?;
+            let locs = sources
+                .iter()
+                .map(|s| Location::parse(s))
+                .collect::<Result<Vec<_>>>()?;
             let dest_loc = Location::parse(&dest)?;
             let jobs = app.jobs.clone();
-            cx_archive::compress(&app.vfs, locs, dest_loc.clone(), move |p| jobs.update(id, |j| progress_to(j, p, started)), cancel).await?;
-            Ok(serde_json::to_value(UndoOp::Copy { created: vec![dest_loc.uri()] }).ok())
+            cx_archive::compress(
+                &app.vfs,
+                locs,
+                dest_loc.clone(),
+                move |p| jobs.update(id, |j| progress_to(j, p, started)),
+                cancel,
+            )
+            .await?;
+            Ok(serde_json::to_value(UndoOp::Copy {
+                created: vec![dest_loc.uri()],
+            })
+            .ok())
         }
         .await;
         finish(&app, id, result);
@@ -139,7 +206,12 @@ fn compress(app: Arc<App>, sources: Vec<String>, dest: String) -> u64 {
 
 fn extract(app: Arc<App>, sources: Vec<String>, dest: String) -> u64 {
     let (id, cancel) = app.task();
-    app.jobs.insert(UiJob::new(id, "extract", sources.clone(), Some(dest.clone())));
+    app.jobs.insert(UiJob::new(
+        id,
+        "extract",
+        sources.clone(),
+        Some(dest.clone()),
+    ));
     tauri::async_runtime::spawn(async move {
         let started = std::time::Instant::now();
         let result = async {
@@ -147,7 +219,14 @@ fn extract(app: Arc<App>, sources: Vec<String>, dest: String) -> u64 {
             let mut created = Vec::new();
             for s in &sources {
                 let jobs = app.jobs.clone();
-                let out = cx_archive::extract(&app.vfs, Location::parse(s)?, dest_loc.clone(), move |p| jobs.update(id, |j| progress_to(j, p, started)), cancel.clone()).await?;
+                let out = cx_archive::extract(
+                    &app.vfs,
+                    Location::parse(s)?,
+                    dest_loc.clone(),
+                    move |p| jobs.update(id, |j| progress_to(j, p, started)),
+                    cancel.clone(),
+                )
+                .await?;
                 created.push(out.uri());
             }
             Ok(serde_json::to_value(UndoOp::Copy { created }).ok())

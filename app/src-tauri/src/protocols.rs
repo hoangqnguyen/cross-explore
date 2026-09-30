@@ -16,11 +16,18 @@ const MAX_FULL: u64 = 64 << 20;
 const MAX_RANGE: u64 = 8 << 20;
 
 fn decode(path: &str) -> String {
-    percent_encoding::percent_decode_str(path.trim_start_matches('/')).decode_utf8_lossy().into_owned()
+    percent_encoding::percent_decode_str(path.trim_start_matches('/'))
+        .decode_utf8_lossy()
+        .into_owned()
 }
 
 fn error(status: StatusCode, msg: impl Into<String>) -> Response<Vec<u8>> {
-    Response::builder().status(status).header(header::CONTENT_TYPE, "text/plain").header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*").body(msg.into().into_bytes()).unwrap()
+    Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, "text/plain")
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(msg.into().into_bytes())
+        .unwrap()
 }
 
 fn status_for(e: &CxError) -> StatusCode {
@@ -40,7 +47,11 @@ fn parse_range(h: &str, size: u64) -> Option<(u64, u64)> {
         return Some((size.saturating_sub(n), size.saturating_sub(1)));
     }
     let start: u64 = a.parse().ok()?;
-    let end = if b.is_empty() { size.saturating_sub(1) } else { b.parse::<u64>().ok()?.min(size.saturating_sub(1)) };
+    let end = if b.is_empty() {
+        size.saturating_sub(1)
+    } else {
+        b.parse::<u64>().ok()?.min(size.saturating_sub(1))
+    };
     (start <= end).then_some((start, end))
 }
 
@@ -49,18 +60,29 @@ fn parse_range(h: &str, size: u64) -> Option<(u64, u64)> {
 const REMOTE_RANGE: u64 = 2 * crate::remote_bytes::CHUNK;
 
 fn remote_bytes() -> &'static Arc<crate::remote_bytes::RemoteBytes> {
-    static CACHE: std::sync::OnceLock<Arc<crate::remote_bytes::RemoteBytes>> = std::sync::OnceLock::new();
+    static CACHE: std::sync::OnceLock<Arc<crate::remote_bytes::RemoteBytes>> =
+        std::sync::OnceLock::new();
     CACHE.get_or_init(Default::default)
 }
 
 /// Files on servers: ranges come from a shared chunk cache with read-ahead.
-async fn serve_remote(app: Arc<App>, req: &Request<Vec<u8>>, loc: Location) -> Result<Response<Vec<u8>>, CxError> {
+async fn serve_remote(
+    app: Arc<App>,
+    req: &Request<Vec<u8>>,
+    loc: Location,
+) -> Result<Response<Vec<u8>>, CxError> {
     let provider = app.vfs.provider(&loc).await?;
     let cache = remote_bytes();
     let entry = cache.stat(provider.as_ref(), &loc).await?;
     let size = entry.size;
-    let mime = mime_guess::from_path(&entry.name).first_or_octet_stream().to_string();
-    let range = req.headers().get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(|h| parse_range(h, size));
+    let mime = mime_guess::from_path(&entry.name)
+        .first_or_octet_stream()
+        .to_string();
+    let range = req
+        .headers()
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| parse_range(h, size));
     // A request with no Range header (pdf.js's opening probe, a plain <img>/
     // fetch) must get the file's true size in Content-Length: for a 206,
     // that's the length of the partial body, NOT the total, so a client that
@@ -75,7 +97,9 @@ async fn serve_remote(app: Arc<App>, req: &Request<Vec<u8>>, loc: Location) -> R
         None => (0, REMOTE_RANGE - 1, true),
     };
     let len = if size == 0 { 0 } else { end - start + 1 };
-    let buf = cache.read(provider.as_ref(), &loc, &entry, start, len).await?;
+    let buf = cache
+        .read(provider.as_ref(), &loc, &entry, start, len)
+        .await?;
     if size > 0 {
         cache.read_ahead(provider, loc, entry, end);
     }
@@ -83,26 +107,45 @@ async fn serve_remote(app: Arc<App>, req: &Request<Vec<u8>>, loc: Location) -> R
         .header(header::CONTENT_TYPE, mime)
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Range, Content-Length, Accept-Ranges")
+        .header(
+            header::ACCESS_CONTROL_EXPOSE_HEADERS,
+            "Content-Range, Content-Length, Accept-Ranges",
+        )
         .header(header::CACHE_CONTROL, "no-cache");
     if partial {
-        res = res.status(StatusCode::PARTIAL_CONTENT).header(header::CONTENT_RANGE, format!("bytes {start}-{}/{size}", start + buf.len().max(1) as u64 - 1));
+        res = res.status(StatusCode::PARTIAL_CONTENT).header(
+            header::CONTENT_RANGE,
+            format!(
+                "bytes {start}-{}/{size}",
+                start + buf.len().max(1) as u64 - 1
+            ),
+        );
     }
     Ok(res.body(buf).unwrap())
 }
 
 async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let uri = decode(req.uri().path());
-    let Ok(loc) = Location::parse(&uri) else { return error(StatusCode::BAD_REQUEST, "bad location") };
+    let Ok(loc) = Location::parse(&uri) else {
+        return error(StatusCode::BAD_REQUEST, "bad location");
+    };
     if loc.local_path().is_none() {
-        return serve_remote(app, &req, loc).await.unwrap_or_else(|e| error(status_for(&e), e.to_string()));
+        return serve_remote(app, &req, loc)
+            .await
+            .unwrap_or_else(|e| error(status_for(&e), e.to_string()));
     }
     let result = async {
         let provider = app.vfs.provider(&loc).await?;
         let entry = provider.stat(&loc).await?;
         let size = entry.size;
-        let mime = mime_guess::from_path(&entry.name).first_or_octet_stream().to_string();
-        let range = req.headers().get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(|h| parse_range(h, size));
+        let mime = mime_guess::from_path(&entry.name)
+            .first_or_octet_stream()
+            .to_string();
+        let range = req
+            .headers()
+            .get(header::RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|h| parse_range(h, size));
         let (start, end, partial) = match range {
             Some((s, e)) => (s, e.min(s + MAX_RANGE - 1), true),
             None if size <= MAX_FULL => (0, size.saturating_sub(1), false),
@@ -112,16 +155,29 @@ async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
         let mut buf = Vec::with_capacity(len as usize);
         if len > 0 {
             let reader = provider.open_read(&loc, start).await?;
-            reader.take(len).read_to_end(&mut buf).await.map_err(|e| CxError::io("read failed", e))?;
+            reader
+                .take(len)
+                .read_to_end(&mut buf)
+                .await
+                .map_err(|e| CxError::io("read failed", e))?;
         }
         let mut res = Response::builder()
             .header(header::CONTENT_TYPE, mime)
             .header(header::ACCEPT_RANGES, "bytes")
             .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-            .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Content-Range, Content-Length, Accept-Ranges")
+            .header(
+                header::ACCESS_CONTROL_EXPOSE_HEADERS,
+                "Content-Range, Content-Length, Accept-Ranges",
+            )
             .header(header::CACHE_CONTROL, "no-cache");
         if partial {
-            res = res.status(StatusCode::PARTIAL_CONTENT).header(header::CONTENT_RANGE, format!("bytes {start}-{}/{size}", start + buf.len().max(1) as u64 - 1));
+            res = res.status(StatusCode::PARTIAL_CONTENT).header(
+                header::CONTENT_RANGE,
+                format!(
+                    "bytes {start}-{}/{size}",
+                    start + buf.len().max(1) as u64 - 1
+                ),
+            );
         }
         Ok::<_, CxError>(res.body(buf).unwrap())
     }
@@ -132,9 +188,14 @@ async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
 async fn serve_thumb(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
     let path = req.uri().path().trim_start_matches('/');
     let mut parts = path.splitn(3, '/');
-    let (Some(size), Some(_version), Some(rest)) = (parts.next(), parts.next(), parts.next()) else { return error(StatusCode::BAD_REQUEST, "bad thumbnail path") };
+    let (Some(size), Some(_version), Some(rest)) = (parts.next(), parts.next(), parts.next())
+    else {
+        return error(StatusCode::BAD_REQUEST, "bad thumbnail path");
+    };
     let size: u32 = size.parse().unwrap_or(256);
-    let Ok(loc) = Location::parse(&decode(rest)) else { return error(StatusCode::BAD_REQUEST, "bad location") };
+    let Ok(loc) = Location::parse(&decode(rest)) else {
+        return error(StatusCode::BAD_REQUEST, "bad location");
+    };
     match app.thumbs.thumbnail(&app.vfs, &loc, size).await {
         Ok(t) => Response::builder()
             .header(header::CONTENT_TYPE, t.mime)
@@ -152,22 +213,38 @@ async fn serve_thumb(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> 
 /// thread; answering from a worker could race with that and answer a task
 /// WebKit had just stopped, which raises an Objective-C exception and took
 /// the whole app down.
-fn respond_on_main(handle: tauri::AppHandle<Wry>, responder: UriSchemeResponder, res: Response<Vec<u8>>) {
+fn respond_on_main(
+    handle: tauri::AppHandle<Wry>,
+    responder: UriSchemeResponder,
+    res: Response<Vec<u8>>,
+) {
     if let Err(e) = handle.run_on_main_thread(move || responder.respond(res)) {
         eprintln!("cx: dropping a response, the event loop is gone: {e}");
     }
 }
 
-pub fn file_protocol(ctx: UriSchemeContext<'_, Wry>, req: Request<Vec<u8>>, responder: UriSchemeResponder) {
+pub fn file_protocol(
+    ctx: UriSchemeContext<'_, Wry>,
+    req: Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+) {
     let handle = ctx.app_handle().clone();
     let app = handle.state::<Arc<App>>().inner().clone();
-    tauri::async_runtime::spawn(async move { respond_on_main(handle, responder, serve_file(app, req).await) });
+    tauri::async_runtime::spawn(async move {
+        respond_on_main(handle, responder, serve_file(app, req).await)
+    });
 }
 
-pub fn thumb_protocol(ctx: UriSchemeContext<'_, Wry>, req: Request<Vec<u8>>, responder: UriSchemeResponder) {
+pub fn thumb_protocol(
+    ctx: UriSchemeContext<'_, Wry>,
+    req: Request<Vec<u8>>,
+    responder: UriSchemeResponder,
+) {
     let handle = ctx.app_handle().clone();
     let app = handle.state::<Arc<App>>().inner().clone();
-    tauri::async_runtime::spawn(async move { respond_on_main(handle, responder, serve_thumb(app, req).await) });
+    tauri::async_runtime::spawn(async move {
+        respond_on_main(handle, responder, serve_thumb(app, req).await)
+    });
 }
 
 #[cfg(test)]

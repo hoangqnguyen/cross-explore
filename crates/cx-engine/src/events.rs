@@ -72,7 +72,17 @@ mod tests {
 
     #[test]
     fn events_serialize_like_the_desktop_ui_expects() {
-        let e = EngineEvent::Offer { offer: IncomingOffer { id: "o".into(), from: OfferPeer { id: "d".into(), name: "Mac".into() }, files: vec![], total: 3 } };
+        let e = EngineEvent::Offer {
+            offer: IncomingOffer {
+                id: "o".into(),
+                from: OfferPeer {
+                    id: "d".into(),
+                    name: "Mac".into(),
+                },
+                files: vec![],
+                total: 3,
+            },
+        };
         let v = serde_json::to_value(&e).unwrap();
         assert_eq!(v["type"], "offer");
         assert_eq!(v["offer"]["from"]["name"], "Mac");

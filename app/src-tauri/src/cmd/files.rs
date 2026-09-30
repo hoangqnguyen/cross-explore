@@ -3,7 +3,10 @@
 
 use super::AppState;
 use cx_core::poll::{poll_watch_from, PollConfig};
-use cx_core::{Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem, WatchGuard};
+use cx_core::{
+    Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem,
+    WatchGuard,
+};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,11 +17,23 @@ use tauri::State;
 use tokio::sync::mpsc;
 
 #[derive(Serialize, Clone)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ListEvent {
-    Meta { info: LocationInfo, capabilities: Capabilities },
-    Batch { entries: Vec<Entry> },
-    Done { total: usize, elapsed_ms: f64 },
+    Meta {
+        info: LocationInfo,
+        capabilities: Capabilities,
+    },
+    Batch {
+        entries: Vec<Entry>,
+    },
+    Done {
+        total: usize,
+        elapsed_ms: f64,
+    },
 }
 
 /// The last full listing of each polled (non-live) folder: the baseline its
@@ -35,15 +50,26 @@ impl RecentListings {
 }
 
 #[tauri::command]
-pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, app: AppState<'_>, recent: State<'_, RecentListings>) -> Result<()> {
+pub async fn list_dir(
+    uri: String,
+    on_event: Channel<ListEvent>,
+    app: AppState<'_>,
+    recent: State<'_, RecentListings>,
+) -> Result<()> {
     let started = Instant::now();
     let loc = Location::parse(&uri)?;
     // Name the tab and breadcrumb before connecting, so a slow or failing
     // server still shows where you are.
-    let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: Capabilities::default() });
+    let _ = on_event.send(ListEvent::Meta {
+        info: loc.info(),
+        capabilities: Capabilities::default(),
+    });
     let provider = app.vfs.provider(&loc).await?;
     let caps = provider.capabilities();
-    let _ = on_event.send(ListEvent::Meta { info: loc.info(), capabilities: caps });
+    let _ = on_event.send(ListEvent::Meta {
+        info: loc.info(),
+        capabilities: caps,
+    });
 
     let (tx, mut rx) = mpsc::channel(8);
     let key = loc.uri();
@@ -62,7 +88,10 @@ pub async fn list_dir(uri: String, on_event: Channel<ListEvent>, app: AppState<'
     if let Some(k) = kept {
         recent.0.lock().unwrap().insert(key, (Instant::now(), k));
     }
-    let _ = on_event.send(ListEvent::Done { total, elapsed_ms: started.elapsed().as_secs_f64() * 1e3 });
+    let _ = on_event.send(ListEvent::Done {
+        total,
+        elapsed_ms: started.elapsed().as_secs_f64() * 1e3,
+    });
     Ok(())
 }
 
@@ -80,7 +109,13 @@ pub struct WatchInfo {
 }
 
 #[tauri::command]
-pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: State<'_, Watches>, app: AppState<'_>, recent: State<'_, RecentListings>) -> Result<WatchInfo> {
+pub async fn watch_dir(
+    uri: String,
+    on_change: Channel<Vec<Change>>,
+    watches: State<'_, Watches>,
+    app: AppState<'_>,
+    recent: State<'_, RecentListings>,
+) -> Result<WatchInfo> {
     let loc = Location::parse(&uri)?;
     let provider = app.vfs.provider(&loc).await?;
     let sink: cx_core::WatchSink = Arc::new(move |changes| {
@@ -90,7 +125,10 @@ pub async fn watch_dir(uri: String, on_change: Channel<Vec<Change>>, watches: St
         Some(g) => (g, "live"),
         None => {
             let baseline = recent.take(&loc.uri());
-            (poll_watch_from(provider, loc, sink, PollConfig::default(), baseline), "polling")
+            (
+                poll_watch_from(provider, loc, sink, PollConfig::default(), baseline),
+                "polling",
+            )
         }
     };
     let id = watches.next.fetch_add(1, Ordering::Relaxed);
@@ -112,17 +150,30 @@ pub async fn stat_entry(uri: String, app: AppState<'_>) -> Result<Entry> {
 #[tauri::command]
 pub async fn create_folder(uri: String, name: Option<String>, app: AppState<'_>) -> Result<Entry> {
     let loc = Location::parse(&uri)?;
-    app.vfs.provider(&loc).await?.create_dir(&loc, name.as_deref()).await
+    app.vfs
+        .provider(&loc)
+        .await?
+        .create_dir(&loc, name.as_deref())
+        .await
 }
 
 #[tauri::command]
-pub async fn rename_entry(uri: String, from: String, to: String, app: AppState<'_>) -> Result<Entry> {
+pub async fn rename_entry(
+    uri: String,
+    from: String,
+    to: String,
+    app: AppState<'_>,
+) -> Result<Entry> {
     let loc = Location::parse(&uri)?;
     app.vfs.provider(&loc).await?.rename(&loc, &from, &to).await
 }
 
 #[tauri::command]
-pub async fn trash_entries(uri: String, names: Vec<String>, app: AppState<'_>) -> Result<Vec<TrashedItem>> {
+pub async fn trash_entries(
+    uri: String,
+    names: Vec<String>,
+    app: AppState<'_>,
+) -> Result<Vec<TrashedItem>> {
     let loc = Location::parse(&uri)?;
     app.vfs.provider(&loc).await?.trash(&loc, &names).await
 }
@@ -144,14 +195,25 @@ pub struct SizeProgress {
 /// Total size of a folder (recursively, through any provider), reported
 /// every 100 ms while counting.
 #[tauri::command]
-pub async fn dir_size(uri: String, on_progress: Channel<SizeProgress>, app: AppState<'_>) -> Result<u64> {
+pub async fn dir_size(
+    uri: String,
+    on_progress: Channel<SizeProgress>,
+    app: AppState<'_>,
+) -> Result<u64> {
     let root = Location::parse(&uri)?;
     let provider = app.vfs.provider(&root).await?;
-    let mut p = SizeProgress { bytes: 0, files: 0, dirs: 0, done: false };
+    let mut p = SizeProgress {
+        bytes: 0,
+        files: 0,
+        dirs: 0,
+        done: false,
+    };
     let mut queue = VecDeque::from([root]);
     let mut last = Instant::now();
     while let Some(dir) = queue.pop_front() {
-        let Ok(entries) = cx_core::provider::list_all(provider.as_ref(), &dir).await else { continue };
+        let Ok(entries) = cx_core::provider::list_all(provider.as_ref(), &dir).await else {
+            continue;
+        };
         for e in entries {
             if e.kind == cx_core::EntryKind::Dir {
                 p.dirs += 1;
@@ -182,10 +244,19 @@ pub struct TextPreview {
 }
 
 #[tauri::command]
-pub async fn preview_text(uri: String, max_bytes: Option<usize>, app: AppState<'_>) -> Result<TextPreview> {
+pub async fn preview_text(
+    uri: String,
+    max_bytes: Option<usize>,
+    app: AppState<'_>,
+) -> Result<TextPreview> {
     let loc = Location::parse(&uri)?;
     let t = cx_thumbs::preview_text(&app.vfs, &loc, max_bytes.unwrap_or(512 * 1024)).await?;
-    Ok(TextPreview { text: t.text, truncated: t.truncated, encoding: t.encoding.to_string(), language: t.language_guess.map(|l| l.to_string()) })
+    Ok(TextPreview {
+        text: t.text,
+        truncated: t.truncated,
+        encoding: t.encoding.to_string(),
+        language: t.language_guess.map(|l| l.to_string()),
+    })
 }
 
 /// Surface UI-side errors in the terminal during development.

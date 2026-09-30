@@ -33,7 +33,12 @@ impl KeyCombo {
                 _ => ("", s),
             },
         };
-        let mut c = KeyCombo { key: String::new(), ctrl: false, alt: false, shift: false };
+        let mut c = KeyCombo {
+            key: String::new(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+        };
         for m in mods.split('+').filter(|m| !m.is_empty()) {
             match m {
                 "Ctrl" | "Mod" => c.ctrl = true,
@@ -45,7 +50,11 @@ impl KeyCombo {
         // Letters are written upper-case in bindings ("Ctrl+P") without
         // meaning Shift; only an explicit "Shift+" does.
         let key = normalize_name(key);
-        c.key = if key.len() == 1 && key.as_bytes()[0].is_ascii_alphabetic() { key.to_ascii_lowercase() } else { key };
+        c.key = if key.len() == 1 && key.as_bytes()[0].is_ascii_alphabetic() {
+            key.to_ascii_lowercase()
+        } else {
+            key
+        };
         Some(c.normalized())
     }
 
@@ -65,7 +74,12 @@ impl KeyCombo {
 
     pub fn from_event(e: &KeyEvent) -> Option<KeyCombo> {
         let m = e.modifiers;
-        let mut c = KeyCombo { key: String::new(), ctrl: m.contains(KeyModifiers::CONTROL), alt: m.contains(KeyModifiers::ALT), shift: m.contains(KeyModifiers::SHIFT) };
+        let mut c = KeyCombo {
+            key: String::new(),
+            ctrl: m.contains(KeyModifiers::CONTROL),
+            alt: m.contains(KeyModifiers::ALT),
+            shift: m.contains(KeyModifiers::SHIFT),
+        };
         c.key = match e.code {
             KeyCode::Char(' ') => "Space".into(),
             // Legacy terminals send Ctrl+\ as 0x1c, which crossterm reports as Ctrl+4.
@@ -97,7 +111,9 @@ impl KeyCombo {
 
     /// A printable character typed without Ctrl/Alt (type-to-filter).
     pub fn typed_char(e: &KeyEvent) -> Option<char> {
-        if e.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) {
+        if e.modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
             return None;
         }
         match e.code {
@@ -124,7 +140,9 @@ fn normalize_name(k: &str) -> String {
         "end" => "End".into(),
         "pageup" | "pgup" => "PageUp".into(),
         "pagedown" | "pgdn" => "PageDown".into(),
-        f if f.len() >= 2 && f.starts_with('f') && f[1..].chars().all(|c| c.is_ascii_digit()) => format!("F{}", &f[1..]),
+        f if f.len() >= 2 && f.starts_with('f') && f[1..].chars().all(|c| c.is_ascii_digit()) => {
+            format!("F{}", &f[1..])
+        }
         _ => k.to_string(),
     }
 }
@@ -162,23 +180,59 @@ mod tests {
 
     #[test]
     fn parse_and_events_agree() {
-        assert_eq!(KeyCombo::parse("Ctrl+Shift+P").unwrap(), ev(KeyCode::Char('P'), KeyModifiers::CONTROL | KeyModifiers::SHIFT));
-        assert_eq!(KeyCombo::parse("Ctrl+P").unwrap(), ev(KeyCode::Char('p'), KeyModifiers::CONTROL));
-        assert_eq!(KeyCombo::parse("Alt+F7").unwrap(), ev(KeyCode::F(7), KeyModifiers::ALT));
-        assert_eq!(KeyCombo::parse("Shift+Tab").unwrap(), ev(KeyCode::BackTab, KeyModifiers::SHIFT));
-        assert_eq!(KeyCombo::parse("Ctrl+\\").unwrap(), ev(KeyCode::Char('4'), KeyModifiers::CONTROL));
-        assert_eq!(KeyCombo::parse("Ctrl+\\").unwrap(), ev(KeyCode::Char('\\'), KeyModifiers::CONTROL));
-        assert_eq!(KeyCombo::parse("+").unwrap(), ev(KeyCode::Char('+'), KeyModifiers::SHIFT));
-        assert_eq!(KeyCombo::parse("*").unwrap(), ev(KeyCode::Char('*'), KeyModifiers::NONE));
-        assert_eq!(KeyCombo::parse("Space").unwrap(), ev(KeyCode::Char(' '), KeyModifiers::NONE));
-        assert_eq!(KeyCombo::parse("Alt+Shift+D").unwrap(), ev(KeyCode::Char('D'), KeyModifiers::ALT));
+        assert_eq!(
+            KeyCombo::parse("Ctrl+Shift+P").unwrap(),
+            ev(
+                KeyCode::Char('P'),
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT
+            )
+        );
+        assert_eq!(
+            KeyCombo::parse("Ctrl+P").unwrap(),
+            ev(KeyCode::Char('p'), KeyModifiers::CONTROL)
+        );
+        assert_eq!(
+            KeyCombo::parse("Alt+F7").unwrap(),
+            ev(KeyCode::F(7), KeyModifiers::ALT)
+        );
+        assert_eq!(
+            KeyCombo::parse("Shift+Tab").unwrap(),
+            ev(KeyCode::BackTab, KeyModifiers::SHIFT)
+        );
+        assert_eq!(
+            KeyCombo::parse("Ctrl+\\").unwrap(),
+            ev(KeyCode::Char('4'), KeyModifiers::CONTROL)
+        );
+        assert_eq!(
+            KeyCombo::parse("Ctrl+\\").unwrap(),
+            ev(KeyCode::Char('\\'), KeyModifiers::CONTROL)
+        );
+        assert_eq!(
+            KeyCombo::parse("+").unwrap(),
+            ev(KeyCode::Char('+'), KeyModifiers::SHIFT)
+        );
+        assert_eq!(
+            KeyCombo::parse("*").unwrap(),
+            ev(KeyCode::Char('*'), KeyModifiers::NONE)
+        );
+        assert_eq!(
+            KeyCombo::parse("Space").unwrap(),
+            ev(KeyCode::Char(' '), KeyModifiers::NONE)
+        );
+        assert_eq!(
+            KeyCombo::parse("Alt+Shift+D").unwrap(),
+            ev(KeyCode::Char('D'), KeyModifiers::ALT)
+        );
         assert_eq!(KeyCombo::parse("Ctrl++").unwrap().key, "+");
         assert!(KeyCombo::parse("Hyper+X").is_none());
     }
 
     #[test]
     fn display() {
-        assert_eq!(KeyCombo::parse("Ctrl+Shift+p").unwrap().to_string(), "Ctrl+Shift+P");
+        assert_eq!(
+            KeyCombo::parse("Ctrl+Shift+p").unwrap().to_string(),
+            "Ctrl+Shift+P"
+        );
         assert_eq!(KeyCombo::parse("Alt+Left").unwrap().to_string(), "Alt+←");
         assert_eq!(KeyCombo::parse("f5").unwrap().to_string(), "F5");
     }

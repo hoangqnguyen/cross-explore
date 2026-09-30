@@ -68,7 +68,10 @@ impl RemoteBytes {
         let mut m = self.chunks.lock().unwrap();
         m.insert(key, (data, t));
         while m.len() > CAPACITY {
-            let oldest = m.iter().min_by_key(|(_, (_, used))| *used).map(|(k, _)| k.clone());
+            let oldest = m
+                .iter()
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(k, _)| k.clone());
             match oldest {
                 Some(k) => m.remove(&k),
                 None => break,
@@ -78,16 +81,28 @@ impl RemoteBytes {
 
     /// Read chunks `first..=last` of the file, fetching the missing ones with
     /// one sequential stream (starting at the first missing chunk).
-    async fn chunks(&self, provider: &dyn Provider, loc: &Location, ver: &str, size: u64, first: u64, last: u64) -> Result<Vec<Arc<Vec<u8>>>> {
+    async fn chunks(
+        &self,
+        provider: &dyn Provider,
+        loc: &Location,
+        ver: &str,
+        size: u64,
+        first: u64,
+        last: u64,
+    ) -> Result<Vec<Arc<Vec<u8>>>> {
         let key = |i: u64| (ver.to_string(), i);
-        let mut out: Vec<Option<Arc<Vec<u8>>>> = (first..=last).map(|i| self.get(&key(i))).collect();
+        let mut out: Vec<Option<Arc<Vec<u8>>>> =
+            (first..=last).map(|i| self.get(&key(i))).collect();
         if let Some(missing) = out.iter().position(Option::is_none) {
             let from = first + missing as u64;
             let mut reader = provider.open_read(loc, from * CHUNK).await?;
             for i in from..=last {
                 let want = CHUNK.min(size.saturating_sub(i * CHUNK)) as usize;
                 let mut buf = vec![0u8; want];
-                reader.read_exact(&mut buf).await.map_err(|e| CxError::io("read failed", e))?;
+                reader
+                    .read_exact(&mut buf)
+                    .await
+                    .map_err(|e| CxError::io("read failed", e))?;
                 let buf = Arc::new(buf);
                 self.put(key(i), buf.clone());
                 out[(i - first) as usize] = Some(buf);
@@ -97,13 +112,22 @@ impl RemoteBytes {
     }
 
     /// Bytes `start..start+len` of a remote file, from cached chunks.
-    pub async fn read(&self, provider: &dyn Provider, loc: &Location, entry: &Entry, start: u64, len: u64) -> Result<Vec<u8>> {
+    pub async fn read(
+        &self,
+        provider: &dyn Provider,
+        loc: &Location,
+        entry: &Entry,
+        start: u64,
+        len: u64,
+    ) -> Result<Vec<u8>> {
         if len == 0 {
             return Ok(Vec::new());
         }
         let ver = version(loc, entry);
         let (first, last) = (start / CHUNK, (start + len - 1) / CHUNK);
-        let parts = self.chunks(provider, loc, &ver, entry.size, first, last).await?;
+        let parts = self
+            .chunks(provider, loc, &ver, entry.size, first, last)
+            .await?;
         let mut out = Vec::with_capacity(len as usize);
         for (n, part) in parts.iter().enumerate() {
             let base = (first + n as u64) * CHUNK;
@@ -117,20 +141,33 @@ impl RemoteBytes {
     }
 
     /// Start reading the chunks after `end` in the background.
-    pub fn read_ahead(self: &Arc<Self>, provider: Arc<dyn Provider>, loc: Location, entry: Entry, end: u64) {
+    pub fn read_ahead(
+        self: &Arc<Self>,
+        provider: Arc<dyn Provider>,
+        loc: Location,
+        entry: Entry,
+        end: u64,
+    ) {
         let ver = version(&loc, &entry);
         let first = end / CHUNK + 1;
         let last_chunk = entry.size.saturating_sub(1) / CHUNK;
         if first > last_chunk || self.get(&(ver.clone(), first)).is_some() {
             return;
         }
-        if !self.prefetching.lock().unwrap().insert((ver.clone(), first)) {
+        if !self
+            .prefetching
+            .lock()
+            .unwrap()
+            .insert((ver.clone(), first))
+        {
             return;
         }
         let me = self.clone();
         tauri::async_runtime::spawn(async move {
             let last = (first + READ_AHEAD - 1).min(last_chunk);
-            let _ = me.chunks(provider.as_ref(), &loc, &ver, entry.size, first, last).await;
+            let _ = me
+                .chunks(provider.as_ref(), &loc, &ver, entry.size, first, last)
+                .await;
             me.prefetching.lock().unwrap().remove(&(ver, first));
         });
     }
@@ -156,7 +193,10 @@ mod tests {
         let e = cache.stat(remote.as_ref(), &loc).await.unwrap();
 
         // A range across a chunk boundary, then ranges inside cached chunks.
-        let a = cache.read(remote.as_ref(), &loc, &e, CHUNK - 10, 20).await.unwrap();
+        let a = cache
+            .read(remote.as_ref(), &loc, &e, CHUNK - 10, 20)
+            .await
+            .unwrap();
         assert_eq!(a, data[(CHUNK - 10) as usize..(CHUNK + 10) as usize]);
         assert_eq!(remote.reads_opened(), 1, "one stream for both chunks");
         let b = cache.read(remote.as_ref(), &loc, &e, 5, 100).await.unwrap();
@@ -165,7 +205,10 @@ mod tests {
 
         // The tail (short last chunk), like an MP4 index at the end.
         let size = data.len() as u64;
-        let t = cache.read(remote.as_ref(), &loc, &e, size - 50, 50).await.unwrap();
+        let t = cache
+            .read(remote.as_ref(), &loc, &e, size - 50, 50)
+            .await
+            .unwrap();
         assert_eq!(t, data[(size - 50) as usize..]);
         assert_eq!(remote.reads_opened(), 2);
         assert!(cache.cached() <= CAPACITY);
@@ -180,6 +223,9 @@ mod tests {
         let a = cache.stat(remote.as_ref(), &loc).await.unwrap();
         remote.put("/v.mp4", vec![1; 20]);
         let b = cache.stat(remote.as_ref(), &loc).await.unwrap();
-        assert_eq!(a.size, b.size, "second stat within the TTL comes from the cache");
+        assert_eq!(
+            a.size, b.size,
+            "second stat within the TTL comes from the cache"
+        );
     }
 }

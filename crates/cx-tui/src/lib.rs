@@ -1,8 +1,9 @@
 //! Cross Explore in the terminal.
 //!
-//! The same engine as the desktop app ([`cx_engine`]): every protocol,
-//! transfers with conflicts and undo, archives, search, tags, nearby
-//! devices and peer mode. The UI follows the desktop app's two keyboard
+//! Built on [`cx_engine`]. The desktop app wires those same crates itself
+//! in `app/src-tauri`; this UI does not. Protocols, transfers with conflicts
+//! and undo, archives, search, tags, nearby devices and peer mode are all
+//! here. The UI follows the desktop app's two keyboard
 //! styles (Explorer/Finder and Total Commander) and its feature set, adapted
 //! to a terminal: dual panes with tabs, a Finder-style outline, a Brief
 //! multi-column view, Quick Look, a preview pane, a command palette.

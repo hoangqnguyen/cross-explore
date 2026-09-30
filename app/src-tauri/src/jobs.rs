@@ -43,11 +43,17 @@ pub struct UiJob {
 }
 
 fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn name_of<T: Serialize>(v: &T) -> String {
-    serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
+    serde_json::to_value(v)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 impl UiJob {
@@ -99,7 +105,10 @@ pub struct Jobs {
 
 impl Jobs {
     pub fn new(events: Arc<Events>) -> Arc<Jobs> {
-        Arc::new(Jobs { map: Mutex::new(HashMap::new()), events })
+        Arc::new(Jobs {
+            map: Mutex::new(HashMap::new()),
+            events,
+        })
     }
 
     pub fn list(&self) -> Vec<UiJob> {
@@ -116,7 +125,8 @@ impl Jobs {
             f(j);
             j.clone()
         };
-        self.events.emit("job", serde_json::json!({ "job": snapshot }));
+        self.events
+            .emit("job", serde_json::json!({ "job": snapshot }));
     }
 
     pub fn insert(&self, job: UiJob) {
@@ -128,7 +138,9 @@ impl Jobs {
     pub fn on_transfer(&self, e: TransferEvent) {
         match e {
             TransferEvent::JobAdded { job } => self.insert(UiJob::from_snapshot(&job)),
-            TransferEvent::Progress { id, progress } => self.update(id.0, |j| j.apply_progress(&progress)),
+            TransferEvent::Progress { id, progress } => {
+                self.update(id.0, |j| j.apply_progress(&progress))
+            }
             TransferEvent::StateChanged { id, state } => self.update(id.0, |j| {
                 j.state = name_of(&state);
                 if j.state != "waitingForConflict" {
@@ -145,7 +157,13 @@ impl Jobs {
                 });
             }),
             TransferEvent::FileError { id, error } => self.update(id.0, |j| j.errors.push(error)),
-            TransferEvent::Finished { id, state, error, undo, errors } => self.update(id.0, |j| {
+            TransferEvent::Finished {
+                id,
+                state,
+                error,
+                undo,
+                errors,
+            } => self.update(id.0, |j| {
                 j.state = name_of(&state);
                 j.conflict = None;
                 j.speed = 0.0;
@@ -153,7 +171,10 @@ impl Jobs {
                 j.errors = errors;
                 if let Some(e) = error {
                     if j.errors.is_empty() {
-                        j.errors.push(FileError { uri: j.sources.first().cloned().unwrap_or_default(), message: e });
+                        j.errors.push(FileError {
+                            uri: j.sources.first().cloned().unwrap_or_default(),
+                            message: e,
+                        });
                     }
                 }
                 j.undo = undo.and_then(|u| serde_json::to_value(u).ok());
@@ -162,6 +183,9 @@ impl Jobs {
     }
 
     pub fn clear_finished(&self) {
-        self.map.lock().unwrap().retain(|_, j| !matches!(j.state.as_str(), "done" | "failed" | "cancelled"));
+        self.map
+            .lock()
+            .unwrap()
+            .retain(|_, j| !matches!(j.state.as_str(), "done" | "failed" | "cancelled"));
     }
 }

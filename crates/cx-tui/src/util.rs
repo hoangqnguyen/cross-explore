@@ -21,7 +21,10 @@ pub fn decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() + 1 && i + 3 <= b.len() {
-            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+            {
                 out.push(v);
                 i += 3;
                 continue;
@@ -35,7 +38,10 @@ pub fn decode(s: &str) -> String {
 
 /// `cx:search?root=…&q=…` and friends.
 pub fn cx_uri(kind: &str, params: &[(&str, &str)]) -> String {
-    let q: Vec<String> = params.iter().map(|(k, v)| format!("{k}={}", encode(v))).collect();
+    let q: Vec<String> = params
+        .iter()
+        .map(|(k, v)| format!("{k}={}", encode(v)))
+        .collect();
     format!("cx:{kind}?{}", q.join("&"))
 }
 
@@ -57,7 +63,11 @@ pub fn display(uri: &str) -> String {
             if let (Some(p), Some(home)) = (loc.local_path(), cx_core::location::home_dir()) {
                 if let Ok(rest) = p.strip_prefix(&home) {
                     let r = rest.to_string_lossy();
-                    return if r.is_empty() { "~".into() } else { format!("~{}{r}", std::path::MAIN_SEPARATOR) };
+                    return if r.is_empty() {
+                        "~".into()
+                    } else {
+                        format!("~{}{r}", std::path::MAIN_SEPARATOR)
+                    };
                 }
             }
             d
@@ -68,7 +78,11 @@ pub fn display(uri: &str) -> String {
 
 /// Last path component of a URI, for labels.
 pub fn name_of(uri: &str) -> String {
-    Location::parse(uri).map(|l| l.name()).ok().filter(|n| !n.is_empty()).unwrap_or_else(|| display(uri))
+    Location::parse(uri)
+        .map(|l| l.name())
+        .ok()
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| display(uri))
 }
 
 /// The terminal escape that puts `text` on the system clipboard (OSC 52).

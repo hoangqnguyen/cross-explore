@@ -62,10 +62,20 @@ fn no_peer() -> CxError {
 /// Tell the peer client where discovered Cross Explore devices are.
 pub fn feed_directory(svc: &PeerService, devices: &[Device]) {
     for d in devices {
-        for s in d.services.iter().filter(|s| s.scheme == cx_core::Scheme::Peer) {
-            let Ok(loc) = Location::parse(&s.uri) else { continue };
+        for s in d
+            .services
+            .iter()
+            .filter(|s| s.scheme == cx_core::Scheme::Peer)
+        {
+            let Ok(loc) = Location::parse(&s.uri) else {
+                continue;
+            };
             let Some(ep) = loc.endpoint() else { continue };
-            let addrs: Vec<SocketAddr> = d.addresses.iter().map(|ip| SocketAddr::new(*ip, s.port)).collect();
+            let addrs: Vec<SocketAddr> = d
+                .addresses
+                .iter()
+                .map(|ip| SocketAddr::new(*ip, s.port))
+                .collect();
             if !addrs.is_empty() {
                 svc.directory().set(&ep.host, addrs);
             }
@@ -91,7 +101,10 @@ pub fn peer_address(address: &str) -> String {
 
 impl Engine {
     pub(crate) fn load_peer_prefs(data_dir: &std::path::Path) -> PeerPrefs {
-        std::fs::read(data_dir.join("peer.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        std::fs::read(data_dir.join("peer.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
     }
 
     fn save_peer_prefs(&self) {
@@ -121,7 +134,15 @@ impl Engine {
             name: id.name,
             port: svc.local_addr().map(|a| a.port()).unwrap_or(PEER_PORT),
             shares: svc.shares(),
-            trusted: svc.trusted_devices().into_iter().map(|t| TrustedView { id: t.device_id, name: t.name, added_at: t.added_at }).collect(),
+            trusted: svc
+                .trusted_devices()
+                .into_iter()
+                .map(|t| TrustedView {
+                    id: t.device_id,
+                    name: t.name,
+                    added_at: t.added_at,
+                })
+                .collect(),
             tailnet_auto_trust: prefs.tailnet_auto_trust,
         })
     }
@@ -136,10 +157,15 @@ impl Engine {
         let prefs = self.peer_prefs();
         let mut cfg = PeerConfig::new(self.data_dir.join("peer"));
         cfg.listen = prefs.enabled;
-        cfg.port = if prefs.enabled { self.config.peer_port } else { 0 };
+        cfg.port = if prefs.enabled {
+            self.config.peer_port
+        } else {
+            0
+        };
         cfg.tailnet_auto_trust = prefs.tailnet_auto_trust;
         let weak = Arc::downgrade(self);
-        let handler = move |w: Weak<Engine>| Arc::new(move |e| on_peer_event(&w, e)) as cx_peer::EventHandler;
+        let handler =
+            move |w: Weak<Engine>| Arc::new(move |e| on_peer_event(&w, e)) as cx_peer::EventHandler;
         let svc = match PeerService::start(cfg.clone(), handler(weak.clone())).await {
             Ok(s) => s,
             // Port taken (another instance?): fall back to any free port.
@@ -155,7 +181,12 @@ impl Engine {
             if prefs.enabled {
                 let id = svc.identity();
                 let port = svc.local_addr().map(|a| a.port()).unwrap_or(PEER_PORT);
-                let _ = d.advertise(Advertisement { name: id.name, port, device_id: id.device_id, txt: vec![] });
+                let _ = d.advertise(Advertisement {
+                    name: id.name,
+                    port,
+                    device_id: id.device_id,
+                    txt: vec![],
+                });
             } else {
                 d.stop_advertising();
             }
@@ -184,14 +215,20 @@ impl Engine {
                     }
                 }
             }
-            engine.events.emit(EngineEvent::Devices { devices: engine.devices() });
+            engine.events.emit(EngineEvent::Devices {
+                devices: engine.devices(),
+            });
         });
         *self.discovery.lock().unwrap() = Some(d);
     }
 
     /// Nearby devices found so far (empty until discovery runs).
     pub fn devices(&self) -> Vec<Device> {
-        self.discovery.lock().ok().and_then(|d| d.as_ref().map(|d| d.devices())).unwrap_or_default()
+        self.discovery
+            .lock()
+            .ok()
+            .and_then(|d| d.as_ref().map(|d| d.devices()))
+            .unwrap_or_default()
     }
 
     /// Scan again now.
@@ -210,7 +247,12 @@ impl Engine {
     }
 
     pub async fn peer_set_shares(&self, shares: Vec<Share>) -> Result<PeerStatus> {
-        self.peer.read().await.as_ref().ok_or_else(no_peer)?.set_shares(shares)?;
+        self.peer
+            .read()
+            .await
+            .as_ref()
+            .ok_or_else(no_peer)?
+            .set_shares(shares)?;
         self.peer_status().await
     }
 
@@ -235,12 +277,22 @@ impl Engine {
     /// it shows.
     pub async fn peer_pair(&self, address: &str, code: &str) -> Result<Paired> {
         let svc = self.peer.read().await.clone().ok_or_else(no_peer)?;
-        let d = svc.pair(&peer_address(address), &code.replace(' ', "")).await?;
-        Ok(Paired { id: d.device_id, name: d.name })
+        let d = svc
+            .pair(&peer_address(address), &code.replace(' ', ""))
+            .await?;
+        Ok(Paired {
+            id: d.device_id,
+            name: d.name,
+        })
     }
 
     pub async fn peer_forget(&self, id: &str) -> Result<PeerStatus> {
-        self.peer.read().await.as_ref().ok_or_else(no_peer)?.remove_trusted(id)?;
+        self.peer
+            .read()
+            .await
+            .as_ref()
+            .ok_or_else(no_peer)?
+            .remove_trusted(id)?;
         self.peer_status().await
     }
 
@@ -250,9 +302,17 @@ impl Engine {
         let svc = self.peer.read().await.clone().ok_or_else(no_peer)?;
         let paths = uris
             .iter()
-            .map(|u| Location::parse(u).ok().and_then(|l| l.local_path().map(PathBuf::from)).ok_or_else(|| CxError::Unsupported("sending remote files".into())))
+            .map(|u| {
+                Location::parse(u)
+                    .ok()
+                    .and_then(|l| l.local_path().map(PathBuf::from))
+                    .ok_or_else(|| CxError::Unsupported("sending remote files".into()))
+            })
             .collect::<Result<Vec<_>>>()?;
-        let target = match Location::parse(device).ok().and_then(|l| l.endpoint().cloned()) {
+        let target = match Location::parse(device)
+            .ok()
+            .and_then(|l| l.endpoint().cloned())
+        {
             Some(ep) => ep.host,
             None => device.strip_prefix("peer:").unwrap_or(device).to_string(),
         };
@@ -260,10 +320,20 @@ impl Engine {
     }
 
     /// Accept (into `dest`, default Downloads) or decline an incoming offer.
-    pub async fn peer_respond(&self, offer_id: &str, accept: bool, dest: Option<&str>) -> Result<()> {
+    pub async fn peer_respond(
+        &self,
+        offer_id: &str,
+        accept: bool,
+        dest: Option<&str>,
+    ) -> Result<()> {
         let svc = self.peer.read().await.clone().ok_or_else(no_peer)?;
         if accept {
-            let dest = dest.map(Location::parse).transpose()?.and_then(|l| l.local_path().map(PathBuf::from)).or_else(dirs::download_dir).ok_or_else(|| CxError::InvalidLocation("no download folder".into()))?;
+            let dest = dest
+                .map(Location::parse)
+                .transpose()?
+                .and_then(|l| l.local_path().map(PathBuf::from))
+                .or_else(dirs::download_dir)
+                .ok_or_else(|| CxError::InvalidLocation("no download folder".into()))?;
             svc.accept_offer(offer_id, dest)
         } else {
             svc.decline_offer(offer_id)
@@ -272,20 +342,57 @@ impl Engine {
 }
 
 fn on_peer_event(engine: &Weak<Engine>, e: PeerEvent) {
-    let Some(engine) = engine.upgrade() else { return };
+    let Some(engine) = engine.upgrade() else {
+        return;
+    };
     match e {
-        PeerEvent::IncomingOffer { offer_id, from, files, total } => {
-            engine.events.emit(EngineEvent::Offer { offer: IncomingOffer { id: offer_id, from: OfferPeer { id: from.device_id, name: from.name }, files, total } });
+        PeerEvent::IncomingOffer {
+            offer_id,
+            from,
+            files,
+            total,
+        } => {
+            engine.events.emit(EngineEvent::Offer {
+                offer: IncomingOffer {
+                    id: offer_id,
+                    from: OfferPeer {
+                        id: from.device_id,
+                        name: from.name,
+                    },
+                    files,
+                    total,
+                },
+            });
         }
-        PeerEvent::OfferProgress { offer_id, direction, peer, state, bytes, total, file, error, .. } => {
+        PeerEvent::OfferProgress {
+            offer_id,
+            direction,
+            peer,
+            state,
+            bytes,
+            total,
+            file,
+            error,
+            ..
+        } => {
             let state = name_of(&state);
             let outgoing = name_of(&direction) == "outgoing";
-            let id = *engine.offer_jobs.lock().unwrap().entry(offer_id).or_insert_with(|| {
-                let id = engine.tasks.next_id();
-                let label = format!("peer://{}/", peer.device_id);
-                engine.jobs.insert(JobView::new(id, if outgoing { "send" } else { "receive" }, vec![label], None));
-                id
-            });
+            let id = *engine
+                .offer_jobs
+                .lock()
+                .unwrap()
+                .entry(offer_id)
+                .or_insert_with(|| {
+                    let id = engine.tasks.next_id();
+                    let label = format!("peer://{}/", peer.device_id);
+                    engine.jobs.insert(JobView::new(
+                        id,
+                        if outgoing { "send" } else { "receive" },
+                        vec![label],
+                        None,
+                    ));
+                    id
+                });
             engine.jobs.update(id, |j| {
                 j.bytes_done = bytes;
                 j.bytes_total = total;
@@ -299,13 +406,21 @@ fn on_peer_event(engine: &Weak<Engine>, e: PeerEvent) {
                 }
                 .into();
                 if let Some(e) = error {
-                    j.errors.push(cx_transfer::FileError { uri: String::new(), message: e });
+                    j.errors.push(cx_transfer::FileError {
+                        uri: String::new(),
+                        message: e,
+                    });
                 } else if state == "declined" {
-                    j.errors.push(cx_transfer::FileError { uri: String::new(), message: format!("{} declined", peer.name) });
+                    j.errors.push(cx_transfer::FileError {
+                        uri: String::new(),
+                        message: format!("{} declined", peer.name),
+                    });
                 }
             });
         }
-        PeerEvent::PairingCompleted { .. } | PeerEvent::PeerConnected { .. } | PeerEvent::PeerDisconnected { .. } => {
+        PeerEvent::PairingCompleted { .. }
+        | PeerEvent::PeerConnected { .. }
+        | PeerEvent::PeerDisconnected { .. } => {
             let e2 = engine.clone();
             engine.rt.spawn(async move {
                 if let Ok(status) = e2.peer_status().await {

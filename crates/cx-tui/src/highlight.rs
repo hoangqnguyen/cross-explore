@@ -23,19 +23,149 @@ struct Lang {
 }
 
 const C_LIKE: &[&str] = &[
-    "fn", "let", "mut", "pub", "use", "mod", "struct", "enum", "impl", "trait", "match", "if", "else", "for", "while", "loop", "return", "break", "continue", "const", "static", "async", "await", "move", "where", "type", "self", "Self", "true", "false", "function", "var", "class", "new", "this", "import", "export", "from", "default", "extends", "interface", "public", "private", "protected", "void", "int", "char", "float", "double", "bool", "boolean", "string", "null", "undefined", "try", "catch", "finally", "throw", "throws", "switch", "case", "package", "func", "go", "defer", "chan", "select", "struct", "namespace", "using", "virtual", "override", "unsafe", "extern", "crate", "super", "in", "of", "typeof", "instanceof", "yield", "val", "fun", "object", "when", "is", "as", "do", "nil", "None", "Some", "Ok", "Err",
+    "fn",
+    "let",
+    "mut",
+    "pub",
+    "use",
+    "mod",
+    "struct",
+    "enum",
+    "impl",
+    "trait",
+    "match",
+    "if",
+    "else",
+    "for",
+    "while",
+    "loop",
+    "return",
+    "break",
+    "continue",
+    "const",
+    "static",
+    "async",
+    "await",
+    "move",
+    "where",
+    "type",
+    "self",
+    "Self",
+    "true",
+    "false",
+    "function",
+    "var",
+    "class",
+    "new",
+    "this",
+    "import",
+    "export",
+    "from",
+    "default",
+    "extends",
+    "interface",
+    "public",
+    "private",
+    "protected",
+    "void",
+    "int",
+    "char",
+    "float",
+    "double",
+    "bool",
+    "boolean",
+    "string",
+    "null",
+    "undefined",
+    "try",
+    "catch",
+    "finally",
+    "throw",
+    "throws",
+    "switch",
+    "case",
+    "package",
+    "func",
+    "go",
+    "defer",
+    "chan",
+    "select",
+    "struct",
+    "namespace",
+    "using",
+    "virtual",
+    "override",
+    "unsafe",
+    "extern",
+    "crate",
+    "super",
+    "in",
+    "of",
+    "typeof",
+    "instanceof",
+    "yield",
+    "val",
+    "fun",
+    "object",
+    "when",
+    "is",
+    "as",
+    "do",
+    "nil",
+    "None",
+    "Some",
+    "Ok",
+    "Err",
 ];
 const PY_LIKE: &[&str] = &[
-    "def", "class", "import", "from", "as", "if", "elif", "else", "for", "while", "return", "yield", "with", "try", "except", "finally", "raise", "lambda", "pass", "break", "continue", "and", "or", "not", "in", "is", "None", "True", "False", "global", "nonlocal", "async", "await", "self", "end", "do", "then", "fi", "done", "esac", "case", "function", "local", "export", "echo", "module", "require", "puts", "unless", "elsif", "begin", "rescue", "ensure",
+    "def", "class", "import", "from", "as", "if", "elif", "else", "for", "while", "return",
+    "yield", "with", "try", "except", "finally", "raise", "lambda", "pass", "break", "continue",
+    "and", "or", "not", "in", "is", "None", "True", "False", "global", "nonlocal", "async",
+    "await", "self", "end", "do", "then", "fi", "done", "esac", "case", "function", "local",
+    "export", "echo", "module", "require", "puts", "unless", "elsif", "begin", "rescue", "ensure",
 ];
-const SQL: &[&str] = &["select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create", "table", "index", "join", "left", "right", "inner", "outer", "on", "group", "by", "order", "having", "limit", "and", "or", "not", "null", "as", "distinct", "union", "primary", "key", "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "JOIN", "ON", "GROUP", "BY", "ORDER", "AND", "OR", "NOT", "NULL", "AS", "LIMIT"];
+const SQL: &[&str] = &[
+    "select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create",
+    "table", "index", "join", "left", "right", "inner", "outer", "on", "group", "by", "order",
+    "having", "limit", "and", "or", "not", "null", "as", "distinct", "union", "primary", "key",
+    "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "CREATE",
+    "TABLE", "JOIN", "ON", "GROUP", "BY", "ORDER", "AND", "OR", "NOT", "NULL", "AS", "LIMIT",
+];
 
 fn lang(name: &str) -> Option<Lang> {
     let l = match name {
-        "rust" | "c" | "cpp" | "c++" | "java" | "javascript" | "typescript" | "go" | "swift" | "kotlin" | "csharp" | "c#" | "scala" | "dart" | "php" | "objective-c" | "objectivec" | "protobuf" | "zig" | "json" | "jsx" | "tsx" | "svelte" | "vue" | "css" | "scss" | "less" | "groovy" => Lang { line_comments: &["//"], block: Some(("/*", "*/")), keywords: C_LIKE, backtick_strings: matches!(name, "javascript" | "typescript" | "jsx" | "tsx" | "svelte" | "vue" | "go") },
-        "python" | "ruby" | "shell" | "bash" | "sh" | "zsh" | "fish" | "perl" | "r" | "yaml" | "toml" | "makefile" | "dockerfile" | "powershell" | "nim" | "elixir" | "ini" | "conf" | "cmake" | "graphql" => Lang { line_comments: &["#"], block: None, keywords: PY_LIKE, backtick_strings: false },
-        "lua" | "haskell" | "sql" => Lang { line_comments: &["--"], block: None, keywords: if name == "sql" { SQL } else { PY_LIKE }, backtick_strings: false },
-        "html" | "xml" | "svg" => Lang { line_comments: &[], block: Some(("<!--", "-->")), keywords: &[], backtick_strings: false },
+        "rust" | "c" | "cpp" | "c++" | "java" | "javascript" | "typescript" | "go" | "swift"
+        | "kotlin" | "csharp" | "c#" | "scala" | "dart" | "php" | "objective-c" | "objectivec"
+        | "protobuf" | "zig" | "json" | "jsx" | "tsx" | "svelte" | "vue" | "css" | "scss"
+        | "less" | "groovy" => Lang {
+            line_comments: &["//"],
+            block: Some(("/*", "*/")),
+            keywords: C_LIKE,
+            backtick_strings: matches!(
+                name,
+                "javascript" | "typescript" | "jsx" | "tsx" | "svelte" | "vue" | "go"
+            ),
+        },
+        "python" | "ruby" | "shell" | "bash" | "sh" | "zsh" | "fish" | "perl" | "r" | "yaml"
+        | "toml" | "makefile" | "dockerfile" | "powershell" | "nim" | "elixir" | "ini" | "conf"
+        | "cmake" | "graphql" => Lang {
+            line_comments: &["#"],
+            block: None,
+            keywords: PY_LIKE,
+            backtick_strings: false,
+        },
+        "lua" | "haskell" | "sql" => Lang {
+            line_comments: &["--"],
+            block: None,
+            keywords: if name == "sql" { SQL } else { PY_LIKE },
+            backtick_strings: false,
+        },
+        "html" | "xml" | "svg" => Lang {
+            line_comments: &[],
+            block: Some(("<!--", "-->")),
+            keywords: &[],
+            backtick_strings: false,
+        },
         _ => return None,
     };
     Some(l)
@@ -65,10 +195,15 @@ pub fn highlight(text: &str, language: Option<&str>) -> Vec<Line> {
         return markdown(text);
     }
     let Some(lang) = language.as_deref().and_then(lang) else {
-        return text.lines().map(|l| vec![(Tok::Plain, l.to_string())]).collect();
+        return text
+            .lines()
+            .map(|l| vec![(Tok::Plain, l.to_string())])
+            .collect();
     };
     let mut in_block = false;
-    text.lines().map(|l| code_line(l, &lang, &mut in_block)).collect()
+    text.lines()
+        .map(|l| code_line(l, &lang, &mut in_block))
+        .collect()
 }
 
 fn code_line(line: &str, lang: &Lang, in_block: &mut bool) -> Line {
@@ -145,12 +280,24 @@ fn code_line(line: &str, lang: &Lang, in_block: &mut bool) -> Line {
                 j += 1;
             }
             let word = &line[i..j];
-            push(&mut out, if lang.keywords.contains(&word) { Tok::Keyword } else { Tok::Plain }, word);
+            push(
+                &mut out,
+                if lang.keywords.contains(&word) {
+                    Tok::Keyword
+                } else {
+                    Tok::Plain
+                },
+                word,
+            );
             i = j;
             continue;
         }
         let ch = rest.chars().next().unwrap();
-        let tok = if "{}()[];,.:<>=+-*/&|!?%^~@#".contains(ch) { Tok::Punct } else { Tok::Plain };
+        let tok = if "{}()[];,.:<>=+-*/&|!?%^~@#".contains(ch) {
+            Tok::Punct
+        } else {
+            Tok::Plain
+        };
         let mut buf = [0u8; 4];
         push(&mut out, tok, ch.encode_utf8(&mut buf));
         i += ch.len_utf8();
@@ -216,7 +363,14 @@ mod tests {
     fn markdown_and_plain() {
         let l = highlight("# Title\nuse `x` here\n```\ncode\n```", Some("markdown"));
         assert_eq!(l[0][0].0, Tok::Heading);
-        assert_eq!(toks(&l[1]), vec![(Tok::Plain, "use "), (Tok::Code, "x"), (Tok::Plain, " here")]);
+        assert_eq!(
+            toks(&l[1]),
+            vec![
+                (Tok::Plain, "use "),
+                (Tok::Code, "x"),
+                (Tok::Plain, " here")
+            ]
+        );
         assert_eq!(l[3][0].0, Tok::Code);
         assert_eq!(highlight("a\nb", None).len(), 2);
     }

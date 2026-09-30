@@ -10,7 +10,11 @@ use std::sync::Arc;
 pub fn install(app: &tauri::App, events: Arc<Events>) -> tauri::Result<()> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
     let h = app.handle();
-    let item = |id: &str, label: &str, accel: &str| MenuItemBuilder::with_id(id, label).accelerator(accel).build(h);
+    let item = |id: &str, label: &str, accel: &str| {
+        MenuItemBuilder::with_id(id, label)
+            .accelerator(accel)
+            .build(h)
+    };
 
     let app_menu = SubmenuBuilder::new(h, "Cross Explore")
         .about(None)
@@ -36,7 +40,15 @@ pub fn install(app: &tauri::App, events: Arc<Events>) -> tauri::Result<()> {
         .build()?;
     // Standard edit actions keep working in text fields; the file list
     // handles the same shortcuts itself.
-    let edit = SubmenuBuilder::new(h, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
+    let edit = SubmenuBuilder::new(h, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
     let go = SubmenuBuilder::new(h, "Go")
         .item(&item("nav.back", "Back", "Cmd+[")?)
         .item(&item("nav.forward", "Forward", "Cmd+]")?)
@@ -46,8 +58,15 @@ pub fn install(app: &tauri::App, events: Arc<Events>) -> tauri::Result<()> {
         .item(&item("nav.editPath", "Go to Folder…", "Cmd+Shift+G")?)
         .item(&item("net.connect", "Connect to Server…", "Cmd+K")?)
         .build()?;
-    let window = SubmenuBuilder::new(h, "Window").minimize().maximize().separator().fullscreen().build()?;
-    let menu = MenuBuilder::new(h).items(&[&app_menu, &file, &edit, &go, &window]).build()?;
+    let window = SubmenuBuilder::new(h, "Window")
+        .minimize()
+        .maximize()
+        .separator()
+        .fullscreen()
+        .build()?;
+    let menu = MenuBuilder::new(h)
+        .items(&[&app_menu, &file, &edit, &go, &window])
+        .build()?;
     app.set_menu(menu)?;
     app.on_menu_event(move |_, ev| {
         events.emit("command", serde_json::json!({ "id": ev.id().0 }));

@@ -42,8 +42,19 @@ pub struct App {
 
 impl App {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(vfs: Arc<Vfs>, events: Arc<Events>, jobs: Arc<Jobs>, transfers: Arc<TransferManager>, thumbs: Thumbnailer, data_dir: PathBuf, cache_dir: PathBuf) -> App {
-        let peer_prefs = std::fs::read(data_dir.join("peer.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    pub fn new(
+        vfs: Arc<Vfs>,
+        events: Arc<Events>,
+        jobs: Arc<Jobs>,
+        transfers: Arc<TransferManager>,
+        thumbs: Thumbnailer,
+        data_dir: PathBuf,
+        cache_dir: PathBuf,
+    ) -> App {
+        let peer_prefs = std::fs::read(data_dir.join("peer.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
         App {
             tags: Tags::new(data_dir.join("tags.json")),
             vfs,

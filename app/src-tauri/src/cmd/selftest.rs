@@ -10,9 +10,11 @@ use tauri::AppHandle;
 
 // A 2×2 red PNG.
 const PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0xFD, 0xD4, 0x9A, 0x73, 0x00,
-    0x00, 0x00, 0x12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x44, 0x0C, 0x70, 0x00, 0x00, 0x2A, 0x17, 0x05, 0xFB, 0x96, 0x11, 0x88, 0xB5, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-    0xAE, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0xFD, 0xD4, 0x9A,
+    0x73, 0x00, 0x00, 0x00, 0x12, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+    0x44, 0x0C, 0x70, 0x00, 0x00, 0x2A, 0x17, 0x05, 0xFB, 0x96, 0x11, 0x88, 0xB5, 0x00, 0x00, 0x00,
+    0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
 
 /// A one-page PDF with a line of text, xref offsets computed.
@@ -36,7 +38,10 @@ fn tiny_pdf() -> Vec<u8> {
     for o in offsets {
         out += &format!("{o:010} 00000 n \n");
     }
-    out += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1);
+    out += &format!(
+        "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+        objs.len() + 1
+    );
     out.into_bytes()
 }
 
@@ -53,12 +58,23 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("doc.pdf"), tiny_pdf()).ok()?;
         // A few MiB of known bytes, for ranged reads of non-local files.
         std::fs::create_dir_all(base.join("media")).ok()?;
-        std::fs::write(base.join("media").join("clip.bin"), (0..3_600_000u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect::<Vec<u8>>()).ok()?;
+        std::fs::write(
+            base.join("media").join("clip.bin"),
+            (0..3_600_000u32)
+                .map(|i| (i.wrapping_mul(2654435761) >> 13) as u8)
+                .collect::<Vec<u8>>(),
+        )
+        .ok()?;
         std::fs::write(base.join("sheet.csv"), "Fruit,Qty\nApples,3\nPears,5\n").ok()?;
         std::fs::write(base.join("sub").join("nested.txt"), "deep inside\n").ok()?;
         // Many folders: a big listing arrives in large channel messages.
         for i in 0..400 {
-            std::fs::create_dir_all(base.join("sub").join("wide").join(format!("folder number {i:03} with a fairly long name"))).ok()?;
+            std::fs::create_dir_all(
+                base.join("sub")
+                    .join("wide")
+                    .join(format!("folder number {i:03} with a fairly long name")),
+            )
+            .ok()?;
         }
         Some(base.canonicalize().unwrap_or(base))
     })
@@ -73,14 +89,20 @@ pub struct Config {
 
 #[tauri::command]
 pub fn selftest_config() -> Option<Config> {
-    dir().as_ref().map(|d| Config { uri: Location::local(d).uri(), remote: std::env::var_os("CX_SELFTEST_REMOTE").is_some() })
+    dir().as_ref().map(|d| Config {
+        uri: Location::local(d).uri(),
+        remote: std::env::var_os("CX_SELFTEST_REMOTE").is_some(),
+    })
 }
 
 /// Simulate another app changing the folder.
 #[tauri::command]
 pub fn selftest_touch(name: String) -> Result<()> {
-    let d = dir().as_ref().ok_or_else(|| cx_core::CxError::Unsupported("self test".into()))?;
-    std::fs::write(d.join(name), "made outside the app\n").map_err(|e| cx_core::CxError::from_io(e, "touch"))
+    let d = dir()
+        .as_ref()
+        .ok_or_else(|| cx_core::CxError::Unsupported("self test".into()))?;
+    std::fs::write(d.join(name), "made outside the app\n")
+        .map_err(|e| cx_core::CxError::from_io(e, "touch"))
 }
 
 #[tauri::command]

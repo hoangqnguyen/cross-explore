@@ -2,8 +2,11 @@
 //! copy and move (to the other pane or anywhere), duplicate, undo,
 //! archives, tags, sizes, diffs, sync, shell and editor.
 
-use super::{App, External, UndoEntry};
-use crate::dialog::{Confirm, DestItem, DestPicker, Dialog, DiffLine, DiffView, Menu, MenuAction, MenuItem, MultiRename, Pending, Prompt, PromptKind, RenameItem, TagState, TagsDlg};
+use super::{App, External, SshFinish, UndoEntry};
+use crate::dialog::{
+    Confirm, DestItem, DestPicker, Dialog, DiffLine, DiffView, Menu, MenuAction, MenuItem,
+    MultiRename, Pending, Prompt, PromptKind, RenameItem, TagState, TagsDlg,
+};
 use crate::input::TextInput;
 use crate::msg::Update;
 use crate::tab::{child_uri, Source};
@@ -22,11 +25,19 @@ fn describe(uris: &[String]) -> String {
 }
 
 impl App {
-    pub(crate) fn submit(&mut self, kind: &str, sources: Vec<String>, dest: Option<String>, conflict: ConflictPolicy) -> Option<u64> {
+    pub(crate) fn submit(
+        &mut self,
+        kind: &str,
+        sources: Vec<String>,
+        dest: Option<String>,
+        conflict: ConflictPolicy,
+    ) -> Option<u64> {
         if sources.is_empty() {
             return None;
         }
-        let r = self.engine.submit(SubmitRequest::new(kind, sources, dest).with_conflict(conflict));
+        let r = self
+            .engine
+            .submit(SubmitRequest::new(kind, sources, dest).with_conflict(conflict));
         self.report(r)
     }
 
@@ -35,7 +46,9 @@ impl App {
     pub(crate) fn open_targets(&mut self, new_tab: bool) {
         // Compare view: rows are relative paths; Enter diffs a changed file.
         if let Source::Compare { left, right, .. } = &self.tab().source {
-            let Some(item) = self.tab().cursor_item() else { return };
+            let Some(item) = self.tab().cursor_item() else {
+                return;
+            };
             if item.entry.is_dir {
                 self.toast("Folders: use sync (F5 / F6 in Commander keys, or the palette)");
                 return;
@@ -51,7 +64,11 @@ impl App {
             .into_iter()
             .map(|r| {
                 let i = t.item(r);
-                (t.uri_of(r), i.entry.is_dir && !i.name().ends_with(".app"), cx_archive::is_archive(i.name()))
+                (
+                    t.uri_of(r),
+                    i.entry.is_dir && !i.name().ends_with(".app"),
+                    cx_archive::is_archive(i.name()),
+                )
             })
             .collect();
         let navigable = targets.iter().filter(|(_, d, a)| *d || *a).count();
@@ -112,26 +129,46 @@ impl App {
         self.spawn(move |engine| async move {
             let local = engine.local_copy(&uri).await;
             Box::new(move |app: &mut App| {
-                let Some(path) = app.report(local) else { return };
+                let Some(path) = app.report(local) else {
+                    return;
+                };
                 let remote = !uri.starts_with("file:");
-                let upload = remote.then(|| (parent, std::fs::metadata(&path).and_then(|m| m.modified()).ok()));
+                let upload = remote.then(|| {
+                    (
+                        parent,
+                        std::fs::metadata(&path).and_then(|m| m.modified()).ok(),
+                    )
+                });
                 app.external = Some(External::Edit { path, upload });
             }) as Update
         });
     }
 
     /// Called by the loop after the editor exits.
-    pub fn edited(&mut self, path: std::path::PathBuf, upload: Option<(String, Option<std::time::SystemTime>)>) {
+    pub fn edited(
+        &mut self,
+        path: std::path::PathBuf,
+        upload: Option<(String, Option<std::time::SystemTime>)>,
+    ) {
         let Some((dir, before)) = upload else { return };
         let after = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
         if after != before {
-            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             self.dialogs.push(Dialog::Confirm(Confirm {
                 title: format!("Upload “{name}”?"),
-                body: format!("You changed the downloaded copy. Replace the file in {}?", crate::util::display(&dir)),
+                body: format!(
+                    "You changed the downloaded copy. Replace the file in {}?",
+                    crate::util::display(&dir)
+                ),
                 ok: "Upload".into(),
                 danger: false,
-                then: Pending::Upload { local: Location::local(&path).uri(), dest_dir: dir },
+                then: Pending::Upload {
+                    local: Location::local(&path).uri(),
+                    dest_dir: dir,
+                },
                 on_cancel: false,
             }));
         }
@@ -158,7 +195,14 @@ impl App {
                 input.cursor = name[..i].chars().count();
             }
         }
-        self.dialogs.push(Dialog::Prompt(Prompt { title: "Rename".into(), label: format!("New name for “{name}”"), input, ok: "Rename".into(), kind: PromptKind::Rename { dir, from: name }, completions: Vec::new() }));
+        self.dialogs.push(Dialog::Prompt(Prompt {
+            title: "Rename".into(),
+            label: format!("New name for “{name}”"),
+            input,
+            ok: "Rename".into(),
+            kind: PromptKind::Rename { dir, from: name },
+            completions: Vec::new(),
+        }));
     }
 
     pub(crate) fn rename(&mut self, dir: String, from: String, to: String) {
@@ -170,7 +214,14 @@ impl App {
             let r = engine.rename(&dir, &from, &to).await;
             Box::new(move |app: &mut App| {
                 let Some(entry) = app.report(r) else { return };
-                app.undo.push(UndoEntry { label: format!("Rename “{from}”"), ops: vec![UndoOp::Rename { dir: dir.clone(), from: from.clone(), to: to.clone() }] });
+                app.undo.push(UndoEntry {
+                    label: format!("Rename “{from}”"),
+                    ops: vec![UndoOp::Rename {
+                        dir: dir.clone(),
+                        from: from.clone(),
+                        to: to.clone(),
+                    }],
+                });
                 app.after_local_change(&dir, &[from.as_str()], Some(entry));
             }) as Update
         });
@@ -178,7 +229,12 @@ impl App {
 
     /// Show a change we made ourselves right away (polled folders would
     /// otherwise lag; live ones get the same patch again, harmlessly).
-    pub(crate) fn after_local_change(&mut self, dir: &str, removed: &[&str], added: Option<cx_core::Entry>) {
+    pub(crate) fn after_local_change(
+        &mut self,
+        dir: &str,
+        removed: &[&str],
+        added: Option<cx_core::Entry>,
+    ) {
         let dir = dir.trim_end_matches('/');
         let mut select = None;
         for p in 0..2 {
@@ -186,10 +242,17 @@ impl App {
                 let is_main = t.is_folder() && t.dir_uri().trim_end_matches('/') == dir;
                 let key = added.as_ref().map(|e| e.name.clone());
                 for f in t.folders_mut() {
-                    if f.dir_uri().trim_end_matches('/') != dir || matches!(f.status, crate::folder::Status::Error(_)) {
+                    if f.dir_uri().trim_end_matches('/') != dir
+                        || matches!(f.status, crate::folder::Status::Error(_))
+                    {
                         continue;
                     }
-                    let mut changes: Vec<cx_core::Change> = removed.iter().map(|r| cx_core::Change::Remove { name: r.to_string() }).collect();
+                    let mut changes: Vec<cx_core::Change> = removed
+                        .iter()
+                        .map(|r| cx_core::Change::Remove {
+                            name: r.to_string(),
+                        })
+                        .collect();
                     if let Some(e) = &added {
                         changes.push(cx_core::Change::Upsert { entry: e.clone() });
                     }
@@ -214,14 +277,27 @@ impl App {
             return;
         }
         let dir = self.tab().dir_uri().to_string();
-        let taken: HashSet<String> = self.tab().folder.items.iter().map(|i| i.lname.clone()).collect();
+        let taken: HashSet<String> = self
+            .tab()
+            .folder
+            .items
+            .iter()
+            .map(|i| i.lname.clone())
+            .collect();
         let mut name = "New folder".to_string();
         let mut n = 2;
         while taken.contains(&name.to_lowercase()) {
             name = format!("New folder ({n})");
             n += 1;
         }
-        self.dialogs.push(Dialog::Prompt(Prompt { title: "New folder".into(), label: "Name".into(), input: TextInput::new(name), ok: "Create".into(), kind: PromptKind::NewFolder { dir }, completions: Vec::new() }));
+        self.dialogs.push(Dialog::Prompt(Prompt {
+            title: "New folder".into(),
+            label: "Name".into(),
+            input: TextInput::new(name),
+            ok: "Create".into(),
+            kind: PromptKind::NewFolder { dir },
+            completions: Vec::new(),
+        }));
     }
 
     pub(crate) fn create_folder(&mut self, dir: String, name: String) {
@@ -233,7 +309,12 @@ impl App {
             let r = engine.create_folder(&dir, Some(&name)).await;
             Box::new(move |app: &mut App| {
                 let Some(entry) = app.report(r) else { return };
-                app.undo.push(UndoEntry { label: format!("New folder “{}”", entry.name), ops: vec![UndoOp::NewFolder { uri: child_uri(&dir, &entry.name) }] });
+                app.undo.push(UndoEntry {
+                    label: format!("New folder “{}”", entry.name),
+                    ops: vec![UndoOp::NewFolder {
+                        uri: child_uri(&dir, &entry.name),
+                    }],
+                });
                 app.tab_mut().filter.clear();
                 app.after_local_change(&dir, &[], Some(entry));
             }) as Update
@@ -245,13 +326,31 @@ impl App {
         if matches!(t.source, Source::Home | Source::Compare { .. }) {
             return;
         }
-        let rows: Vec<_> = if t.selected_rows().len() > 1 { t.selected_rows() } else { t.rows().iter().collect() };
+        let rows: Vec<_> = if t.selected_rows().len() > 1 {
+            t.selected_rows()
+        } else {
+            t.rows().iter().collect()
+        };
         if rows.is_empty() {
             return;
         }
-        let items: Vec<RenameItem> = rows.iter().map(|r| RenameItem { dir: t.parent_of(r), name: t.item(r).name().to_string(), is_dir: t.item(r).entry.is_dir, modified: t.item(r).entry.modified }).collect();
+        let items: Vec<RenameItem> = rows
+            .iter()
+            .map(|r| RenameItem {
+                dir: t.parent_of(r),
+                name: t.item(r).name().to_string(),
+                is_dir: t.item(r).entry.is_dir,
+                modified: t.item(r).entry.modified,
+            })
+            .collect();
         let renaming: HashSet<&str> = items.iter().map(|i| i.name.as_str()).collect();
-        let others = t.folder.items.iter().map(|i| i.name().to_string()).filter(|n| !renaming.contains(n.as_str())).collect();
+        let others = t
+            .folder
+            .items
+            .iter()
+            .map(|i| i.name().to_string())
+            .filter(|n| !renaming.contains(n.as_str()))
+            .collect();
         let parent = t.title();
         self.dialogs.push(Dialog::MultiRename(MultiRename {
             items,
@@ -280,12 +379,21 @@ impl App {
             self.error("Some new names are invalid or clash; fix them first");
             return;
         }
-        let changes: Vec<(String, String, String)> = mr.items.iter().zip(plan).filter(|(_, p)| p.to != p.from).map(|(i, p)| (i.dir.clone(), p.from, p.to)).collect();
+        let changes: Vec<(String, String, String)> = mr
+            .items
+            .iter()
+            .zip(plan)
+            .filter(|(_, p)| p.to != p.from)
+            .map(|(i, p)| (i.dir.clone(), p.from, p.to))
+            .collect();
         if changes.is_empty() {
             return;
         }
         self.spawn(move |engine| async move {
-            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
             let mut done: Vec<UndoOp> = Vec::new();
             let mut error = None;
             let mut temp = Vec::new();
@@ -304,7 +412,11 @@ impl App {
                 // After a failure in phase one, put the moved ones back.
                 let target = if error.is_some() { from } else { to };
                 match engine.rename(dir, tmp, target).await {
-                    Ok(_) if error.is_none() => done.push(UndoOp::Rename { dir: dir.clone(), from: from.clone(), to: to.clone() }),
+                    Ok(_) if error.is_none() => done.push(UndoOp::Rename {
+                        dir: dir.clone(),
+                        from: from.clone(),
+                        to: to.clone(),
+                    }),
                     Ok(_) => {}
                     Err(e) => error = error.or(Some(e)),
                 }
@@ -313,8 +425,14 @@ impl App {
             Box::new(move |app: &mut App| {
                 if !done.is_empty() {
                     let n = done.len();
-                    app.undo.push(UndoEntry { label: format!("Rename {n} items"), ops: done });
-                    app.toast(format!("Renamed {n} {}", if n == 1 { "item" } else { "items" }));
+                    app.undo.push(UndoEntry {
+                        label: format!("Rename {n} items"),
+                        ops: done,
+                    });
+                    app.toast(format!(
+                        "Renamed {n} {}",
+                        if n == 1 { "item" } else { "items" }
+                    ));
                 }
                 if let Some(e) = error {
                     app.error(format!("Rename stopped: {e}"));
@@ -326,12 +444,25 @@ impl App {
 
     /// Re-list every shown folder in `dirs`.
     pub(crate) fn reload_dirs(&mut self, dirs: &HashSet<String>) {
-        let dirs: HashSet<String> = dirs.iter().map(|d| d.trim_end_matches('/').to_string()).collect();
-        let tokens: Vec<u64> = self.panes.iter().flat_map(|p| p.tabs.iter()).flat_map(|t| t.folders()).filter(|f| dirs.contains(f.dir_uri().trim_end_matches('/'))).map(|f| f.token).collect();
+        let dirs: HashSet<String> = dirs
+            .iter()
+            .map(|d| d.trim_end_matches('/').to_string())
+            .collect();
+        let tokens: Vec<u64> = self
+            .panes
+            .iter()
+            .flat_map(|p| p.tabs.iter())
+            .flat_map(|t| t.folders())
+            .filter(|f| dirs.contains(f.dir_uri().trim_end_matches('/')))
+            .map(|f| f.token)
+            .collect();
         for t in tokens {
             self.reload_token(t);
         }
-        if matches!(self.tab().source, Source::Search { .. } | Source::Tag { .. }) {
+        if matches!(
+            self.tab().source,
+            Source::Search { .. } | Source::Tag { .. }
+        ) {
             self.reload();
         }
     }
@@ -349,13 +480,27 @@ impl App {
         }
         let mut by_dir: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for r in t.targets() {
-            by_dir.entry(t.parent_of(r)).or_default().push(t.item(r).name().to_string());
+            by_dir
+                .entry(t.parent_of(r))
+                .or_default()
+                .push(t.item(r).name().to_string());
         }
         let groups: Vec<(String, Vec<String>)> = by_dir.into_iter().collect();
         if self.settings.confirm_trash {
             let n: usize = groups.iter().map(|g| g.1.len()).sum();
-            let body = if n == 1 { format!("“{}”", groups[0].1[0]) } else { format!("{n} items") };
-            self.dialogs.push(Dialog::Confirm(Confirm { title: "Move to Trash?".into(), body, ok: "Move to Trash".into(), danger: false, then: Pending::Trash(groups), on_cancel: false }));
+            let body = if n == 1 {
+                format!("“{}”", groups[0].1[0])
+            } else {
+                format!("{n} items")
+            };
+            self.dialogs.push(Dialog::Confirm(Confirm {
+                title: "Move to Trash?".into(),
+                body,
+                ok: "Move to Trash".into(),
+                danger: false,
+                then: Pending::Trash(groups),
+                on_cancel: false,
+            }));
         } else {
             self.trash_now(groups);
         }
@@ -364,15 +509,39 @@ impl App {
     pub(crate) fn trash_now(&mut self, groups: Vec<(String, Vec<String>)>) {
         // Move the cursor to the row after the deleted block, like Explorer.
         let t = self.tab_mut();
-        let gone: HashSet<String> = t.targets().into_iter().map(|r| t.key_of(r).to_string()).collect();
-        let last = t.rows().iter().rposition(|r| gone.contains(t.key_of(r))).unwrap_or(0);
-        let next = t.rows().iter().skip(last + 1).map(|r| t.key_of(r).to_string()).find(|k| !gone.contains(k)).or_else(|| t.rows()[..last.min(t.rows().len())].iter().rev().map(|r| t.key_of(r).to_string()).find(|k| !gone.contains(k)));
+        let gone: HashSet<String> = t
+            .targets()
+            .into_iter()
+            .map(|r| t.key_of(r).to_string())
+            .collect();
+        let last = t
+            .rows()
+            .iter()
+            .rposition(|r| gone.contains(t.key_of(r)))
+            .unwrap_or(0);
+        let next = t
+            .rows()
+            .iter()
+            .skip(last + 1)
+            .map(|r| t.key_of(r).to_string())
+            .find(|k| !gone.contains(k))
+            .or_else(|| {
+                t.rows()[..last.min(t.rows().len())]
+                    .iter()
+                    .rev()
+                    .map(|r| t.key_of(r).to_string())
+                    .find(|k| !gone.contains(k))
+            });
         t.clear_selection();
         if let Some(k) = next {
             t.select_key(&k);
         }
         let total: usize = groups.iter().map(|g| g.1.len()).sum();
-        let label = if total == 1 { format!("“{}”", groups[0].1[0]) } else { format!("{total} items") };
+        let label = if total == 1 {
+            format!("“{}”", groups[0].1[0])
+        } else {
+            format!("{total} items")
+        };
         for (dir, names) in &groups {
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
             self.after_local_change(dir, &names, None);
@@ -389,7 +558,10 @@ impl App {
             let dirs: HashSet<String> = groups.iter().map(|g| g.0.clone()).collect();
             Box::new(move |app: &mut App| {
                 if !items.is_empty() {
-                    app.undo.push(UndoEntry { label: format!("Move {label} to Trash"), ops: vec![UndoOp::Trash { items }] });
+                    app.undo.push(UndoEntry {
+                        label: format!("Move {label} to Trash"),
+                        ops: vec![UndoOp::Trash { items }],
+                    });
                     app.toast(format!("Moved {label} to Trash"));
                 }
                 if let Some(e) = err {
@@ -411,8 +583,15 @@ impl App {
         }
         if self.settings.confirm_permanent_delete || no_trash {
             self.dialogs.push(Dialog::Confirm(Confirm {
-                title: if no_trash { "This location has no trash. Delete permanently?".into() } else { "Delete permanently?".into() },
-                body: format!("{} will be deleted immediately. You can't undo this.", describe(&uris)),
+                title: if no_trash {
+                    "This location has no trash. Delete permanently?".into()
+                } else {
+                    "Delete permanently?".into()
+                },
+                body: format!(
+                    "{} will be deleted immediately. You can't undo this.",
+                    describe(&uris)
+                ),
                 ok: "Delete".into(),
                 danger: true,
                 then: Pending::Delete(uris),
@@ -430,7 +609,11 @@ impl App {
         if uris.is_empty() {
             return;
         }
-        self.toast(format!("{} {}", if cut { "Cut" } else { "Copied" }, describe(&uris)));
+        self.toast(format!(
+            "{} {}",
+            if cut { "Cut" } else { "Copied" },
+            describe(&uris)
+        ));
         if self.settings.os_clipboard {
             let local = uris.clone();
             // Local files also go on the system clipboard for Finder / Explorer.
@@ -446,17 +629,35 @@ impl App {
             return;
         }
         let dest = self.tab().dir_uri().to_string();
-        let ours: Vec<String> = self.clipboard.as_ref().map(|c| c.0.iter().filter(|u| u.starts_with("file:")).cloned().collect()).unwrap_or_default();
+        let ours: Vec<String> = self
+            .clipboard
+            .as_ref()
+            .map(|c| {
+                c.0.iter()
+                    .filter(|u| u.starts_with("file:"))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
         let use_os = self.settings.os_clipboard;
         self.spawn(move |_| async move {
             // Files copied in another app win when they differ from ours.
             let os = if !use_os {
                 Vec::new()
             } else {
-                tokio::time::timeout(std::time::Duration::from_millis(500), tokio::task::spawn_blocking(cx_engine::system::os_clipboard_get)).await.ok().and_then(|r| r.ok()).unwrap_or_default()
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(500),
+                    tokio::task::spawn_blocking(cx_engine::system::os_clipboard_get),
+                )
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .unwrap_or_default()
             };
             Box::new(move |app: &mut App| {
-                if !os.is_empty() && (os.len() != ours.len() || os.iter().any(|u| !ours.contains(u))) {
+                if !os.is_empty()
+                    && (os.len() != ours.len() || os.iter().any(|u| !ours.contains(u)))
+                {
                     app.submit("copy", os, Some(dest), ConflictPolicy::Ask);
                     return;
                 }
@@ -464,7 +665,12 @@ impl App {
                     app.toast("Nothing to paste");
                     return;
                 };
-                app.submit(if cut { "move" } else { "copy" }, uris, Some(dest), ConflictPolicy::Ask);
+                app.submit(
+                    if cut { "move" } else { "copy" },
+                    uris,
+                    Some(dest),
+                    ConflictPolicy::Ask,
+                );
                 if cut {
                     app.clipboard = None;
                 }
@@ -512,7 +718,11 @@ impl App {
             return;
         }
         if matches!(self.tab().source, Source::Compare { .. }) {
-            self.sync(if moving { SyncDirection::RightToLeft } else { SyncDirection::LeftToRight });
+            self.sync(if moving {
+                SyncDirection::RightToLeft
+            } else {
+                SyncDirection::LeftToRight
+            });
             return;
         }
         let Some(other) = self.other_tab() else {
@@ -528,11 +738,19 @@ impl App {
         let kind = if moving { "move" } else { "copy" };
         if self.settings.confirm_transfer {
             self.dialogs.push(Dialog::Confirm(Confirm {
-                title: format!("{} {}?", if moving { "Move" } else { "Copy" }, describe(&uris)),
+                title: format!(
+                    "{} {}?",
+                    if moving { "Move" } else { "Copy" },
+                    describe(&uris)
+                ),
                 body: format!("To {}", crate::util::display(&dest)),
                 ok: if moving { "Move".into() } else { "Copy".into() },
                 danger: false,
-                then: Pending::Transfer { kind, sources: uris, dests: vec![dest] },
+                then: Pending::Transfer {
+                    kind,
+                    sources: uris,
+                    dests: vec![dest],
+                },
                 on_cancel: false,
             }));
         } else {
@@ -543,7 +761,8 @@ impl App {
     /// Copy to… / Move to…: every place the files could go.
     pub(crate) fn destination_picker(&mut self, moving: bool) {
         let sources = self.tab().target_uris();
-        if sources.is_empty() || matches!(self.tab().source, Source::Home | Source::Compare { .. }) {
+        if sources.is_empty() || matches!(self.tab().source, Source::Home | Source::Compare { .. })
+        {
             return;
         }
         let here = self.tab().dir_uri().to_string();
@@ -552,11 +771,20 @@ impl App {
         seen.insert(here.clone());
         let mut add = |label: String, uri: String, section: &'static str| {
             if !uri.starts_with("cx:") && seen.insert(uri.clone()) {
-                items.push(DestItem { detail: crate::util::display(&uri), label, uri, section });
+                items.push(DestItem {
+                    detail: crate::util::display(&uri),
+                    label,
+                    uri,
+                    section,
+                });
             }
         };
         if let Some(o) = self.other_tab() {
-            add(format!("Other pane: {}", o.title()), o.dir_uri().to_string(), "Panes");
+            add(
+                format!("Other pane: {}", o.title()),
+                o.dir_uri().to_string(),
+                "Panes",
+            );
         }
         for (p, pane) in self.panes.iter().enumerate() {
             for t in &pane.tabs {
@@ -594,7 +822,14 @@ impl App {
                 add(v.name.clone(), v.uri.clone(), "Drives");
             }
         }
-        self.dialogs.push(Dialog::DestPicker(DestPicker { moving, sources, items, checked: BTreeSet::new(), cursor: 0, input: TextInput::default() }));
+        self.dialogs.push(Dialog::DestPicker(DestPicker {
+            moving,
+            sources,
+            items,
+            checked: BTreeSet::new(),
+            cursor: 0,
+            input: TextInput::default(),
+        }));
     }
 
     /// Run the picker's choice: one job per destination.
@@ -628,15 +863,34 @@ impl App {
 
     pub(crate) fn copy_path(&mut self) {
         let t = self.tab();
-        let uris = if t.targets().is_empty() { vec![t.dir_uri().to_string()] } else { t.target_uris() };
-        let text: Vec<String> = uris.iter().map(|u| Location::parse(u).ok().and_then(|l| l.local_path().map(|p| p.display().to_string())).unwrap_or_else(|| u.clone())).collect();
+        let uris = if t.targets().is_empty() {
+            vec![t.dir_uri().to_string()]
+        } else {
+            t.target_uris()
+        };
+        let text: Vec<String> = uris
+            .iter()
+            .map(|u| {
+                Location::parse(u)
+                    .ok()
+                    .and_then(|l| l.local_path().map(|p| p.display().to_string()))
+                    .unwrap_or_else(|| u.clone())
+            })
+            .collect();
         self.osc52 = Some(text.join("\n"));
-        self.toast(if text.len() > 1 { format!("Copied {} paths", text.len()) } else { "Copied path".to_string() });
+        self.toast(if text.len() > 1 {
+            format!("Copied {} paths", text.len())
+        } else {
+            "Copied path".to_string()
+        });
     }
 
     pub(crate) fn reveal(&mut self) {
         let t = self.tab();
-        let uri = t.cursor_row().map(|r| t.uri_of(r)).unwrap_or_else(|| t.dir_uri().to_string());
+        let uri = t
+            .cursor_row()
+            .map(|r| t.uri_of(r))
+            .unwrap_or_else(|| t.dir_uri().to_string());
         if !self.may_launch("the file manager") {
             return;
         }
@@ -645,16 +899,163 @@ impl App {
     }
 
     /// Ctrl+O: a shell (or ssh session) in this folder, TUI suspended.
+    ///
+    /// SFTP asks for the remote user the first time and does not assume the
+    /// local account. A successful login is remembered; a password login
+    /// offers to copy an SSH key once the shell returns.
     pub(crate) fn shell(&mut self) {
         let t = self.tab();
         let uri = match &t.source {
             Source::Folder => t.dir_uri().to_string(),
             Source::Search { root, .. } => root.clone(),
-            _ => cx_core::location::home_dir().map(|h| Location::local(h).uri()).unwrap_or_default(),
+            _ => cx_core::location::home_dir()
+                .map(|h| Location::local(h).uri())
+                .unwrap_or_default(),
         };
-        match Location::parse(&uri).and_then(|l| cx_term::ShellCommand::for_location(&l)) {
-            Ok(cmd) => self.external = Some(External::Shell { argv: cmd.argv, cwd: cmd.cwd }),
+        let loc = match Location::parse(&uri) {
+            Ok(l) => l,
+            Err(e) => {
+                self.error(e);
+                return;
+            }
+        };
+        if let Location::Remote { endpoint, path } = &loc {
+            if endpoint.scheme == cx_core::Scheme::Sftp {
+                self.shell_ssh(endpoint, path);
+                return;
+            }
+        }
+        match cx_term::ShellCommand::for_location(&loc) {
+            Ok(cmd) => {
+                self.external = Some(External::Shell {
+                    argv: cmd.argv,
+                    cwd: cmd.cwd,
+                    ssh: None,
+                })
+            }
             Err(e) => self.error(e),
+        }
+    }
+
+    pub(crate) fn terminal_window(&mut self) {
+        let uri = self.tab().dir_uri().to_string();
+        let Ok(loc) = Location::parse(&uri) else {
+            self.report(cx_engine::system::open_terminal(&uri));
+            return;
+        };
+        if let Location::Remote { endpoint, path } = &loc {
+            if endpoint.scheme == cx_core::Scheme::Sftp {
+                self.ssh_then(endpoint, path, crate::dialog::SshAfter::Window);
+                return;
+            }
+        }
+        self.report(cx_engine::system::open_terminal(&uri));
+    }
+
+    fn ssh_then(
+        &mut self,
+        endpoint: &cx_core::Endpoint,
+        path: &str,
+        after: crate::dialog::SshAfter,
+    ) {
+        let port = endpoint.port_or_default();
+        if let Some(user) = cx_term::SshUsers::new(&self.engine.data_dir).get(&endpoint.host, port)
+        {
+            let ep = cx_core::Endpoint {
+                user: Some(user.clone()),
+                ..endpoint.clone()
+            };
+            match after {
+                crate::dialog::SshAfter::Shell => self.start_ssh(&ep, path, &user),
+                crate::dialog::SshAfter::Window => self.open_ssh_window(&ep, path),
+            }
+            return;
+        }
+        self.dialogs.push(Dialog::Prompt(Prompt {
+            title: format!("SSH to {}", endpoint.host),
+            label: "User name on this server".into(),
+            input: TextInput::new(endpoint.user.clone().unwrap_or_default()),
+            ok: "Connect".into(),
+            kind: PromptKind::SshUser {
+                host: endpoint.host.clone(),
+                port,
+                path: path.to_string(),
+                after,
+            },
+            completions: Vec::new(),
+        }));
+    }
+
+    fn shell_ssh(&mut self, endpoint: &cx_core::Endpoint, path: &str) {
+        self.ssh_then(endpoint, path, crate::dialog::SshAfter::Shell);
+    }
+
+    /// OS terminal app, with the user already chosen.
+    pub(crate) fn open_ssh_window(&mut self, endpoint: &cx_core::Endpoint, path: &str) {
+        let loc = Location::remote(endpoint.clone(), path);
+        self.report(cx_engine::system::open_terminal(&loc.uri()));
+    }
+
+    pub(crate) fn start_ssh(&mut self, endpoint: &cx_core::Endpoint, path: &str, user: &str) {
+        let id = cx_term::next_ssh_id();
+        let log_file = self
+            .engine
+            .cache_dir
+            .join("ssh-logs")
+            .join(format!("ssh-{id}.log"));
+        let control = cx_term::control_socket(id);
+        // The master outlives the foreground ssh for a minute, so the confirm
+        // dialog shown after it returns can still install a key.
+        match cx_term::prepare_ssh(
+            endpoint,
+            path,
+            user,
+            log_file.clone(),
+            control.clone(),
+            Some(60),
+        ) {
+            Ok(launch) => {
+                self.external = Some(External::Shell {
+                    argv: launch.command.argv,
+                    cwd: launch.command.cwd,
+                    ssh: Some(SshFinish {
+                        user: user.to_string(),
+                        host: endpoint.host.clone(),
+                        port: endpoint.port_or_default(),
+                        log_file,
+                        control_path: control,
+                    }),
+                })
+            }
+            Err(e) => self.error(e),
+        }
+    }
+
+    /// Called once the suspended ssh has exited.
+    pub(crate) fn finish_ssh(&mut self, info: SshFinish, code: Option<i32>) {
+        let text = std::fs::read_to_string(&info.log_file).unwrap_or_default();
+        let _ = std::fs::remove_file(&info.log_file);
+        let users = cx_term::SshUsers::new(&self.engine.data_dir);
+        match cx_term::parse_auth_method(&text) {
+            Some(method) => {
+                users.set(&info.host, info.port, &info.user);
+                if method.needs_key() {
+                    self.dialogs.push(Dialog::Confirm(Confirm {
+                        title: format!("Copy your SSH key to {}?", info.host),
+                        body: format!("You signed in as {} with a password. Copy your public key to this server so later SSH sessions sign in without asking?", info.user),
+                        ok: "Copy key".into(),
+                        danger: false,
+                        then: Pending::SshCopyId { user: info.user, host: info.host, port: info.port, control: info.control_path },
+                        on_cancel: false,
+                    }));
+                }
+            }
+            None if code == Some(255) => {
+                if users.forget(&info.host, info.port) {
+                    self.toast("SSH did not sign in. The saved user name was cleared.");
+                }
+            }
+            None => {}
         }
     }
 
@@ -663,8 +1064,16 @@ impl App {
     pub(crate) fn calc_sizes(&mut self) {
         let t = self.tab();
         let sel = t.selected_rows();
-        let rows = if sel.is_empty() { t.rows().iter().collect() } else { sel };
-        let uris: Vec<String> = rows.into_iter().filter(|r| t.item(r).entry.is_dir).map(|r| t.uri_of(r)).collect();
+        let rows = if sel.is_empty() {
+            t.rows().iter().collect()
+        } else {
+            sel
+        };
+        let uris: Vec<String> = rows
+            .into_iter()
+            .filter(|r| t.item(r).entry.is_dir)
+            .map(|r| t.uri_of(r))
+            .collect();
         for u in uris {
             self.compute_size(u);
         }
@@ -702,10 +1111,28 @@ impl App {
         if sources.is_empty() {
             return;
         }
-        let base = if sources.len() == 1 { cx_archive::strip_archive_ext(&name_of(&sources[0])).to_string() } else { "Archive".into() };
-        let base = if sources.len() == 1 && !self.tab().cursor_item().is_some_and(|i| i.entry.is_dir) { base.rsplit_once('.').map(|(s, _)| s.to_string()).unwrap_or(base) } else { base };
+        let base = if sources.len() == 1 {
+            cx_archive::strip_archive_ext(&name_of(&sources[0])).to_string()
+        } else {
+            "Archive".into()
+        };
+        let base =
+            if sources.len() == 1 && !self.tab().cursor_item().is_some_and(|i| i.entry.is_dir) {
+                base.rsplit_once('.')
+                    .map(|(s, _)| s.to_string())
+                    .unwrap_or(base)
+            } else {
+                base
+            };
         let dir = self.tab().dir_uri().to_string();
-        self.dialogs.push(Dialog::Prompt(Prompt { title: "Compress to ZIP".into(), label: "Archive name".into(), input: TextInput::new(format!("{base}.zip")), ok: "Compress".into(), kind: PromptKind::Compress { sources, dir }, completions: Vec::new() }));
+        self.dialogs.push(Dialog::Prompt(Prompt {
+            title: "Compress to ZIP".into(),
+            label: "Archive name".into(),
+            input: TextInput::new(format!("{base}.zip")),
+            ok: "Compress".into(),
+            kind: PromptKind::Compress { sources, dir },
+            completions: Vec::new(),
+        }));
     }
 
     pub(crate) fn compress(&mut self, sources: Vec<String>, dir: String, name: String) {
@@ -713,13 +1140,27 @@ impl App {
         if name.is_empty() {
             return;
         }
-        let name = if name.to_lowercase().ends_with(".zip") { name.to_string() } else { format!("{name}.zip") };
-        self.submit("compress", sources, Some(child_uri(&dir, &name)), ConflictPolicy::KeepBoth);
+        let name = if name.to_lowercase().ends_with(".zip") {
+            name.to_string()
+        } else {
+            format!("{name}.zip")
+        };
+        self.submit(
+            "compress",
+            sources,
+            Some(child_uri(&dir, &name)),
+            ConflictPolicy::KeepBoth,
+        );
     }
 
     pub(crate) fn extract(&mut self) {
         let t = self.tab();
-        let uris: Vec<String> = t.targets().into_iter().filter(|r| cx_archive::is_archive(t.item(r).name())).map(|r| t.uri_of(r)).collect();
+        let uris: Vec<String> = t
+            .targets()
+            .into_iter()
+            .filter(|r| cx_archive::is_archive(t.item(r).name()))
+            .map(|r| t.uri_of(r))
+            .collect();
         if uris.is_empty() || !t.writable() {
             return;
         }
@@ -743,16 +1184,35 @@ impl App {
         let tags = names
             .into_iter()
             .map(|n| {
-                let have = uris.iter().filter(|u| self.tags.get(*u).is_some_and(|t| t.contains(&n))).count();
-                let state = if have == 0 { TagState::None } else if have == uris.len() { TagState::All } else { TagState::Some };
+                let have = uris
+                    .iter()
+                    .filter(|u| self.tags.get(*u).is_some_and(|t| t.contains(&n)))
+                    .count();
+                let state = if have == 0 {
+                    TagState::None
+                } else if have == uris.len() {
+                    TagState::All
+                } else {
+                    TagState::Some
+                };
                 (n, state)
             })
             .collect();
-        self.dialogs.push(Dialog::Tags(TagsDlg { uris, tags, cursor: 0, input: TextInput::default(), busy: false }));
+        self.dialogs.push(Dialog::Tags(TagsDlg {
+            uris,
+            tags,
+            cursor: 0,
+            input: TextInput::default(),
+            busy: false,
+        }));
     }
 
     pub(crate) fn apply_tags(&mut self, dlg: TagsDlg) {
-        let current: Vec<(String, Vec<String>)> = dlg.uris.iter().map(|u| (u.clone(), self.tags.get(u).cloned().unwrap_or_default())).collect();
+        let current: Vec<(String, Vec<String>)> = dlg
+            .uris
+            .iter()
+            .map(|u| (u.clone(), self.tags.get(u).cloned().unwrap_or_default()))
+            .collect();
         let plan: Vec<(String, Vec<String>)> = current
             .into_iter()
             .map(|(u, mut have)| {
@@ -797,9 +1257,17 @@ impl App {
         let mut items = Vec::new();
         let mut seen = HashSet::new();
         for d in self.devices.iter().filter(|d| !d.is_self()) {
-            for s in d.services.iter().filter(|s| s.scheme == cx_core::Scheme::Peer) {
+            for s in d
+                .services
+                .iter()
+                .filter(|s| s.scheme == cx_core::Scheme::Peer)
+            {
                 if seen.insert(s.uri.clone()) {
-                    items.push(MenuItem::new(d.name.clone(), s.uri.clone(), MenuAction::SendTo(s.uri.clone())));
+                    items.push(MenuItem::new(
+                        d.name.clone(),
+                        s.uri.clone(),
+                        MenuAction::SendTo(s.uri.clone()),
+                    ));
                 }
             }
         }
@@ -807,7 +1275,11 @@ impl App {
             for t in &p.trusted {
                 let uri = format!("peer://{}/", t.id);
                 if seen.insert(uri.clone()) {
-                    items.push(MenuItem::new(t.name.clone(), uri.clone(), MenuAction::SendTo(uri)));
+                    items.push(MenuItem::new(
+                        t.name.clone(),
+                        uri.clone(),
+                        MenuAction::SendTo(uri),
+                    ));
                 }
             }
         }
@@ -816,11 +1288,14 @@ impl App {
             return;
         }
         self.pending_send = Some(uris);
-        self.dialogs.push(Dialog::Menu(Menu::new("Send to device", items)));
+        self.dialogs
+            .push(Dialog::Menu(Menu::new("Send to device", items)));
     }
 
     pub(crate) fn send_to(&mut self, device: String) {
-        let Some(uris) = self.pending_send.take() else { return };
+        let Some(uris) = self.pending_send.take() else {
+            return;
+        };
         self.spawn(move |engine| async move {
             let r = engine.peer_send(&device, &uris).await;
             Box::new(move |app: &mut App| {
@@ -835,7 +1310,12 @@ impl App {
 
     pub(crate) fn diff_files(&mut self) {
         let t = self.tab();
-        let files: Vec<String> = t.selected_rows().into_iter().filter(|r| !t.item(r).entry.is_dir).map(|r| t.uri_of(r)).collect();
+        let files: Vec<String> = t
+            .selected_rows()
+            .into_iter()
+            .filter(|r| !t.item(r).entry.is_dir)
+            .map(|r| t.uri_of(r))
+            .collect();
         let (a, b) = if files.len() == 2 {
             (files[0].clone(), files[1].clone())
         } else {
@@ -853,38 +1333,64 @@ impl App {
     pub fn show_diff(&mut self, left: String, right: String) {
         self.spawn(move |engine| async move {
             const MAX: usize = 4 << 20;
-            let (a, b) = tokio::join!(engine.preview_text(&left, MAX), engine.preview_text(&right, MAX));
+            let (a, b) = tokio::join!(
+                engine.preview_text(&left, MAX),
+                engine.preview_text(&right, MAX)
+            );
             let result = a.and_then(|a| b.map(|b| (a.text, b.text)));
             Box::new(move |app: &mut App| {
-                let Some((a, b)) = app.report(result) else { return };
-                app.dialogs.push(Dialog::Diff(diff_view(left, right, &a, &b)));
+                let Some((a, b)) = app.report(result) else {
+                    return;
+                };
+                app.dialogs
+                    .push(Dialog::Diff(diff_view(left, right, &a, &b)));
             }) as Update
         });
     }
 
     pub(crate) fn sync(&mut self, direction: SyncDirection) {
-        let Source::Compare { left, right, diff, .. } = self.tab().source.clone() else { return };
+        let Source::Compare {
+            left, right, diff, ..
+        } = self.tab().source.clone()
+        else {
+            return;
+        };
         let r = self.engine.sync_dirs(&left, &right, &diff, direction);
         if let Some(ids) = self.report(r) {
             if ids.is_empty() {
                 self.toast("Nothing to copy");
             } else {
-                self.toast(format!("Syncing: {} copy {}", ids.len(), if ids.len() == 1 { "job" } else { "jobs" }));
+                self.toast(format!(
+                    "Syncing: {} copy {}",
+                    ids.len(),
+                    if ids.len() == 1 { "job" } else { "jobs" }
+                ));
             }
         }
     }
 }
 
 fn join_rel(root: &str, rel: &str) -> String {
-    rel.split('/').filter(|s| !s.is_empty()).fold(root.to_string(), |acc, s| child_uri(&acc, s))
+    rel.split('/')
+        .filter(|s| !s.is_empty())
+        .fold(root.to_string(), |acc, s| child_uri(&acc, s))
 }
 
 /// Folders an undo touches (to refresh polled views).
 fn op_dirs(op: &UndoOp) -> Vec<String> {
-    let parent = |u: &str| Location::parse(u).ok().and_then(|l| l.parent()).map(|p| p.uri());
+    let parent = |u: &str| {
+        Location::parse(u)
+            .ok()
+            .and_then(|l| l.parent())
+            .map(|p| p.uri())
+    };
     match op {
         UndoOp::Copy { created } => created.iter().filter_map(|u| parent(u)).collect(),
-        UndoOp::Move { items } => items.iter().flat_map(|i| [parent(&i.from), parent(&i.to)]).flatten().collect(),
+        UndoOp::Move { items } => items
+            .iter()
+            .flat_map(|i| [parent(&i.from), parent(&i.to)])
+            .flatten()
+            .collect(),
         UndoOp::Rename { dir, .. } => vec![dir.clone()],
         UndoOp::Trash { items } => items.iter().filter_map(|i| parent(&i.original)).collect(),
         UndoOp::NewFolder { uri } => parent(uri).into_iter().collect(),
@@ -908,7 +1414,19 @@ pub fn diff_view(left: String, right: String, a: &str, b: &str) -> DiffView {
             }
             similar::ChangeTag::Equal => ' ',
         };
-        lines.push(DiffLine { tag, left: change.old_index().map(|i| i + 1), right: change.new_index().map(|i| i + 1), text: change.value().trim_end_matches(['\n', '\r']).to_string() });
+        lines.push(DiffLine {
+            tag,
+            left: change.old_index().map(|i| i + 1),
+            right: change.new_index().map(|i| i + 1),
+            text: change.value().trim_end_matches(['\n', '\r']).to_string(),
+        });
     }
-    DiffView { left, right, lines, added, removed, scroll: 0 }
+    DiffView {
+        left,
+        right,
+        lines,
+        added,
+        removed,
+        scroll: 0,
+    }
 }

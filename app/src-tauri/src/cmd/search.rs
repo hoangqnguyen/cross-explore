@@ -32,18 +32,37 @@ pub struct UiHit {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum SearchEvent {
-    Hits { hits: Vec<UiHit> },
-    Done { scanned: u64, elapsed_ms: f64, truncated: bool },
+    Hits {
+        hits: Vec<UiHit>,
+    },
+    Done {
+        scanned: u64,
+        elapsed_ms: f64,
+        truncated: bool,
+    },
 }
 
 fn parent_of(uri: &str) -> String {
-    Location::parse(uri).ok().and_then(|l| l.parent()).map(|p| p.uri()).unwrap_or_default()
+    Location::parse(uri)
+        .ok()
+        .and_then(|l| l.parent())
+        .map(|p| p.uri())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
-pub async fn search_start(root: String, query: UiQuery, on_event: Channel<SearchEvent>, app: AppState<'_>) -> Result<u64> {
+pub async fn search_start(
+    root: String,
+    query: UiQuery,
+    on_event: Channel<SearchEvent>,
+    app: AppState<'_>,
+) -> Result<u64> {
     let root = Location::parse(&root)?;
     let (id, token) = app.task();
     let cancel = Cancel::new();
@@ -77,7 +96,17 @@ pub async fn search_start(root: String, query: UiQuery, on_event: Channel<Search
         let stats = match query.content.filter(|c| !c.is_empty()) {
             Some(pattern) => {
                 let (tx, mut rx) = mpsc::channel(8);
-                let q = ContentQuery { pattern, regex: false, case_sensitive: None, whole_word: false, files: SearchQuery { text: String::new(), ..files }, ..Default::default() };
+                let q = ContentQuery {
+                    pattern,
+                    regex: false,
+                    case_sensitive: None,
+                    whole_word: false,
+                    files: SearchQuery {
+                        text: String::new(),
+                        ..files
+                    },
+                    ..Default::default()
+                };
                 let run = cx_search::search_content(app.vfs.clone(), root, q, tx, cancel);
                 let forward = async {
                     while let Some(batch) = rx.recv().await {
@@ -85,7 +114,14 @@ pub async fn search_start(root: String, query: UiQuery, on_event: Channel<Search
                             .into_iter()
                             .map(|h| {
                                 let first = h.matches.first();
-                                UiHit { parent: parent_of(&h.uri), uri: h.uri, rel_path: h.rel_path, entry: h.entry, line: first.map(|m| m.line_number), snippet: first.map(|m| m.line.clone()) }
+                                UiHit {
+                                    parent: parent_of(&h.uri),
+                                    uri: h.uri,
+                                    rel_path: h.rel_path,
+                                    entry: h.entry,
+                                    line: first.map(|m| m.line_number),
+                                    snippet: first.map(|m| m.line.clone()),
+                                }
                             })
                             .collect();
                         let _ = on_event.send(SearchEvent::Hits { hits });
@@ -98,15 +134,32 @@ pub async fn search_start(root: String, query: UiQuery, on_event: Channel<Search
                 let run = cx_search::search(app.vfs.clone(), root, files, tx, cancel);
                 let forward = async {
                     while let Some(batch) = rx.recv().await {
-                        let hits = batch.into_iter().map(|h| UiHit { uri: h.uri, parent: h.parent_uri, rel_path: h.rel_path, entry: h.entry, line: None, snippet: None }).collect();
+                        let hits = batch
+                            .into_iter()
+                            .map(|h| UiHit {
+                                uri: h.uri,
+                                parent: h.parent_uri,
+                                rel_path: h.rel_path,
+                                entry: h.entry,
+                                line: None,
+                                snippet: None,
+                            })
+                            .collect();
                         let _ = on_event.send(SearchEvent::Hits { hits });
                     }
                 };
                 tokio::join!(run, forward).0
             }
         };
-        let (scanned, truncated) = stats.as_ref().map(|s| (s.entries_scanned, s.truncated)).unwrap_or((0, false));
-        let _ = on_event.send(SearchEvent::Done { scanned, elapsed_ms: started.elapsed().as_secs_f64() * 1e3, truncated });
+        let (scanned, truncated) = stats
+            .as_ref()
+            .map(|s| (s.entries_scanned, s.truncated))
+            .unwrap_or((0, false));
+        let _ = on_event.send(SearchEvent::Done {
+            scanned,
+            elapsed_ms: started.elapsed().as_secs_f64() * 1e3,
+            truncated,
+        });
         app.finish_task(id);
     });
     Ok(id)

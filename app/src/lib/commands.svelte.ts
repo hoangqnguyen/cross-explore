@@ -14,6 +14,7 @@ import { transfers } from "./stores/transfers.svelte";
 import { toasts } from "./toasts.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
 import { sizes } from "./stores/sizes.svelte";
+import { resolveSshUri } from "./ssh";
 import { HOME_URI, isArchive, ws } from "./workspace.svelte";
 import { ui } from "./stores/ui.svelte";
 
@@ -91,7 +92,7 @@ export const commands: Command[] = [
   { id: "file.copyPath", label: "Copy path", group: "File", icon: "link", keys: { finder: ["Mod+Alt+C"], explorer: ["Mod+Shift+C"] }, run: () => tab().copyPath() },
   { id: "file.reveal", label: isMac ? "Show in Finder" : "Show in Explorer", group: "File", icon: "open", keys: { finder: ["Mod+Shift+R"], explorer: ["Mod+Shift+E"] }, when: () => tab().folder.info?.local === true && tab().folder.kind !== "home", run: () => revealEntry(tab().targets()[0] ? tab().uriOf(tab().targets()[0]) : tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
   { id: "view.terminal", label: "Toggle terminal panel", group: "View", icon: "terminal", keys: { finder: ["Ctrl+`"], explorer: ["Mod+`"] }, when: () => !ui.phone, run: () => (ui.terminalOpen = !ui.terminalOpen) },
-  { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => openTerminal(tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
+  { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => void openExternalTerminal() },
   { id: "file.calcSize", label: "Calculate folder sizes", group: "Tools", icon: "sigma", keys: { all: ["Alt+Shift+Enter"], commander: ["Space"] }, list: true, when: () => tab().targets().some((e) => e.isDir) || tab().visible.some((e) => e.isDir), run: () => calcSizes() },
   { id: "file.compress", label: "Compress to ZIP", group: "Tools", icon: "archive", when: () => hasTargets() && writable(), run: () => compress() },
   { id: "file.extract", label: "Extract here", group: "Tools", icon: "archive", when: () => tab().targets().some((e) => isArchive(e.name)) && writable(), run: () => extract() },
@@ -229,6 +230,12 @@ function calcSizes() {
   const dirs = (t.selectedEntries.length ? t.selectedEntries : t.visible).filter((e) => e.isDir);
   for (const d of dirs) sizes.compute(t.uriOf(d));
   if (settings.data.keymap === "commander" && t.cursorEntry) t.toggle(keyOf(t.cursorEntry));
+}
+
+async function openExternalTerminal() {
+  const uri = await resolveSshUri(tab().dirUri);
+  if (!uri) return;
+  openTerminal(uri).catch((e) => toasts.show(errorText(e), "error"));
 }
 
 async function compress() {

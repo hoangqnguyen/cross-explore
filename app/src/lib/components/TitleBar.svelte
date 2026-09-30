@@ -8,8 +8,11 @@
   import TabStrip from "./TabStrip.svelte";
   import TransferCapsule from "./TransferCapsule.svelte";
 
-  // macOS keeps native traffic lights; Windows gets drawn caption buttons.
-  let customCaption = $derived(ws.platform === "windows");
+  // macOS keeps native traffic lights. Windows has no system title bar (it is
+  // removed so the tabs can sit in it, over Mica), so these are the minimize /
+  // maximize / close buttons. Detect Windows from the web view too: until
+  // places load, `platform` defaults to "macos", which would hide them.
+  let customCaption = $derived(ws.platform === "windows" || /Windows/i.test(navigator.userAgent));
   // The title bar's own left padding (room for traffic lights) isn't the
   // sidebar: pad the rest of the way so the tab split lines up with where
   // the sidebar actually ends, below.
@@ -25,13 +28,13 @@
   </button>
 {/snippet}
 
-<header class="titlebar" class:mac={ws.platform === "macos"} data-tauri-drag-region>
+<header class="titlebar" class:mac={ws.platform === "macos"} class:win={customCaption} data-tauri-drag-region>
   {#if ws.dual}
     <div class="sidebar-gap" style:width="{sidebarGap}px" data-tauri-drag-region></div>
-    <!-- Matched to .panes' real rendered width (a separate flex layout with
-         different chrome on its edges), so the divider between the two tab
-         clusters lands exactly where the two panes actually meet. -->
-    <div class="dual-tabs" class:measured={ws.panesWidth > 0} style:width="{ws.panesWidth}px">
+    <!-- Capped at .panes' real width so the divider lines up with the panes,
+         but allowed to shrink. A fixed width pushed the caption buttons past
+         the window edge, where overflow:hidden clipped them. -->
+    <div class="dual-tabs" style:max-width={ws.panesWidth > 0 ? `${ws.panesWidth}px` : undefined}>
       <div class="pane-tabs" class:active={ws.activePane === 0}><TabStrip pane={ws.panes[0]} compact /></div>
       <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact trailing={splitBtn} /></div>
     </div>
@@ -50,10 +53,12 @@
   </div>
 
   {#if customCaption}
-    <div class="caption">
-      <button aria-label="Minimize" onclick={() => appWindow.minimize()}><Icon name="minimize" size={14} stroke={1} /></button>
-      <button aria-label="Maximize" onclick={() => appWindow.toggleMaximize()}><Icon name="maximize" size={12} stroke={1} /></button>
-      <button class="close-win" aria-label="Close" onclick={() => appWindow.close()}><Icon name="winClose" size={14} stroke={1} /></button>
+    <!-- Out of the flex row, pinned to the window corner, so tabs and the
+         search box can never push them off-screen. -->
+    <div class="caption" data-tauri-drag-region="false">
+      <button aria-label="Minimize" title="Minimize" onclick={() => appWindow.minimize()}><Icon name="minimize" size={10} stroke={1} /></button>
+      <button aria-label="Maximize" title="Maximize" onclick={() => appWindow.toggleMaximize()}><Icon name="maximize" size={10} stroke={1} /></button>
+      <button class="close-win" aria-label="Close" title="Close" onclick={() => appWindow.close()}><Icon name="winClose" size={10} stroke={1} /></button>
     </div>
   {/if}
 </header>
@@ -67,9 +72,15 @@
     padding-left: 8px;
     background: var(--chrome);
     flex: none;
+    min-width: 0;
+    position: relative;
   }
   .titlebar.mac {
     padding-left: 84px;
+  }
+  /* Room for the three caption buttons (46px each), which are taken out of flow. */
+  .titlebar.win {
+    padding-right: 138px;
   }
   .sidebar-gap {
     flex: none;
@@ -78,13 +89,11 @@
   .dual-tabs {
     display: flex;
     align-items: flex-end;
-    /* Until .panes reports its real width (first frame), fill the space. */
-    flex: 1;
+    /* Grow up to the pane width, and shrink when the caption buttons and
+       the search box need the right edge. */
+    flex: 1 1 auto;
     min-width: 0;
     height: 100%;
-  }
-  .dual-tabs.measured {
-    flex: none;
   }
   .pane-tabs {
     display: flex;
@@ -121,6 +130,8 @@
     align-items: center;
     gap: 4px;
     align-self: center;
+    flex: none;
+    margin-left: auto;
     padding-right: 8px;
   }
   .palette {
@@ -164,21 +175,32 @@
     }
   }
   .caption {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
     display: flex;
-    align-self: flex-start;
-    height: 36px;
+    height: 100%;
   }
   .caption button {
     display: grid;
     place-items: center;
     width: 46px;
     height: 100%;
+    color: var(--text);
   }
   .caption button:hover {
     background: var(--hover);
   }
+  .caption button:active {
+    background: var(--pressed);
+  }
   .caption .close-win:hover {
-    background: #c42b1c;
+    background: #e81123;
+    color: #fff;
+  }
+  .caption .close-win:active {
+    background: #c50f1f;
     color: #fff;
   }
 </style>

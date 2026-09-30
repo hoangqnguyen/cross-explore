@@ -17,14 +17,20 @@ pub struct KeychainCredentials {
 
 impl Default for KeychainCredentials {
     fn default() -> Self {
-        KeychainCredentials { session: MemoryCredentials::default(), keychain: true }
+        KeychainCredentials {
+            session: MemoryCredentials::default(),
+            keychain: true,
+        }
     }
 }
 
 impl KeychainCredentials {
     /// A store that never touches the OS keychain.
     pub fn session_only() -> Self {
-        KeychainCredentials { session: MemoryCredentials::default(), keychain: false }
+        KeychainCredentials {
+            session: MemoryCredentials::default(),
+            keychain: false,
+        }
     }
 }
 
@@ -73,7 +79,10 @@ impl CredentialStore for KeychainCredentials {
 
 #[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
 fn keychain_get(account: &str) -> Option<String> {
-    keyring::Entry::new(SERVICE, account).ok()?.get_password().ok()
+    keyring::Entry::new(SERVICE, account)
+        .ok()?
+        .get_password()
+        .ok()
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios", windows, target_os = "linux"))]
@@ -113,7 +122,9 @@ mod tests {
         let store = KeychainCredentials::session_only();
         let loc = Location::parse("sftp://pi@nas/home").unwrap();
         let ep = loc.endpoint().unwrap();
-        store.set(ep, &Credentials::password("pi", "pw"), true).unwrap();
+        store
+            .set(ep, &Credentials::password("pi", "pw"), true)
+            .unwrap();
         assert_eq!(store.get(ep).unwrap().password_str(), Some("pw"));
         assert_eq!(store.get(&ep.without_user()).unwrap().user, "pi");
         store.remove(ep);

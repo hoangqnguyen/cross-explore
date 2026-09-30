@@ -22,11 +22,25 @@ pub fn register(vfs: &Vfs, data_dir: &Path) {
 
 pub fn trust(app: &App, uri: &str, key_type: &str, fingerprint: &str) -> Result<()> {
     let loc = Location::parse(uri)?;
-    let ep = loc.endpoint().ok_or_else(|| CxError::InvalidLocation(uri.into()))?;
+    let ep = loc
+        .endpoint()
+        .ok_or_else(|| CxError::InvalidLocation(uri.into()))?;
     let port = ep.port_or_default();
     match ep.scheme {
-        Scheme::Sftp => cx_sftp::trust_host_key(&ssh_store(&app.data_dir), &ep.host, port, key_type, fingerprint),
-        Scheme::Ftp | Scheme::Ftps => cx_ftp::trust_host_key(&tls_store(&app.data_dir), &ep.host, port, key_type, fingerprint),
+        Scheme::Sftp => cx_sftp::trust_host_key(
+            &ssh_store(&app.data_dir),
+            &ep.host,
+            port,
+            key_type,
+            fingerprint,
+        ),
+        Scheme::Ftp | Scheme::Ftps => cx_ftp::trust_host_key(
+            &tls_store(&app.data_dir),
+            &ep.host,
+            port,
+            key_type,
+            fingerprint,
+        ),
         other => Err(CxError::Unsupported(format!("trusting {other} keys"))),
     }
 }

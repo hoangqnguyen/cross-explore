@@ -488,7 +488,10 @@ export async function subscribe(onEvent: (e: AppEvent) => void): Promise<void> {
 
 // ---------- terminal ----------
 
-export type TermEvent = { kind: "output"; data: string } | { kind: "exit"; code: number | null };
+export type TermEvent =
+  | { kind: "output"; data: string }
+  | { kind: "exit"; code: number | null }
+  | { kind: "authenticated"; method: string; copyId: boolean };
 export async function termOpen(uri: string, cols: number, rows: number, onEvent: (e: TermEvent) => void): Promise<number> {
   return invoke<number>("term_open", { uri, cols, rows, onEvent: channel(onEvent) });
 }
@@ -496,3 +499,8 @@ export const termWrite = (id: number, data: string) => invoke<void>("term_write"
 export const termResize = (id: number, cols: number, rows: number) => invoke<void>("term_resize", { id, cols, rows });
 export const termClose = (id: number) => invoke<void>("term_close", { id });
 export const termCwd = (id: number) => invoke<string | null>("term_cwd", { id });
+
+/** User name remembered after a successful SSH login to this host, if any. */
+export const sshSavedUser = (host: string, port: number) => invoke<string | null>("ssh_saved_user", { host, port });
+/** Install the default public key using the live SSH session. `password` is only needed when there is no control socket. */
+export const sshCopyId = (id: number, password?: string | null) => invoke<string>("ssh_copy_id", { id, password: password ?? null });

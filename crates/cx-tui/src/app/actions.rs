@@ -3,7 +3,9 @@
 
 use super::{App, Focus};
 use crate::commands::Action;
-use crate::dialog::{ConnectForm, Dialog, Menu, MenuAction, MenuItem, PairForm, Prompt, PromptKind, SearchForm};
+use crate::dialog::{
+    ConnectForm, Dialog, Menu, MenuAction, MenuItem, PairForm, Prompt, PromptKind, SearchForm,
+};
 use crate::input::TextInput;
 use crate::settings::{Keymap, ViewMode};
 use crate::sort::SortKey;
@@ -53,11 +55,26 @@ impl App {
             Action::PlacesRight => self.places_menu(if self.dual() { 1 } else { 0 }),
             Action::Hotlist => self.hotlist(),
             Action::RecentFolders => {
-                let items: Vec<MenuItem> = self.settings.recent.iter().map(|u| MenuItem::new(crate::util::name_of(u), crate::util::display(u), MenuAction::Navigate { uri: u.clone(), pane: None })).collect();
+                let items: Vec<MenuItem> = self
+                    .settings
+                    .recent
+                    .iter()
+                    .map(|u| {
+                        MenuItem::new(
+                            crate::util::name_of(u),
+                            crate::util::display(u),
+                            MenuAction::Navigate {
+                                uri: u.clone(),
+                                pane: None,
+                            },
+                        )
+                    })
+                    .collect();
                 if items.is_empty() {
                     self.toast("No recent folders yet");
                 } else {
-                    self.dialogs.push(Dialog::Menu(Menu::new("Recent folders", items)));
+                    self.dialogs
+                        .push(Dialog::Menu(Menu::new("Recent folders", items)));
                 }
             }
             Action::ToggleBookmark => {
@@ -66,7 +83,11 @@ impl App {
                 }
                 let (title, uri) = (self.tab().title(), self.tab().dir_uri().to_string());
                 let added = self.settings.toggle_bookmark(&title, &uri);
-                self.toast(if added { format!("Added “{title}” to Favorites") } else { format!("Removed “{title}” from Favorites") });
+                self.toast(if added {
+                    format!("Added “{title}” to Favorites")
+                } else {
+                    format!("Removed “{title}” from Favorites")
+                });
                 self.refresh_home();
                 self.save_settings();
             }
@@ -96,7 +117,11 @@ impl App {
             Action::TabN(k) => {
                 let p = self.active;
                 let n = self.panes[p].tabs.len();
-                let i = if k == 9 { n - 1 } else { (k as usize).saturating_sub(1) };
+                let i = if k == 9 {
+                    n - 1
+                } else {
+                    (k as usize).saturating_sub(1)
+                };
                 if i >= n {
                     return false;
                 }
@@ -156,7 +181,9 @@ impl App {
             Action::Paste => self.paste(),
             Action::Duplicate => self.duplicate(),
             Action::Undo => self.undo_last(),
-            Action::CopyToOther | Action::MoveToOther => self.send_to_other_pane(a == Action::MoveToOther),
+            Action::CopyToOther | Action::MoveToOther => {
+                self.send_to_other_pane(a == Action::MoveToOther)
+            }
             Action::CopyTo | Action::MoveTo => self.destination_picker(a == Action::MoveTo),
             Action::CopyPath => self.copy_path(),
             Action::ShowInFolder => {
@@ -171,9 +198,7 @@ impl App {
                 if !self.may_launch("a terminal") {
                     return true;
                 }
-                let uri = self.tab().dir_uri().to_string();
-                let r = cx_engine::system::open_terminal(&uri);
-                self.report(r);
+                self.terminal_window();
             }
             Action::CalcSize => self.calc_sizes(),
             Action::Compress => self.compress_prompt(),
@@ -197,10 +222,18 @@ impl App {
             Action::SelectPattern | Action::DeselectPattern => {
                 let select = a == Action::SelectPattern;
                 self.dialogs.push(Dialog::Prompt(Prompt {
-                    title: if select { "Select by pattern".into() } else { "Deselect by pattern".into() },
+                    title: if select {
+                        "Select by pattern".into()
+                    } else {
+                        "Deselect by pattern".into()
+                    },
                     label: "Wildcards like *.jpg; several separated by ;".into(),
                     input: TextInput::new("*"),
-                    ok: if select { "Select".into() } else { "Deselect".into() },
+                    ok: if select {
+                        "Select".into()
+                    } else {
+                        "Deselect".into()
+                    },
                     kind: PromptKind::SelectPattern { select },
                     completions: Vec::new(),
                 }));
@@ -222,13 +255,19 @@ impl App {
             Action::TogglePreview => self.settings.preview_pane = !self.settings.preview_pane,
             Action::ToggleHidden => {
                 self.settings.show_hidden = !self.settings.show_hidden;
-                self.toast(if self.settings.show_hidden { "Showing hidden items" } else { "Hiding hidden items" });
+                self.toast(if self.settings.show_hidden {
+                    "Showing hidden items"
+                } else {
+                    "Hiding hidden items"
+                });
             }
             Action::ToggleStripes => self.settings.stripes = !self.settings.stripes,
             Action::CollapseAll => self.collapse_all(),
             Action::ExpandAll => {
                 let t = self.tab();
-                let Some(r) = t.cursor_row().cloned() else { return false };
+                let Some(r) = t.cursor_row().cloned() else {
+                    return false;
+                };
                 if !t.item(&r).entry.is_dir || t.view != ViewMode::Details {
                     return false;
                 }
@@ -247,7 +286,13 @@ impl App {
                     _ => return false,
                 };
                 let name = TextInput::new(self.tab().filter.clone());
-                self.dialogs.push(Dialog::Search(SearchForm { root, name, content: TextInput::default(), include_hidden: self.settings.show_hidden, focus: 0 }));
+                self.dialogs.push(Dialog::Search(SearchForm {
+                    root,
+                    name,
+                    content: TextInput::default(),
+                    include_hidden: self.settings.show_hidden,
+                    focus: 0,
+                }));
             }
             Action::SortBy(k) => {
                 let s = self.settings.sort.toggled(k);
@@ -255,17 +300,32 @@ impl App {
             }
             Action::SortMenu => {
                 let cur = self.settings.sort;
-                let items = [SortKey::Name, SortKey::Modified, SortKey::Type, SortKey::Size]
-                    .into_iter()
-                    .map(|k| {
-                        let mark = if cur.key == k { if cur.desc { "▼" } else { "▲" } } else { "" };
-                        MenuItem::new(k.label(), mark, MenuAction::Sort(k))
-                    })
-                    .collect();
+                let items = [
+                    SortKey::Name,
+                    SortKey::Modified,
+                    SortKey::Type,
+                    SortKey::Size,
+                ]
+                .into_iter()
+                .map(|k| {
+                    let mark = if cur.key == k {
+                        if cur.desc {
+                            "▼"
+                        } else {
+                            "▲"
+                        }
+                    } else {
+                        ""
+                    };
+                    MenuItem::new(k.label(), mark, MenuAction::Sort(k))
+                })
+                .collect();
                 self.dialogs.push(Dialog::Menu(Menu::new("Sort by", items)));
             }
             // ---- network ----
-            Action::Connect => self.dialogs.push(Dialog::Connect(ConnectForm::new("smb", ""))),
+            Action::Connect => self
+                .dialogs
+                .push(Dialog::Connect(ConnectForm::new("smb", ""))),
             Action::Disconnect => {
                 let uri = self.tab().dir_uri().to_string();
                 if !uri.contains("://") || uri.starts_with("file:") || uri.starts_with("archive:") {
@@ -274,7 +334,13 @@ impl App {
                 }
                 self.disconnect(uri);
             }
-            Action::Pair => self.dialogs.push(Dialog::Pair(PairForm { address: TextInput::default(), code: TextInput::default(), focus: 0, error: None, busy: false })),
+            Action::Pair => self.dialogs.push(Dialog::Pair(PairForm {
+                address: TextInput::default(),
+                code: TextInput::default(),
+                focus: 0,
+                error: None,
+                busy: false,
+            })),
             Action::PeerSettings => {
                 self.refresh_peer();
                 self.dialogs.push(Dialog::Peer { cursor: 0 });
@@ -307,7 +373,14 @@ impl App {
             }
             Action::SaveWorkspace => {
                 let n = self.settings.workspaces.len() + 1;
-                self.dialogs.push(Dialog::Prompt(Prompt { title: "Save workspace".into(), label: "Name (reopen it from the palette)".into(), input: TextInput::new(format!("Workspace {n}")), ok: "Save".into(), kind: PromptKind::SaveWorkspace, completions: Vec::new() }));
+                self.dialogs.push(Dialog::Prompt(Prompt {
+                    title: "Save workspace".into(),
+                    label: "Name (reopen it from the palette)".into(),
+                    input: TextInput::new(format!("Workspace {n}")),
+                    ok: "Save".into(),
+                    kind: PromptKind::SaveWorkspace,
+                    completions: Vec::new(),
+                }));
             }
             Action::CycleTheme => {
                 self.settings.theme = self.settings.theme.next();
@@ -336,42 +409,142 @@ impl App {
     /// Alt+F1 / Alt+F2: home, standard folders, drives, favorites, servers
     /// and devices, opened in that pane.
     fn places_menu(&mut self, pane: usize) {
-        let mut items = vec![MenuItem::new("Home page", "", MenuAction::Navigate { uri: HOME_URI.into(), pane: Some(pane) })];
+        let mut items = vec![MenuItem::new(
+            "Home page",
+            "",
+            MenuAction::Navigate {
+                uri: HOME_URI.into(),
+                pane: Some(pane),
+            },
+        )];
         let mut seen = HashSet::new();
         let mut section = |items: &mut Vec<MenuItem>, title: &str, list: Vec<(String, String)>| {
-            let list: Vec<_> = list.into_iter().filter(|(_, u)| seen.insert(u.clone())).collect();
+            let list: Vec<_> = list
+                .into_iter()
+                .filter(|(_, u)| seen.insert(u.clone()))
+                .collect();
             if !list.is_empty() {
                 items.push(MenuItem::header(title));
-                items.extend(list.into_iter().map(|(n, u)| MenuItem::new(n, crate::util::display(&u), MenuAction::Navigate { uri: u, pane: Some(pane) })));
+                items.extend(list.into_iter().map(|(n, u)| {
+                    MenuItem::new(
+                        n,
+                        crate::util::display(&u),
+                        MenuAction::Navigate {
+                            uri: u,
+                            pane: Some(pane),
+                        },
+                    )
+                }));
             }
         };
         if let Some(p) = self.places.clone() {
             let mut places = vec![(p.home.name.clone(), p.home.uri.clone())];
             places.extend(p.favorites.iter().map(|f| (f.name.clone(), f.uri.clone())));
             section(&mut items, "Places", places);
-            section(&mut items, "Drives", p.volumes.iter().map(|v| (format!("{}  {} free", v.name, crate::format::size(v.free)), v.uri.clone())).collect());
+            section(
+                &mut items,
+                "Drives",
+                p.volumes
+                    .iter()
+                    .map(|v| {
+                        (
+                            format!("{}  {} free", v.name, crate::format::size(v.free)),
+                            v.uri.clone(),
+                        )
+                    })
+                    .collect(),
+            );
         }
-        section(&mut items, "Favorites", self.settings.bookmarks.iter().map(|b| (b.name.clone(), b.uri.clone())).collect());
-        let mut servers: Vec<(String, String)> = self.settings.servers.iter().map(|s| (s.name.clone(), s.uri.clone())).collect();
-        servers.extend(self.engine.connections().into_iter().map(|c| (crate::util::display(&c), c)));
+        section(
+            &mut items,
+            "Favorites",
+            self.settings
+                .bookmarks
+                .iter()
+                .map(|b| (b.name.clone(), b.uri.clone()))
+                .collect(),
+        );
+        let mut servers: Vec<(String, String)> = self
+            .settings
+            .servers
+            .iter()
+            .map(|s| (s.name.clone(), s.uri.clone()))
+            .collect();
+        servers.extend(
+            self.engine
+                .connections()
+                .into_iter()
+                .map(|c| (crate::util::display(&c), c)),
+        );
         section(&mut items, "Servers", servers);
-        let devices: Vec<(String, String)> = self.devices.iter().filter(|d| !d.is_self()).flat_map(|d| d.shares.iter().map(|s| (format!("{} — {}", d.name, s.name), s.uri.clone())).chain(d.services.iter().map(|s| (format!("{} ({})", d.name, s.label), s.uri.clone()))).collect::<Vec<_>>()).collect();
+        let devices: Vec<(String, String)> = self
+            .devices
+            .iter()
+            .filter(|d| !d.is_self())
+            .flat_map(|d| {
+                d.shares
+                    .iter()
+                    .map(|s| (format!("{} — {}", d.name, s.name), s.uri.clone()))
+                    .chain(
+                        d.services
+                            .iter()
+                            .map(|s| (format!("{} ({})", d.name, s.label), s.uri.clone())),
+                    )
+                    .collect::<Vec<_>>()
+            })
+            .collect();
         section(&mut items, "Nearby", devices);
         items.push(MenuItem::header("Network"));
-        items.push(MenuItem::new("Connect to server…", crate::commands::shortcut(Action::Connect, self.settings.keymap).unwrap_or_default(), MenuAction::Run(Action::Connect)));
-        let title = if self.dual() { if pane == 0 { "Left pane" } else { "Right pane" } } else { "Go to" };
+        items.push(MenuItem::new(
+            "Connect to server…",
+            crate::commands::shortcut(Action::Connect, self.settings.keymap).unwrap_or_default(),
+            MenuAction::Run(Action::Connect),
+        ));
+        let title = if self.dual() {
+            if pane == 0 {
+                "Left pane"
+            } else {
+                "Right pane"
+            }
+        } else {
+            "Go to"
+        };
         self.dialogs.push(Dialog::Menu(Menu::new(title, items)));
     }
 
     /// Ctrl+D: favorites, plus adding/removing the current folder.
     fn hotlist(&mut self) {
-        let mut items: Vec<MenuItem> = self.settings.bookmarks.iter().map(|b| MenuItem::new(b.name.clone(), crate::util::display(&b.uri), MenuAction::Navigate { uri: b.uri.clone(), pane: None })).collect();
+        let mut items: Vec<MenuItem> = self
+            .settings
+            .bookmarks
+            .iter()
+            .map(|b| {
+                MenuItem::new(
+                    b.name.clone(),
+                    crate::util::display(&b.uri),
+                    MenuAction::Navigate {
+                        uri: b.uri.clone(),
+                        pane: None,
+                    },
+                )
+            })
+            .collect();
         if self.tab().is_folder() {
             let marked = self.settings.is_bookmarked(self.tab().dir_uri());
             items.push(MenuItem::header(""));
-            items.push(MenuItem::new(if marked { "Remove current folder" } else { "Add current folder" }, crate::commands::shortcut(Action::ToggleBookmark, self.settings.keymap).unwrap_or_default(), MenuAction::Run(Action::ToggleBookmark)));
+            items.push(MenuItem::new(
+                if marked {
+                    "Remove current folder"
+                } else {
+                    "Add current folder"
+                },
+                crate::commands::shortcut(Action::ToggleBookmark, self.settings.keymap)
+                    .unwrap_or_default(),
+                MenuAction::Run(Action::ToggleBookmark),
+            ));
         }
-        self.dialogs.push(Dialog::Menu(Menu::new("Favorites", items)));
+        self.dialogs
+            .push(Dialog::Menu(Menu::new("Favorites", items)));
     }
 
     /// Run a menu or palette choice.
@@ -396,10 +569,18 @@ impl App {
                     self.activate_tab(pane, i);
                 }
             }
-            MenuAction::ConnectTo { scheme, host } => self.dialogs.push(Dialog::Connect(ConnectForm::new(&scheme, &host))),
+            MenuAction::ConnectTo { scheme, host } => self
+                .dialogs
+                .push(Dialog::Connect(ConnectForm::new(&scheme, &host))),
             MenuAction::SendTo(device) => self.send_to(device),
             MenuAction::Workspace(name) => {
-                if let Some(w) = self.settings.workspaces.iter().find(|w| w.name == name).cloned() {
+                if let Some(w) = self
+                    .settings
+                    .workspaces
+                    .iter()
+                    .find(|w| w.name == name)
+                    .cloned()
+                {
                     self.restore_session(&w.session);
                     self.toast(format!("Opened workspace “{name}”"));
                 }

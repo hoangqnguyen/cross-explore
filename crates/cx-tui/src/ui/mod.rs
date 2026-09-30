@@ -102,7 +102,12 @@ pub fn fit_right(s: &str, width: usize) -> String {
 pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let w = width.min(area.width.saturating_sub(2)).max(1);
     let h = height.min(area.height.saturating_sub(2)).max(1);
-    Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h }
+    Rect {
+        x: area.x + (area.width - w) / 2,
+        y: area.y + (area.height - h) / 2,
+        width: w,
+        height: h,
+    }
 }
 
 /// "Key hint" spans: key in accent, label dim.

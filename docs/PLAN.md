@@ -281,7 +281,7 @@ Phase 0:
 
 ---
 
-## Implementation status (2026-09-26)
+## Implementation status (2026-09-30)
 
 | Phase | Status |
 |---|---|
@@ -291,10 +291,14 @@ Phase 0:
 | 3. Peer mode | Done: QUIC agent, SPAKE2 pairing, tailnet auto-trust, shares, live remote watch, send-to-device, `cx serve` |
 | 4. Power tools | Done: multi-rename, compare/sync, file diff, archives, name/content search, tags, hotlist, workspaces, terminal (external + embedded) |
 | 5. Mobile | Done: iOS and Android apps with a touch layout (verified on simulator and emulator) |
-| 6. Polish & extensibility | Partly done: OS clipboard, native drag-out, S3 (in place of OpenDAL), embedded terminal. Still open: delta sync, Google Drive/OneDrive, WASM plugins, updater |
+| 6. Polish & extensibility | Partly done: OS clipboard, native drag-out, S3, embedded terminal, Google Drive / Dropbox / OneDrive (`cx-cloud`), office previews (`cx-office`). Still open: delta sync, WASM plugins, updater |
 
 Differences from the plan:
 - Job state is kept in JSON files, not SQLite.
 - Sorting happens in the UI, which stays fast at 100k items.
 - S3 has its own small client instead of going through OpenDAL.
 - Only SMB and peers push changes; SFTP change streaming (`inotifywait`) was not built.
+- Google Drive, Dropbox and OneDrive have their own HTTP clients in `cx-cloud` (not OpenDAL). Each needs the distributor's OAuth client id. Append writes are unsupported, and changes are polled.
+- Office documents (Word, Excel, PowerPoint, OpenDocument, RTF, CSV) preview as sanitized HTML via `cx-office`. LibreOffice is used for a PDF rendering when it is installed. This exists only in the desktop app.
+- The terminal UI runs on `cx-engine`. The desktop app wires the same crates in `app/src-tauri` and does not call `Engine`. They share the keychain service name `dev.crossexplore.explorer`.
+- Embedded SSH (and the terminal UI's shell) asks for the remote user instead of assuming the local account, remembers that name after a successful login, and offers to install an SSH public key when the login used a password.

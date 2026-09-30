@@ -48,7 +48,9 @@ fn rgb(hex: u32) -> Color {
 }
 
 pub fn truecolor_supported() -> bool {
-    std::env::var("COLORTERM").map(|v| v.contains("truecolor") || v.contains("24bit")).unwrap_or(false)
+    std::env::var("COLORTERM")
+        .map(|v| v.contains("truecolor") || v.contains("24bit"))
+        .unwrap_or(false)
 }
 
 impl Theme {
@@ -211,13 +213,55 @@ impl Theme {
     /// Finder's tag colors.
     pub fn tag(&self, name: &str) -> Color {
         match name {
-            "Red" => if self.rich { rgb(0xff5f57) } else { Color::Red },
-            "Orange" => if self.rich { rgb(0xff9f0a) } else { Color::LightRed },
-            "Yellow" => if self.rich { rgb(0xffd60a) } else { Color::Yellow },
-            "Green" => if self.rich { rgb(0x32d74b) } else { Color::Green },
-            "Blue" => if self.rich { rgb(0x0a84ff) } else { Color::Blue },
-            "Purple" => if self.rich { rgb(0xbf5af2) } else { Color::Magenta },
-            "Gray" => if self.rich { rgb(0x98989d) } else { Color::Gray },
+            "Red" => {
+                if self.rich {
+                    rgb(0xff5f57)
+                } else {
+                    Color::Red
+                }
+            }
+            "Orange" => {
+                if self.rich {
+                    rgb(0xff9f0a)
+                } else {
+                    Color::LightRed
+                }
+            }
+            "Yellow" => {
+                if self.rich {
+                    rgb(0xffd60a)
+                } else {
+                    Color::Yellow
+                }
+            }
+            "Green" => {
+                if self.rich {
+                    rgb(0x32d74b)
+                } else {
+                    Color::Green
+                }
+            }
+            "Blue" => {
+                if self.rich {
+                    rgb(0x0a84ff)
+                } else {
+                    Color::Blue
+                }
+            }
+            "Purple" => {
+                if self.rich {
+                    rgb(0xbf5af2)
+                } else {
+                    Color::Magenta
+                }
+            }
+            "Gray" => {
+                if self.rich {
+                    rgb(0x98989d)
+                } else {
+                    Color::Gray
+                }
+            }
             _ => self.dim,
         }
     }

@@ -21,9 +21,23 @@ pub const MAX_EXPANDED: usize = 200;
 pub enum Source {
     Folder,
     Home,
-    Search { root: String, text: String, content: bool, task: Option<u64>, scanned: u64, truncated: bool },
-    Compare { left: String, right: String, by_content: bool, diff: Vec<DiffItem> },
-    Tag { name: String },
+    Search {
+        root: String,
+        text: String,
+        content: bool,
+        task: Option<u64>,
+        scanned: u64,
+        truncated: bool,
+    },
+    Compare {
+        left: String,
+        right: String,
+        by_content: bool,
+        diff: Vec<DiffItem>,
+    },
+    Tag {
+        name: String,
+    },
 }
 
 /// One visible line. `folder` is 0 for the tab's own listing, k for
@@ -77,7 +91,9 @@ pub struct Tab {
 
 /// URI of `name` inside the folder `dir`.
 pub fn child_uri(dir: &str, name: &str) -> String {
-    Location::parse(dir).map(|l| l.join(name).uri()).unwrap_or_else(|_| format!("{}/{}", dir.trim_end_matches('/'), name))
+    Location::parse(dir)
+        .map(|l| l.join(name).uri())
+        .unwrap_or_else(|_| format!("{}/{}", dir.trim_end_matches('/'), name))
 }
 
 impl Tab {
@@ -120,7 +136,18 @@ impl Tab {
             Source::Search { text, .. } => format!("Search “{text}”"),
             Source::Compare { .. } => "Compare folders".into(),
             Source::Tag { name } => format!("Tagged {name}"),
-            Source::Folder => self.folder.info.as_ref().map(|i| if i.name.is_empty() { i.display.clone() } else { i.name.clone() }).unwrap_or_else(|| self.folder.uri.clone()),
+            Source::Folder => self
+                .folder
+                .info
+                .as_ref()
+                .map(|i| {
+                    if i.name.is_empty() {
+                        i.display.clone()
+                    } else {
+                        i.name.clone()
+                    }
+                })
+                .unwrap_or_else(|| self.folder.uri.clone()),
         }
     }
 
@@ -144,7 +171,13 @@ impl Tab {
 
     fn remember(&mut self) {
         let key = self.folder.uri.clone();
-        self.memory.insert(key, Memory { cursor: self.cursor_key.clone(), scroll: self.scroll.get() });
+        self.memory.insert(
+            key,
+            Memory {
+                cursor: self.cursor_key.clone(),
+                scroll: self.scroll.get(),
+            },
+        );
     }
 
     /// Show `folder` (already created by the app) and select `select`.
@@ -179,7 +212,8 @@ impl Tab {
     /// Step through history; the app supplies the folder for the target.
     pub fn go_history(&mut self, delta: isize, folder: Folder, source: Source) {
         self.remember();
-        self.index = (self.index as isize + delta).clamp(0, self.history.len() as isize - 1) as usize;
+        self.index =
+            (self.index as isize + delta).clamp(0, self.history.len() as isize - 1) as usize;
         self.show(folder, source, None);
     }
 
@@ -195,28 +229,75 @@ impl Tab {
         for f in self.folders_mut() {
             f.settle();
         }
-        let gens = self.expanded.iter().fold(self.folder.generation.wrapping_mul(31), |a, e| a.wrapping_mul(31).wrapping_add(e.folder.generation).wrapping_add(e.uri.len() as u64));
-        let sig = (gens.wrapping_add(self.expanded.len() as u64), self.filter.clone(), show_hidden);
+        let gens = self
+            .expanded
+            .iter()
+            .fold(self.folder.generation.wrapping_mul(31), |a, e| {
+                a.wrapping_mul(31)
+                    .wrapping_add(e.folder.generation)
+                    .wrapping_add(e.uri.len() as u64)
+            });
+        let sig = (
+            gens.wrapping_add(self.expanded.len() as u64),
+            self.filter.clone(),
+            show_hidden,
+        );
         if self.rows_sig.as_ref() == Some(&sig) {
             return;
         }
         self.rows_sig = Some(sig);
         let q = self.filter.trim().to_lowercase();
-        let keep = |i: &Item| (show_hidden || !i.entry.hidden) && (q.is_empty() || i.lname.contains(&q));
+        let keep =
+            |i: &Item| (show_hidden || !i.entry.hidden) && (q.is_empty() || i.lname.contains(&q));
         let mut rows = Vec::with_capacity(self.folder.items.len());
         if self.expanded.is_empty() {
-            rows.extend(self.folder.items.iter().enumerate().filter(|(_, i)| keep(i)).map(|(idx, _)| Row { folder: 0, idx: idx as u32, depth: 0, uri: None }));
+            rows.extend(
+                self.folder
+                    .items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, i)| keep(i))
+                    .map(|(idx, _)| Row {
+                        folder: 0,
+                        idx: idx as u32,
+                        depth: 0,
+                        uri: None,
+                    }),
+            );
         } else {
-            let by_uri: HashMap<&str, usize> = self.expanded.iter().enumerate().map(|(k, e)| (e.uri.as_str(), k + 1)).collect();
+            let by_uri: HashMap<&str, usize> = self
+                .expanded
+                .iter()
+                .enumerate()
+                .map(|(k, e)| (e.uri.as_str(), k + 1))
+                .collect();
             self.walk(0, 0, None, &by_uri, &keep, &mut rows);
         }
         self.rows = rows;
         self.fix_cursor();
     }
 
-    fn walk(&self, fi: usize, depth: u16, parent: Option<&str>, by_uri: &HashMap<&str, usize>, keep: &dyn Fn(&Item) -> bool, out: &mut Vec<Row>) {
-        let folder = if fi == 0 { &self.folder } else { &self.expanded[fi - 1].folder };
-        let base = parent.and_then(|p| Location::parse(p).ok()).or_else(|| if fi == 0 { Location::parse(self.folder.dir_uri()).ok() } else { None });
+    fn walk(
+        &self,
+        fi: usize,
+        depth: u16,
+        parent: Option<&str>,
+        by_uri: &HashMap<&str, usize>,
+        keep: &dyn Fn(&Item) -> bool,
+        out: &mut Vec<Row>,
+    ) {
+        let folder = if fi == 0 {
+            &self.folder
+        } else {
+            &self.expanded[fi - 1].folder
+        };
+        let base = parent.and_then(|p| Location::parse(p).ok()).or_else(|| {
+            if fi == 0 {
+                Location::parse(self.folder.dir_uri()).ok()
+            } else {
+                None
+            }
+        });
         for (idx, item) in folder.items.iter().enumerate() {
             let uri = if item.entry.is_dir || parent.is_some() {
                 Some(match (&item.uri, &base) {
@@ -227,11 +308,20 @@ impl Tab {
             } else {
                 None
             };
-            let sub = if item.entry.is_dir { uri.as_deref().and_then(|u| by_uri.get(u).copied()) } else { None };
+            let sub = if item.entry.is_dir {
+                uri.as_deref().and_then(|u| by_uri.get(u).copied())
+            } else {
+                None
+            };
             if !keep(item) && sub.is_none() {
                 continue;
             }
-            out.push(Row { folder: fi as u32, idx: idx as u32, depth, uri: if parent.is_some() { uri.clone() } else { None } });
+            out.push(Row {
+                folder: fi as u32,
+                idx: idx as u32,
+                depth,
+                uri: if parent.is_some() { uri.clone() } else { None },
+            });
             if let (Some(k), Some(u)) = (sub, uri.as_deref()) {
                 self.walk(k, depth + 1, Some(u), by_uri, keep, out);
             }
@@ -247,7 +337,10 @@ impl Tab {
             }
         }
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
-        self.cursor_key = self.rows.get(self.cursor).map(|r| self.key_of(r).to_string());
+        self.cursor_key = self
+            .rows
+            .get(self.cursor)
+            .map(|r| self.key_of(r).to_string());
     }
 
     pub fn rows(&self) -> &[Row] {
@@ -276,7 +369,9 @@ impl Tab {
             return self.expanded[r.folder as usize - 1].uri.clone();
         }
         let item = self.item(r);
-        item.parent.clone().unwrap_or_else(|| self.dir_uri().to_string())
+        item.parent
+            .clone()
+            .unwrap_or_else(|| self.dir_uri().to_string())
     }
 
     pub fn uri_of(&self, r: &Row) -> String {
@@ -284,7 +379,9 @@ impl Tab {
             return u.clone();
         }
         let item = self.item(r);
-        item.uri.clone().unwrap_or_else(|| child_uri(self.dir_uri(), &item.entry.name))
+        item.uri
+            .clone()
+            .unwrap_or_else(|| child_uri(self.dir_uri(), &item.entry.name))
     }
 
     pub fn cursor_row(&self) -> Option<&Row> {
@@ -395,7 +492,11 @@ impl Tab {
     }
 
     pub fn select_range_to(&mut self, to: usize, additive: bool) {
-        let a = self.anchor.as_ref().and_then(|k| self.rows.iter().position(|r| self.key_of(r) == k.as_str())).unwrap_or(to);
+        let a = self
+            .anchor
+            .as_ref()
+            .and_then(|k| self.rows.iter().position(|r| self.key_of(r) == k.as_str()))
+            .unwrap_or(to);
         let (lo, hi) = (a.min(to), a.max(to));
         if !additive {
             self.selection.clear();
@@ -407,11 +508,21 @@ impl Tab {
     }
 
     pub fn select_all(&mut self) {
-        self.selection = self.rows.iter().map(|r| self.key_of(r).to_string()).collect();
+        self.selection = self
+            .rows
+            .iter()
+            .map(|r| self.key_of(r).to_string())
+            .collect();
     }
 
     pub fn invert_selection(&mut self) {
-        let next: HashSet<String> = self.rows.iter().map(|r| self.key_of(r)).filter(|k| !self.selection.contains(*k)).map(str::to_owned).collect();
+        let next: HashSet<String> = self
+            .rows
+            .iter()
+            .map(|r| self.key_of(r))
+            .filter(|k| !self.selection.contains(*k))
+            .map(str::to_owned)
+            .collect();
         self.selection = next;
     }
 
@@ -419,7 +530,12 @@ impl Tab {
     /// how many rows matched.
     pub fn select_pattern(&mut self, pattern: &str, select: bool) -> usize {
         let w = Wildcards::new(pattern);
-        let keys: Vec<String> = self.rows.iter().filter(|r| w.matches(self.item(r).name())).map(|r| self.key_of(r).to_string()).collect();
+        let keys: Vec<String> = self
+            .rows
+            .iter()
+            .filter(|r| w.matches(self.item(r).name()))
+            .map(|r| self.key_of(r).to_string())
+            .collect();
         for k in &keys {
             if select {
                 self.selection.insert(k.clone());
@@ -445,11 +561,21 @@ impl Tab {
     /// tokens (to unwatch). Keeps the cursor visible if it was inside.
     pub fn collapse(&mut self, uri: &str) -> Vec<Expanded> {
         let prefix = format!("{}/", uri.trim_end_matches('/'));
-        let (gone, keep): (Vec<Expanded>, Vec<Expanded>) = std::mem::take(&mut self.expanded).into_iter().partition(|e| e.uri == uri || e.uri.starts_with(&prefix));
+        let (gone, keep): (Vec<Expanded>, Vec<Expanded>) = std::mem::take(&mut self.expanded)
+            .into_iter()
+            .partition(|e| e.uri == uri || e.uri.starts_with(&prefix));
         self.expanded = keep;
-        if self.cursor_key.as_deref().is_some_and(|k| k.starts_with(&prefix)) {
-            let top = self.rows.iter().position(|r| r.uri.as_deref() == Some(uri) || (r.uri.is_none() && self.uri_of(r) == uri));
-            self.cursor_key = top.map(|i| self.key_of(&self.rows[i]).to_string()).or_else(|| Some(uri.to_string()));
+        if self
+            .cursor_key
+            .as_deref()
+            .is_some_and(|k| k.starts_with(&prefix))
+        {
+            let top = self.rows.iter().position(|r| {
+                r.uri.as_deref() == Some(uri) || (r.uri.is_none() && self.uri_of(r) == uri)
+            });
+            self.cursor_key = top
+                .map(|i| self.key_of(&self.rows[i]).to_string())
+                .or_else(|| Some(uri.to_string()));
         }
         self.selection.retain(|k| !k.starts_with(&prefix));
         gone
@@ -457,7 +583,11 @@ impl Tab {
 
     pub fn collapse_all(&mut self) -> Vec<Expanded> {
         let gone = std::mem::take(&mut self.expanded);
-        if self.cursor_key.as_deref().is_some_and(|k| k.contains("://") && !self.folder.items.iter().any(|i| i.key() == k)) {
+        if self
+            .cursor_key
+            .as_deref()
+            .is_some_and(|k| k.contains("://") && !self.folder.items.iter().any(|i| i.key() == k))
+        {
             self.cursor_key = None;
         }
         gone
@@ -473,7 +603,10 @@ impl Tab {
     }
 
     pub fn expanded_folder_mut(&mut self, token: u64) -> Option<&mut Folder> {
-        self.expanded.iter_mut().map(|e| &mut e.folder).find(|f| f.token == token)
+        self.expanded
+            .iter_mut()
+            .map(|e| &mut e.folder)
+            .find(|f| f.token == token)
     }
 
     pub fn folder_by_token_mut(&mut self, token: u64) -> Option<&mut Folder> {
@@ -515,19 +648,32 @@ mod tests {
     use crate::sort::SortSpec;
 
     pub fn tab_with(entries: Vec<cx_core::Entry>) -> Tab {
-        let folder = Folder::with_items(1, "file:///root", SortSpec::default(), entries.into_iter().map(Item::new).collect(), false);
+        let folder = Folder::with_items(
+            1,
+            "file:///root",
+            SortSpec::default(),
+            entries.into_iter().map(Item::new).collect(),
+            false,
+        );
         let mut t = Tab::new(1, folder, Source::Folder, ViewMode::Details);
         t.refresh_rows(false);
         t
     }
 
     fn names(t: &Tab) -> Vec<String> {
-        t.rows().iter().map(|r| format!("{}{}", "  ".repeat(r.depth as usize), t.item(r).name())).collect()
+        t.rows()
+            .iter()
+            .map(|r| format!("{}{}", "  ".repeat(r.depth as usize), t.item(r).name()))
+            .collect()
     }
 
     #[test]
     fn hidden_and_filter() {
-        let mut t = tab_with(vec![file("a.txt", 1, 0), file(".hidden", 1, 0), file("b.md", 1, 0)]);
+        let mut t = tab_with(vec![
+            file("a.txt", 1, 0),
+            file(".hidden", 1, 0),
+            file("b.md", 1, 0),
+        ]);
         assert_eq!(names(&t), vec!["a.txt", "b.md"]);
         t.refresh_rows(true);
         assert_eq!(t.rows().len(), 3);
@@ -549,7 +695,12 @@ mod tests {
 
     #[test]
     fn selection_ranges_patterns_invert() {
-        let mut t = tab_with(vec![file("a.jpg", 1, 0), file("b.png", 1, 0), file("c.jpg", 1, 0), file("d.txt", 1, 0)]);
+        let mut t = tab_with(vec![
+            file("a.jpg", 1, 0),
+            file("b.png", 1, 0),
+            file("c.jpg", 1, 0),
+            file("d.txt", 1, 0),
+        ]);
         t.move_to(1, false);
         t.move_by(2, true);
         assert_eq!(t.selected_rows().len(), 3);
@@ -566,7 +717,11 @@ mod tests {
         assert_eq!(t.selected_rows().len(), 4);
         t.clear_selection();
         t.move_to(0, false);
-        assert_eq!(t.targets().len(), 1, "cursor row is the target without a selection");
+        assert_eq!(
+            t.targets().len(),
+            1,
+            "cursor row is the target without a selection"
+        );
         t.toggle_at(0);
         t.toggle_at(3);
         assert_eq!(t.selected_rows().len(), 2);
@@ -575,13 +730,31 @@ mod tests {
     #[test]
     fn outline_flattens_expanded_folders() {
         let mut t = tab_with(vec![dir("docs"), dir("src"), file("z.txt", 1, 0)]);
-        let docs = Folder::with_items(2, "file:///root/docs", SortSpec::default(), vec![Item::new(dir("img")), Item::new(file("a.md", 1, 0))], false);
+        let docs = Folder::with_items(
+            2,
+            "file:///root/docs",
+            SortSpec::default(),
+            vec![Item::new(dir("img")), Item::new(file("a.md", 1, 0))],
+            false,
+        );
         assert!(t.add_expanded("file:///root/docs".into(), docs));
-        let img = Folder::with_items(3, "file:///root/docs/img", SortSpec::default(), vec![Item::new(file("p.png", 1, 0))], false);
+        let img = Folder::with_items(
+            3,
+            "file:///root/docs/img",
+            SortSpec::default(),
+            vec![Item::new(file("p.png", 1, 0))],
+            false,
+        );
         t.add_expanded("file:///root/docs/img".into(), img);
         t.refresh_rows(false);
-        assert_eq!(names(&t), vec!["docs", "  img", "    p.png", "  a.md", "src", "z.txt"]);
-        assert_eq!(t.uri_of(&t.rows()[2].clone()), "file:///root/docs/img/p.png");
+        assert_eq!(
+            names(&t),
+            vec!["docs", "  img", "    p.png", "  a.md", "src", "z.txt"]
+        );
+        assert_eq!(
+            t.uri_of(&t.rows()[2].clone()),
+            "file:///root/docs/img/p.png"
+        );
         assert_eq!(t.parent_of(&t.rows()[2].clone()), "file:///root/docs/img");
         assert_eq!(t.parent_row(2), Some(1));
         assert_eq!(t.parent_row(3), Some(0));
@@ -594,21 +767,41 @@ mod tests {
         t.refresh_rows(false);
         t.move_to(2, false);
         let gone = t.collapse("file:///root/docs");
-        assert_eq!(gone.len(), 2, "collapsing a folder collapses its subfolders");
+        assert_eq!(
+            gone.len(),
+            2,
+            "collapsing a folder collapses its subfolders"
+        );
         t.refresh_rows(false);
         assert_eq!(names(&t), vec!["docs", "src", "z.txt"]);
-        assert_eq!(t.cursor_item().unwrap().name(), "docs", "cursor moves out of the collapsed folder");
+        assert_eq!(
+            t.cursor_item().unwrap().name(),
+            "docs",
+            "cursor moves out of the collapsed folder"
+        );
     }
 
     #[test]
     fn history_and_memory() {
         let mut t = tab_with(vec![file("a", 1, 0), file("b", 1, 0)]);
         t.move_to(1, false);
-        let next = Folder::with_items(9, "file:///other", SortSpec::default(), vec![Item::new(file("x", 1, 0))], false);
+        let next = Folder::with_items(
+            9,
+            "file:///other",
+            SortSpec::default(),
+            vec![Item::new(file("x", 1, 0))],
+            false,
+        );
         t.navigate(next, Source::Folder, None);
         assert!(t.can_back());
         assert_eq!(t.history_target(-1), Some("file:///root"));
-        let back = Folder::with_items(10, "file:///root", SortSpec::default(), vec![Item::new(file("a", 1, 0)), Item::new(file("b", 1, 0))], false);
+        let back = Folder::with_items(
+            10,
+            "file:///root",
+            SortSpec::default(),
+            vec![Item::new(file("a", 1, 0)), Item::new(file("b", 1, 0))],
+            false,
+        );
         t.go_history(-1, back, Source::Folder);
         t.refresh_rows(false);
         assert_eq!(t.cursor_item().unwrap().name(), "b", "cursor restored");

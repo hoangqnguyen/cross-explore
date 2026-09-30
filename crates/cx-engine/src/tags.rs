@@ -35,13 +35,23 @@ pub struct TaggedHit {
 
 impl Tags {
     pub fn new(path: PathBuf) -> Tags {
-        let db = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Tags { path, db: Mutex::new(db), finder: cfg!(target_os = "macos") }
+        let db = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
+        Tags {
+            path,
+            db: Mutex::new(db),
+            finder: cfg!(target_os = "macos"),
+        }
     }
 
     /// Keep every tag in the JSON file, even for local files on macOS.
     pub fn json_only(path: PathBuf) -> Tags {
-        Tags { finder: false, ..Tags::new(path) }
+        Tags {
+            finder: false,
+            ..Tags::new(path)
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -60,12 +70,20 @@ impl Tags {
         if let Some(p) = self.finder_path(uri) {
             return finder::read(&p);
         }
-        self.db.lock().unwrap().get(uri).cloned().unwrap_or_default()
+        self.db
+            .lock()
+            .unwrap()
+            .get(uri)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Tags of many URIs at once (the list view asks per visible page).
     pub fn get_many(&self, uris: impl IntoIterator<Item = String>) -> HashMap<String, Vec<String>> {
-        uris.into_iter().map(|u| (self.get(&u), u)).map(|(t, u)| (u, t)).collect()
+        uris.into_iter()
+            .map(|u| (self.get(&u), u))
+            .map(|(t, u)| (u, t))
+            .collect()
     }
 
     pub fn set(&self, uri: &str, tags: Vec<String>) -> Result<()> {
@@ -85,7 +103,14 @@ impl Tags {
 
     /// Everything carrying `tag`: Spotlight for Finder tags, plus our own DB.
     pub fn find(&self, tag: &str) -> Vec<String> {
-        let mut out: Vec<String> = self.db.lock().unwrap().iter().filter(|(_, t)| t.iter().any(|x| x == tag)).map(|(u, _)| u.clone()).collect();
+        let mut out: Vec<String> = self
+            .db
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, t)| t.iter().any(|x| x == tag))
+            .map(|(u, _)| u.clone())
+            .collect();
         #[cfg(target_os = "macos")]
         if self.finder {
             out.extend(finder::find(tag));
@@ -100,7 +125,12 @@ impl Tags {
     pub fn known(&self) -> Vec<String> {
         let mut out: Vec<String> = TAG_COLORS.iter().map(|s| s.to_string()).collect();
         let db = self.db.lock().unwrap();
-        let mut extra: Vec<String> = db.values().flatten().filter(|t| !TAG_COLORS.contains(&t.as_str())).cloned().collect();
+        let mut extra: Vec<String> = db
+            .values()
+            .flatten()
+            .filter(|t| !TAG_COLORS.contains(&t.as_str()))
+            .cloned()
+            .collect();
         extra.sort();
         extra.dedup();
         out.extend(extra);
@@ -114,13 +144,24 @@ mod finder {
     use std::path::Path;
 
     const ATTR: &str = "com.apple.metadata:_kMDItemUserTags";
-    const COLORS: [&str; 8] = ["", "Gray", "Green", "Purple", "Blue", "Yellow", "Red", "Orange"];
+    const COLORS: [&str; 8] = [
+        "", "Gray", "Green", "Purple", "Blue", "Yellow", "Red", "Orange",
+    ];
 
     pub fn read(path: &Path) -> Vec<String> {
-        let Ok(Some(bytes)) = xattr::get(path, ATTR) else { return vec![] };
-        let Ok(plist::Value::Array(items)) = plist::from_bytes::<plist::Value>(&bytes) else { return vec![] };
+        let Ok(Some(bytes)) = xattr::get(path, ATTR) else {
+            return vec![];
+        };
+        let Ok(plist::Value::Array(items)) = plist::from_bytes::<plist::Value>(&bytes) else {
+            return vec![];
+        };
         // Entries look like "Red\n6": the name, then Finder's color index.
-        items.into_iter().filter_map(|v| v.into_string()).map(|s| s.split('\n').next().unwrap_or("").to_string()).filter(|s| !s.is_empty()).collect()
+        items
+            .into_iter()
+            .filter_map(|v| v.into_string())
+            .map(|s| s.split('\n').next().unwrap_or("").to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     }
 
     pub fn write(path: &Path, tags: &[String]) -> Result<()> {
@@ -136,14 +177,21 @@ mod finder {
             })
             .collect();
         let mut buf = Vec::new();
-        plist::to_writer_binary(&mut buf, &plist::Value::Array(values)).map_err(|e| CxError::Io(e.to_string()))?;
+        plist::to_writer_binary(&mut buf, &plist::Value::Array(values))
+            .map_err(|e| CxError::Io(e.to_string()))?;
         xattr::set(path, ATTR, &buf).map_err(|e| CxError::from_io(e, path.display()))
     }
 
     pub fn find(tag: &str) -> Vec<String> {
         let q = format!("kMDItemUserTags == '{}'", tag.replace('\'', "\\'"));
-        let Ok(out) = std::process::Command::new("mdfind").arg(q).output() else { return vec![] };
-        String::from_utf8_lossy(&out.stdout).lines().take(2000).map(|p| Location::local(p).uri()).collect()
+        let Ok(out) = std::process::Command::new("mdfind").arg(q).output() else {
+            return vec![];
+        };
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .take(2000)
+            .map(|p| Location::local(p).uri())
+            .collect()
     }
 }
 
@@ -156,11 +204,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("tags.json");
         let tags = Tags::json_only(path.clone());
-        tags.set("sftp://h/a", vec!["Red".into(), "Work".into()]).unwrap();
+        tags.set("sftp://h/a", vec!["Red".into(), "Work".into()])
+            .unwrap();
         tags.set("sftp://h/b", vec!["Red".into()]).unwrap();
-        assert_eq!(tags.find("Red"), vec!["sftp://h/a".to_string(), "sftp://h/b".to_string()]);
+        assert_eq!(
+            tags.find("Red"),
+            vec!["sftp://h/a".to_string(), "sftp://h/b".to_string()]
+        );
         let again = Tags::json_only(path);
-        assert_eq!(again.get("sftp://h/a"), vec!["Red".to_string(), "Work".to_string()]);
+        assert_eq!(
+            again.get("sftp://h/a"),
+            vec!["Red".to_string(), "Work".to_string()]
+        );
         assert!(again.known().contains(&"Work".to_string()));
         again.set("sftp://h/a", vec![]).unwrap();
         assert!(again.get("sftp://h/a").is_empty());

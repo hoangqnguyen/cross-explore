@@ -1,11 +1,19 @@
 //! The Cross Explore engine, without any GUI.
 //!
-//! Everything the desktop app's backend keeps alive, wired together once so
-//! the Tauri app and the terminal UI run the very same code:
+//! This is the backend the terminal UI (`cx-tui`) runs. The desktop app does
+//! not call [`Engine`]: `app/src-tauri` wires the same crates itself, and
+//! also serves office-document previews. The two shells share the keychain
+//! service name, so a server remembered in one is known to the other.
+//!
+//! The table further down maps desktop Tauri commands to the engine methods
+//! that do the same job. It is a correspondence, not a claim that the
+//! desktop process calls those methods.
+//!
+//! What it keeps:
 //!
 //! * a [`Vfs`] with every connector (local, SMB, SFTP with known_hosts
 //!   trust, FTP/FTPS with certificate trust, WebDAV over http and https,
-//!   S3, and peer once [`Engine::start_peer`] ran) and the archive provider;
+//!   S3, Google Drive, Dropbox, OneDrive, and peer once [`Engine::start_peer`] ran) and the archive provider;
 //! * a keychain-backed [`cx_core::CredentialStore`]
 //!   ([`credentials::KeychainCredentials`]);
 //! * the [`TransferManager`] (jobs interrupted by a quit come back paused),
@@ -38,7 +46,7 @@
 //! | `tags_get/set/find` | `engine.tags.get_many`, `engine.tags.set`, [`Engine::tags_find`] |
 //! | `open_entry`, `reveal_entry`, `open_terminal` | [`Engine::local_copy`] then the Tauri opener (or [`Engine::open_entry`]); [`system::reveal_entry`]; [`system::open_terminal`] |
 //! | `os_clipboard_set/get`, `full_disk_access`, `open_full_disk_access_settings` | [`system::os_clipboard_set`], [`system::os_clipboard_get`], [`system::full_disk_access`], [`system::open_full_disk_access_settings`] |
-//! | `term_*` | `engine.terminals` ([`cx_term::Terminals`]) |
+//! | `term_*`, `ssh_saved_user`, `ssh_copy_id` | The desktop shell's own [`cx_term::Terminals`]. [`Engine::terminals`] is the same type, but the desktop process does not call it. |
 //! | `places` | [`Engine::places`] ([`places::set_translucent`] for the window material flag) |
 //! | `build_state` / setup | [`Engine::new`]`(`[`EngineConfig`]`::new(app_data_dir, app_cache_dir))` then [`Engine::start_background`] |
 //! | protocols (`cxfile://`, `cxthumb://`) | `engine.vfs` for bytes, [`Engine::thumbnail`] |
@@ -127,8 +135,12 @@ impl EngineConfig {
 
     /// The desktop app's folders (Tauri's `app_data_dir` / `app_cache_dir`).
     pub fn standard() -> Result<EngineConfig> {
-        let data = dirs::data_dir().ok_or_else(|| CxError::Io("no data directory".into()))?.join(APP_ID);
-        let cache = dirs::cache_dir().ok_or_else(|| CxError::Io("no cache directory".into()))?.join(APP_ID);
+        let data = dirs::data_dir()
+            .ok_or_else(|| CxError::Io("no data directory".into()))?
+            .join(APP_ID);
+        let cache = dirs::cache_dir()
+            .ok_or_else(|| CxError::Io("no cache directory".into()))?
+            .join(APP_ID);
         Ok(EngineConfig::new(data, cache))
     }
 
@@ -153,7 +165,9 @@ pub struct Engine {
     pub transfers: Arc<TransferManager>,
     pub thumbs: Thumbnailer,
     pub tags: tags::Tags,
-    /// Embedded terminal sessions (the desktop app's terminal panel).
+    /// PTY sessions. The desktop app keeps its own `Terminals` in the Tauri
+    /// shell (that is where the SSH user prompt, remembered names and key
+    /// install live). The terminal UI suspends and runs `ssh` itself.
     pub terminals: cx_term::Terminals,
     pub data_dir: PathBuf,
     pub cache_dir: PathBuf,
@@ -172,7 +186,8 @@ impl Engine {
     /// Build the engine. Must run inside a tokio runtime (the transfer
     /// manager spawns onto it). Creates the data and cache folders.
     pub fn new(config: EngineConfig) -> Result<Arc<Engine>> {
-        let rt = tokio::runtime::Handle::try_current().map_err(|_| CxError::Io("the engine must be created inside a tokio runtime".into()))?;
+        let rt = tokio::runtime::Handle::try_current()
+            .map_err(|_| CxError::Io("the engine must be created inside a tokio runtime".into()))?;
         let io = |e: std::io::Error, p: &PathBuf| CxError::from_io(e, p.display());
         for d in [&config.data_dir, &config.cache_dir] {
             std::fs::create_dir_all(d).map_err(|e| io(e, d))?;
@@ -194,7 +209,11 @@ impl Engine {
             cx_core::location::set_home(home);
         }
 
-        let creds: Arc<dyn CredentialStore> = if config.keychain { Arc::new(credentials::KeychainCredentials::default()) } else { Arc::new(credentials::KeychainCredentials::session_only()) };
+        let creds: Arc<dyn CredentialStore> = if config.keychain {
+            Arc::new(credentials::KeychainCredentials::default())
+        } else {
+            Arc::new(credentials::KeychainCredentials::session_only())
+        };
         let vfs = Vfs::new(Arc::new(cx_local::LocalProvider), creds);
         net::register_connectors(&vfs, &config.data_dir);
         cx_archive::ArchiveProvider::install(&vfs, config.cache_dir.join("archives"));
@@ -203,7 +222,9 @@ impl Engine {
         let jobs = jobs::Jobs::new(events.clone());
         let transfers = {
             let jobs = jobs.clone();
-            TransferManager::new(vfs.clone(), config.transfers_dir.clone(), move |e| jobs.on_transfer(e))
+            TransferManager::new(vfs.clone(), config.transfers_dir.clone(), move |e| {
+                jobs.on_transfer(e)
+            })
         };
         // Jobs interrupted by a quit come back paused, ready to resume.
         for job in transfers.restore_pending() {
@@ -211,7 +232,11 @@ impl Engine {
         }
         let thumbs = Thumbnailer::new(config.cache_dir.join("thumbs"), config.thumb_cache_bytes)?;
         let tags_path = config.data_dir.join("tags.json");
-        let tags = if config.finder_tags { tags::Tags::new(tags_path) } else { tags::Tags::json_only(tags_path) };
+        let tags = if config.finder_tags {
+            tags::Tags::new(tags_path)
+        } else {
+            tags::Tags::json_only(tags_path)
+        };
         Ok(Arc::new(Engine {
             peer_prefs: Mutex::new(Engine::load_peer_prefs(&config.data_dir)),
             vfs,
@@ -271,7 +296,10 @@ mod tests {
     async fn engine() -> (tempfile::TempDir, Arc<Engine>) {
         let dir = tempfile::tempdir().unwrap();
         let mut cfg = EngineConfig::isolated(dir.path().join("state"));
-        cfg.poll = PollConfig { min: Duration::from_millis(50), max: Duration::from_millis(200) };
+        cfg.poll = PollConfig {
+            min: Duration::from_millis(50),
+            max: Duration::from_millis(200),
+        };
         let e = Engine::new(cfg).unwrap();
         std::fs::create_dir_all(dir.path().join("files")).unwrap();
         (dir, e)
@@ -289,16 +317,29 @@ mod tests {
             std::fs::write(files.join(format!("f{i}.txt")), b"x").unwrap();
         }
         let mut events = Vec::new();
-        let n = e.list_dir(&uri(&files), |ev| {
-            events.push(ev);
-            true
-        })
-        .await
-        .unwrap();
+        let n = e
+            .list_dir(&uri(&files), |ev| {
+                events.push(ev);
+                true
+            })
+            .await
+            .unwrap();
         assert_eq!(n, 50);
         assert!(matches!(events[0], ListEvent::Meta { .. }));
-        assert!(matches!(events.last(), Some(ListEvent::Done { total: 50, .. })));
-        let listed: usize = events.iter().map(|e| if let ListEvent::Batch { entries } = e { entries.len() } else { 0 }).sum();
+        assert!(matches!(
+            events.last(),
+            Some(ListEvent::Done { total: 50, .. })
+        ));
+        let listed: usize = events
+            .iter()
+            .map(|e| {
+                if let ListEvent::Batch { entries } = e {
+                    entries.len()
+                } else {
+                    0
+                }
+            })
+            .sum();
         assert_eq!(listed, 50);
     }
 
@@ -312,9 +353,18 @@ mod tests {
         std::fs::write(files.join(&made.name).join("a.bin"), vec![0u8; 1000]).unwrap();
         let renamed = e.rename(&d, &made.name, "Stuff").await.unwrap();
         assert_eq!(renamed.name, "Stuff");
-        let size = e.dir_size(&uri(&files.join("Stuff")), |_| true).await.unwrap();
+        let size = e
+            .dir_size(&uri(&files.join("Stuff")), |_| true)
+            .await
+            .unwrap();
         assert_eq!(size, 1000);
-        e.undo(cx_transfer::UndoOp::rename(&Location::local(&files), &made.name, "Stuff")).await.unwrap();
+        e.undo(cx_transfer::UndoOp::rename(
+            &Location::local(&files),
+            &made.name,
+            "Stuff",
+        ))
+        .await
+        .unwrap();
         assert!(files.join(&made.name).is_dir());
     }
 
@@ -332,22 +382,43 @@ mod tests {
         std::fs::create_dir_all(files.join("src")).unwrap();
         std::fs::create_dir_all(files.join("dst")).unwrap();
         std::fs::write(files.join("src/a.txt"), b"hello").unwrap();
-        let id = e.submit(SubmitRequest::new("copy", vec![uri(&files.join("src/a.txt"))], Some(uri(&files.join("dst"))))).unwrap();
+        let id = e
+            .submit(SubmitRequest::new(
+                "copy",
+                vec![uri(&files.join("src/a.txt"))],
+                Some(uri(&files.join("dst"))),
+            ))
+            .unwrap();
         let job = e.wait_job(id).await.unwrap();
         assert_eq!(job.state, "done");
         assert_eq!(std::fs::read(files.join("dst/a.txt")).unwrap(), b"hello");
         assert!(matches!(job.undo, Some(cx_transfer::UndoOp::Copy { .. })));
 
         let zip = uri(&files.join("out.zip"));
-        let id = e.submit(SubmitRequest::new("compress", vec![uri(&files.join("src"))], Some(zip.clone()))).unwrap();
+        let id = e
+            .submit(SubmitRequest::new(
+                "compress",
+                vec![uri(&files.join("src"))],
+                Some(zip.clone()),
+            ))
+            .unwrap();
         assert!(tasks::is_task(id));
         assert_eq!(e.wait_job(id).await.unwrap().state, "done");
         std::fs::create_dir_all(files.join("x")).unwrap();
-        let id = e.submit(SubmitRequest::new("extract", vec![zip.clone()], Some(uri(&files.join("x"))))).unwrap();
+        let id = e
+            .submit(SubmitRequest::new(
+                "extract",
+                vec![zip.clone()],
+                Some(uri(&files.join("x"))),
+            ))
+            .unwrap();
         assert_eq!(e.wait_job(id).await.unwrap().state, "done");
         assert!(files.join("x/out/src/a.txt").exists() || files.join("x/src/a.txt").exists());
         // Browse the zip as a folder through the archive provider.
-        let n = e.list_dir(&format!("archive://{zip}!/"), |_| true).await.unwrap();
+        let n = e
+            .list_dir(&format!("archive://{zip}!/"), |_| true)
+            .await
+            .unwrap();
         assert!(n >= 1);
         assert!(!seen.lock().unwrap().is_empty());
     }
@@ -357,18 +428,22 @@ mod tests {
         let (dir, e) = engine().await;
         let files = dir.path().join("files");
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<Change>>();
-        let info = e.watch_dir_with(&uri(&files), move |c| {
-            let _ = tx.send(c);
-        })
-        .await
-        .unwrap();
+        let info = e
+            .watch_dir_with(&uri(&files), move |c| {
+                let _ = tx.send(c);
+            })
+            .await
+            .unwrap();
         assert_eq!(info.mode, WatchMode::Live);
         tokio::time::sleep(Duration::from_millis(200)).await;
         std::fs::write(files.join("new.txt"), b"x").unwrap();
         let got = tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let batch = rx.recv().await.unwrap();
-                if batch.iter().any(|c| matches!(c, Change::Upsert { entry } if entry.name == "new.txt")) {
+                if batch
+                    .iter()
+                    .any(|c| matches!(c, Change::Upsert { entry } if entry.name == "new.txt"))
+                {
                     return true;
                 }
             }
@@ -387,8 +462,20 @@ mod tests {
         std::fs::write(files.join("deep/er/needle.md"), b"the quick fox").unwrap();
         std::fs::write(files.join("hay.txt"), b"nothing").unwrap();
         for (req, want) in [
-            (SearchRequest { text: "needle".into(), ..Default::default() }, "needle.md"),
-            (SearchRequest { content: Some("quick".into()), ..Default::default() }, "needle.md"),
+            (
+                SearchRequest {
+                    text: "needle".into(),
+                    ..Default::default()
+                },
+                "needle.md",
+            ),
+            (
+                SearchRequest {
+                    content: Some("quick".into()),
+                    ..Default::default()
+                },
+                "needle.md",
+            ),
         ] {
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
             e.search_start(&uri(&files), req, move |ev| {
@@ -398,7 +485,9 @@ mod tests {
             let mut names = Vec::new();
             while let Some(ev) = rx.recv().await {
                 match ev {
-                    SearchEvent::Hits { hits } => names.extend(hits.into_iter().map(|h| h.entry.name)),
+                    SearchEvent::Hits { hits } => {
+                        names.extend(hits.into_iter().map(|h| h.entry.name))
+                    }
                     SearchEvent::Done { .. } => break,
                 }
             }
@@ -416,7 +505,9 @@ mod tests {
         let (l, r) = (uri(&files.join("l")), uri(&files.join("r")));
         let diff = e.compare_dirs(&l, &r, false).await.unwrap();
         assert_eq!(diff.len(), 1);
-        let ids = e.sync_dirs(&l, &r, &diff, cx_transfer::SyncDirection::LeftToRight).unwrap();
+        let ids = e
+            .sync_dirs(&l, &r, &diff, cx_transfer::SyncDirection::LeftToRight)
+            .unwrap();
         for id in ids {
             e.wait_job(id).await;
         }
@@ -426,7 +517,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unknown_servers_fail_cleanly() {
         let (_dir, e) = engine().await;
-        assert!(e.trust_host_key("smb://nas/share", "ssh-ed25519", "SHA256:x").is_err());
+        assert!(e
+            .trust_host_key("smb://nas/share", "ssh-ed25519", "SHA256:x")
+            .is_err());
         assert!(e.connections().is_empty());
         assert!(e.connect_server("file:///tmp", None, false).await.is_err());
     }

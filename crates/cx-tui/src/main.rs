@@ -35,7 +35,14 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut a = Args { locations: vec![], config: None, commander: false, discovery: true, peer: true, mouse: true };
+    let mut a = Args {
+        locations: vec![],
+        config: None,
+        commander: false,
+        discovery: true,
+        peer: true,
+        mouse: true,
+    };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -49,10 +56,15 @@ fn parse_args() -> Result<Args, String> {
             s if s.starts_with("--") => return Err(format!("unknown option {s}\n\n{USAGE}")),
             s => {
                 // Relative paths are relative to where we were started.
-                let loc = if s.contains("://") || s.starts_with('~') || std::path::Path::new(s).is_absolute() {
+                let loc = if s.contains("://")
+                    || s.starts_with('~')
+                    || std::path::Path::new(s).is_absolute()
+                {
                     s.to_string()
                 } else {
-                    std::env::current_dir().map(|d| d.join(s).display().to_string()).unwrap_or_else(|_| s.to_string())
+                    std::env::current_dir()
+                        .map(|d| d.join(s).display().to_string())
+                        .unwrap_or_else(|_| s.to_string())
                 };
                 a.locations.push(loc);
             }
@@ -69,7 +81,10 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
     };
-    let rt = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+    let rt = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
         Ok(rt) => rt,
         Err(e) => {
             eprintln!("cx-tui: {e}");

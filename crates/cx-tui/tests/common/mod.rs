@@ -49,7 +49,8 @@ pub fn write(p: &Path, data: &[u8]) {
     }
     std::fs::write(p, data).unwrap();
     let f = std::fs::File::options().write(true).open(p).unwrap();
-    f.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_614_859_200)).unwrap();
+    f.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_614_859_200))
+        .unwrap();
 }
 
 pub struct Harness {
@@ -68,7 +69,10 @@ impl Harness {
         home();
         let state = tempfile::tempdir().unwrap();
         let mut cfg = EngineConfig::isolated(state.path());
-        cfg.poll = PollConfig { min: Duration::from_millis(100), max: Duration::from_millis(400) };
+        cfg.poll = PollConfig {
+            min: Duration::from_millis(100),
+            max: Duration::from_millis(400),
+        };
         let engine = Engine::new(cfg).unwrap();
         let (mut app, rx) = App::new(engine, settings, None);
         app.no_launch = true;
@@ -85,9 +89,27 @@ impl Harness {
             }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
-                panic!("timed out waiting for: {what}\ntoasts: {:?}\njobs: {:?}\ndialogs: {}", self.app.toasts.iter().map(|t| &t.text).collect::<Vec<_>>(), self.app.jobs.iter().map(|j| (j.id, &j.kind, &j.state, &j.sources, &j.dest, j.conflict.as_ref().map(|c| (&c.source_uri, &c.dest_uri)))).collect::<Vec<_>>(), self.app.dialogs.len());
+                panic!(
+                    "timed out waiting for: {what}\ntoasts: {:?}\njobs: {:?}\ndialogs: {}",
+                    self.app.toasts.iter().map(|t| &t.text).collect::<Vec<_>>(),
+                    self.app
+                        .jobs
+                        .iter()
+                        .map(|j| (
+                            j.id,
+                            &j.kind,
+                            &j.state,
+                            &j.sources,
+                            &j.dest,
+                            j.conflict.as_ref().map(|c| (&c.source_uri, &c.dest_uri))
+                        ))
+                        .collect::<Vec<_>>(),
+                    self.app.dialogs.len()
+                );
             }
-            if let Ok(Some(m)) = tokio::time::timeout(left.min(Duration::from_millis(50)), self.rx.recv()).await {
+            if let Ok(Some(m)) =
+                tokio::time::timeout(left.min(Duration::from_millis(50)), self.rx.recv()).await
+            {
                 self.app.handle_msg(m);
             }
         }
@@ -99,7 +121,9 @@ impl Harness {
         self.until("live watches", |a| {
             a.visible_panes().iter().all(|&p| {
                 let t = a.panes[p].tab();
-                !t.is_folder() || t.folders().all(|f| f.is_ready() && !f.is_listing() && f.watch.is_some())
+                !t.is_folder()
+                    || t.folders()
+                        .all(|f| f.is_ready() && !f.is_listing() && f.watch.is_some())
             })
         })
         .await;
@@ -107,14 +131,19 @@ impl Harness {
 
     /// Wait until the active tab finished listing `n` rows.
     pub async fn listed(&mut self, n: usize) {
-        self.until(&format!("{n} rows listed"), move |a| a.tab().folder.is_ready() && a.tab().rows().len() == n).await;
+        self.until(&format!("{n} rows listed"), move |a| {
+            a.tab().folder.is_ready() && a.tab().rows().len() == n
+        })
+        .await;
     }
 
     /// Handle whatever arrives for `d`.
     pub async fn settle(&mut self, d: Duration) {
         let end = Instant::now() + d;
         while Instant::now() < end {
-            if let Ok(Some(m)) = tokio::time::timeout(Duration::from_millis(20), self.rx.recv()).await {
+            if let Ok(Some(m)) =
+                tokio::time::timeout(Duration::from_millis(20), self.rx.recv()).await
+            {
                 self.app.handle_msg(m);
             }
         }
@@ -124,8 +153,13 @@ impl Harness {
     /// Open `uri` in the active tab and wait for the listing.
     pub async fn open(&mut self, uri: &str) {
         self.app.navigate(uri);
-        let target = cx_core::Location::parse(uri).map(|l| l.uri()).unwrap_or_else(|_| uri.to_string());
-        self.until("listing", |a| a.tab().folder.is_ready() && (a.tab().dir_uri() == target || a.tab().uri() == uri)).await;
+        let target = cx_core::Location::parse(uri)
+            .map(|l| l.uri())
+            .unwrap_or_else(|_| uri.to_string());
+        self.until("listing", |a| {
+            a.tab().folder.is_ready() && (a.tab().dir_uri() == target || a.tab().uri() == uri)
+        })
+        .await;
     }
 
     pub fn key(&mut self, code: KeyCode) {
@@ -145,12 +179,19 @@ impl Harness {
     /// Names on screen in the active tab, in order.
     pub fn names(&self) -> Vec<String> {
         let t = self.app.tab();
-        t.rows().iter().map(|r| format!("{}{}", "  ".repeat(r.depth as usize), t.item(r).name())).collect()
+        t.rows()
+            .iter()
+            .map(|r| format!("{}{}", "  ".repeat(r.depth as usize), t.item(r).name()))
+            .collect()
     }
 
     pub fn select(&mut self, name: &str) {
         let t = self.app.tab_mut();
-        let i = t.rows().iter().position(|r| t.item(r).name() == name).unwrap_or_else(|| panic!("no row {name}"));
+        let i = t
+            .rows()
+            .iter()
+            .position(|r| t.item(r).name() == name)
+            .unwrap_or_else(|| panic!("no row {name}"));
         t.select_only(i);
     }
 

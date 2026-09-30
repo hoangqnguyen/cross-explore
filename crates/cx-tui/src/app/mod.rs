@@ -67,11 +67,30 @@ pub struct UndoEntry {
 /// Something the terminal loop runs with the TUI suspended.
 #[derive(Debug, Clone, PartialEq)]
 pub enum External {
-    /// Program and arguments (empty = login shell) in `cwd`.
-    Shell { argv: Vec<String>, cwd: Option<PathBuf> },
+    /// Program and arguments (empty = login shell) in `cwd`. `ssh` is set
+    /// when this is a remote login the app should remember afterwards.
+    Shell {
+        argv: Vec<String>,
+        cwd: Option<PathBuf>,
+        ssh: Option<SshFinish>,
+    },
     /// Edit a local file; for a downloaded copy of a remote file, `upload`
     /// is (remote folder URI, mtime before editing).
-    Edit { path: PathBuf, upload: Option<(String, Option<std::time::SystemTime>)> },
+    Edit {
+        path: PathBuf,
+        upload: Option<(String, Option<std::time::SystemTime>)>,
+    },
+}
+
+/// A finished `ssh` the terminal UI started. The log says whether it signed
+/// in, and the control socket (kept briefly) can install a key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshFinish {
+    pub user: String,
+    pub host: String,
+    pub port: u16,
+    pub log_file: PathBuf,
+    pub control_path: Option<PathBuf>,
 }
 
 /// Which list has the keyboard.
@@ -136,7 +155,11 @@ pub struct App {
 impl App {
     /// Build the app on an engine. Returns the message receiver the loop
     /// (or a test) must pump into [`App::handle_msg`].
-    pub fn new(engine: Arc<Engine>, settings: Settings, settings_path: Option<PathBuf>) -> (App, UnboundedReceiver<Msg>) {
+    pub fn new(
+        engine: Arc<Engine>,
+        settings: Settings,
+        settings_path: Option<PathBuf>,
+    ) -> (App, UnboundedReceiver<Msg>) {
         let (tx, rx) = unbounded_channel();
         {
             let tx = tx.clone();
@@ -149,7 +172,18 @@ impl App {
             tx,
             settings,
             settings_path,
-            panes: [Pane { tabs: Vec::new(), active: 0, closed: Vec::new() }, Pane { tabs: Vec::new(), active: 0, closed: Vec::new() }],
+            panes: [
+                Pane {
+                    tabs: Vec::new(),
+                    active: 0,
+                    closed: Vec::new(),
+                },
+                Pane {
+                    tabs: Vec::new(),
+                    active: 0,
+                    closed: Vec::new(),
+                },
+            ],
             active: 0,
             dialogs: Vec::new(),
             toasts: Vec::new(),
@@ -193,8 +227,12 @@ impl App {
     /// Open the start locations: `starts` if given, else the saved session,
     /// else the home folder.
     pub fn start(&mut self, starts: &[String]) {
-        let home = cx_core::location::home_dir().map(|h| cx_core::Location::local(h).uri()).unwrap_or_else(|| HOME_URI.into());
-        let session = self.settings.session.clone().filter(|s| self.settings.restore_session && s.panes.iter().any(|p| !p.tabs.is_empty()));
+        let home = cx_core::location::home_dir()
+            .map(|h| cx_core::Location::local(h).uri())
+            .unwrap_or_else(|| HOME_URI.into());
+        let session = self.settings.session.clone().filter(|s| {
+            self.settings.restore_session && s.panes.iter().any(|p| !p.tabs.is_empty())
+        });
         if !starts.is_empty() {
             self.open_tab(0, &starts[0], true);
             if let Some(second) = starts.get(1) {
@@ -243,7 +281,9 @@ impl App {
         self.open_session(s);
         for p in 0..2 {
             if self.panes[p].tabs.is_empty() {
-                let uri = cx_core::location::home_dir().map(|h| cx_core::Location::local(h).uri()).unwrap_or_else(|| HOME_URI.into());
+                let uri = cx_core::location::home_dir()
+                    .map(|h| cx_core::Location::local(h).uri())
+                    .unwrap_or_else(|| HOME_URI.into());
                 self.open_tab(p, &uri, true);
             }
         }
@@ -300,7 +340,10 @@ impl App {
     }
 
     pub fn tab_by_id_mut(&mut self, id: u64) -> Option<&mut Tab> {
-        self.panes.iter_mut().flat_map(|p| p.tabs.iter_mut()).find(|t| t.id == id)
+        self.panes
+            .iter_mut()
+            .flat_map(|p| p.tabs.iter_mut())
+            .find(|t| t.id == id)
     }
 
     /// Panes on screen.
@@ -313,7 +356,10 @@ impl App {
     }
 
     pub fn folder_mut(&mut self, token: u64) -> Option<&mut Folder> {
-        self.panes.iter_mut().flat_map(|p| p.tabs.iter_mut()).find_map(|t| t.folder_by_token_mut(token))
+        self.panes
+            .iter_mut()
+            .flat_map(|p| p.tabs.iter_mut())
+            .find_map(|t| t.folder_by_token_mut(token))
     }
 
     /// (pane, tab index) holding the folder `token`, and whether it's the
@@ -339,16 +385,26 @@ impl App {
     // ---- toasts & settings ----
 
     pub fn toast(&mut self, text: impl Into<String>) {
-        self.toasts.push(Toast { text: text.into(), error: false, at: Instant::now() });
+        self.toasts.push(Toast {
+            text: text.into(),
+            error: false,
+            at: Instant::now(),
+        });
     }
 
     pub fn error(&mut self, e: impl std::fmt::Display) {
-        self.toasts.push(Toast { text: e.to_string(), error: true, at: Instant::now() });
+        self.toasts.push(Toast {
+            text: e.to_string(),
+            error: true,
+            at: Instant::now(),
+        });
     }
 
     /// The toast to show now, if any.
     pub fn current_toast(&self) -> Option<&Toast> {
-        self.toasts.last().filter(|t| t.at.elapsed() < Duration::from_secs(if t.error { 8 } else { 4 }))
+        self.toasts
+            .last()
+            .filter(|t| t.at.elapsed() < Duration::from_secs(if t.error { 8 } else { 4 }))
     }
 
     pub fn save_settings(&mut self) {
@@ -368,9 +424,26 @@ impl App {
                 .panes
                 .iter()
                 .map(|p| {
-                    let tabs: Vec<(usize, SavedTab)> = p.tabs.iter().enumerate().filter(|(_, t)| !matches!(t.source, Source::Search { .. })).map(|(i, t)| (i, SavedTab { uri: t.uri().to_string(), view: t.view })).collect();
+                    let tabs: Vec<(usize, SavedTab)> = p
+                        .tabs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, t)| !matches!(t.source, Source::Search { .. }))
+                        .map(|(i, t)| {
+                            (
+                                i,
+                                SavedTab {
+                                    uri: t.uri().to_string(),
+                                    view: t.view,
+                                },
+                            )
+                        })
+                        .collect();
                     let active = tabs.iter().position(|(i, _)| *i == p.active).unwrap_or(0);
-                    SavedPane { tabs: tabs.into_iter().map(|(_, t)| t).collect(), active }
+                    SavedPane {
+                        tabs: tabs.into_iter().map(|(_, t)| t).collect(),
+                        active,
+                    }
                 })
                 .collect(),
         }
@@ -421,11 +494,17 @@ impl App {
     fn on_job(&mut self, job: JobView) {
         if let Some(c) = &job.conflict {
             if self.conflicts_seen.insert((job.id, c.id)) {
-                self.dialogs.push(Dialog::Conflict(ConflictDlg { job: job.id, conflict: c.clone(), apply_all: false, cursor: 0 }));
+                self.dialogs.push(Dialog::Conflict(ConflictDlg {
+                    job: job.id,
+                    conflict: c.clone(),
+                    apply_all: false,
+                    cursor: 0,
+                }));
             }
         } else {
             // Answered elsewhere (apply-to-all, cancel): drop a stale prompt.
-            self.dialogs.retain(|d| !matches!(d, Dialog::Conflict(c) if c.job == job.id));
+            self.dialogs
+                .retain(|d| !matches!(d, Dialog::Conflict(c) if c.job == job.id));
         }
         if job.is_finished() && self.finished_jobs.insert(job.id) {
             self.on_job_finished(&job);
@@ -438,7 +517,11 @@ impl App {
 
     fn on_job_finished(&mut self, job: &JobView) {
         let n = job.sources.len();
-        let what = if n == 1 { format!("“{}”", crate::util::name_of(&job.sources[0])) } else { format!("{n} items") };
+        let what = if n == 1 {
+            format!("“{}”", crate::util::name_of(&job.sources[0]))
+        } else {
+            format!("{n} items")
+        };
         let verb = match job.kind.as_str() {
             "copy" => "Copy",
             "move" => "Move",
@@ -458,16 +541,31 @@ impl App {
             }
             "cancelled" => self.toast(format!("{verb} {what}: cancelled")),
             _ => {
-                let first = job.errors.first().map(|e| e.message.clone()).unwrap_or_else(|| "failed".into());
-                let more = if job.errors.len() > 1 { format!(" (+{} more)", job.errors.len() - 1) } else { String::new() };
+                let first = job
+                    .errors
+                    .first()
+                    .map(|e| e.message.clone())
+                    .unwrap_or_else(|| "failed".into());
+                let more = if job.errors.len() > 1 {
+                    format!(" (+{} more)", job.errors.len() - 1)
+                } else {
+                    String::new()
+                };
                 self.error(format!("{verb} {what}: {first}{more}"));
             }
         }
         if let Some(op) = job.undo.clone() {
-            self.undo.push(UndoEntry { label: format!("{verb} {what}"), ops: vec![op] });
+            self.undo.push(UndoEntry {
+                label: format!("{verb} {what}"),
+                ops: vec![op],
+            });
         }
         // Polled folders the job touched refresh right away.
-        let mut dirs: HashSet<String> = job.sources.iter().filter_map(|s| cx_core::Location::parse(s).ok()?.parent().map(|p| p.uri())).collect();
+        let mut dirs: HashSet<String> = job
+            .sources
+            .iter()
+            .filter_map(|s| cx_core::Location::parse(s).ok()?.parent().map(|p| p.uri()))
+            .collect();
         if let Some(d) = &job.dest {
             dirs.insert(d.trim_end_matches('/').to_string());
         }
@@ -480,7 +578,10 @@ impl App {
         for p in self.visible_panes() {
             let t = self.panes[p].tab();
             for f in t.folders() {
-                let live = f.watch.map(|(_, m)| m == cx_engine::WatchMode::Live).unwrap_or(false);
+                let live = f
+                    .watch
+                    .map(|(_, m)| m == cx_engine::WatchMode::Live)
+                    .unwrap_or(false);
                 if !live && dirs.contains(f.dir_uri().trim_end_matches('/')) {
                     tokens.push(f.token);
                 }
@@ -508,7 +609,13 @@ impl App {
         }
         self.update_preview();
         self.request_tags();
-        animating || self.jobs.iter().any(|j| !j.is_finished()) || self.current_toast().is_some() || self.preview.as_ref().is_some_and(|p| matches!(p.content, Content::Loading))
+        animating
+            || self.jobs.iter().any(|j| !j.is_finished())
+            || self.current_toast().is_some()
+            || self
+                .preview
+                .as_ref()
+                .is_some_and(|p| matches!(p.content, Content::Loading))
     }
 
     fn preview_visible(&self) -> bool {
@@ -530,10 +637,17 @@ impl App {
         }
         let uri = tab.uri_of(row);
         let entry = tab.item(row).entry.clone();
-        if self.preview.as_ref().is_some_and(|p| p.uri == uri && p.entry.modified == entry.modified && p.entry.size == entry.size) {
+        if self.preview.as_ref().is_some_and(|p| {
+            p.uri == uri && p.entry.modified == entry.modified && p.entry.size == entry.size
+        }) {
             return;
         }
-        self.preview = Some(Preview { uri: uri.clone(), entry: entry.clone(), content: Content::Loading, scroll: 0 });
+        self.preview = Some(Preview {
+            uri: uri.clone(),
+            entry: entry.clone(),
+            content: Content::Loading,
+            scroll: 0,
+        });
         self.spawn(move |engine| async move {
             let content = crate::preview::load(engine, uri.clone(), entry).await;
             Box::new(move |app: &mut App| {
@@ -565,7 +679,9 @@ impl App {
         }
         self.tags_pending.extend(want.iter().cloned());
         self.spawn(move |engine| async move {
-            let got = tokio::task::spawn_blocking(move || engine.tags.get_many(want)).await.unwrap_or_default();
+            let got = tokio::task::spawn_blocking(move || engine.tags.get_many(want))
+                .await
+                .unwrap_or_default();
             Box::new(move |app: &mut App| {
                 for (u, t) in got {
                     app.tags_pending.remove(&u);

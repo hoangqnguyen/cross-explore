@@ -22,7 +22,10 @@ pub struct Tasks {
 
 impl Default for Tasks {
     fn default() -> Self {
-        Tasks { map: Mutex::new(HashMap::new()), next: AtomicU64::new(FIRST_TASK_ID) }
+        Tasks {
+            map: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(FIRST_TASK_ID),
+        }
     }
 }
 

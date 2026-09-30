@@ -1,6 +1,6 @@
 [package]
 name = "cx-tui"
-description = "Cross Explore in the terminal: dual-pane, keyboard-first, live file explorer on the same engine as the desktop app"
+description = "Cross Explore in the terminal: dual-pane, keyboard-first, live file explorer on cx-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
