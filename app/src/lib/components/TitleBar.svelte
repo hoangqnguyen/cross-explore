@@ -20,6 +20,15 @@
   // .titlebar's flex `gap` adds 8px between the spacer and the tab clusters
   // that .panes doesn't have, so it comes out of the spacer.
   let sidebarGap = $derived(Math.max(0, settings.data.sidebarWidth - leftPad - 8));
+  // The search box is taken out of the flex row (below) so it can't shrink
+  // the tab strip. When it — or the Windows caption buttons — reaches back
+  // over the panes, pad the right cluster by that much. Padding is inside
+  // the cluster, so the split between the two tab rows stays on the split
+  // between the panes.
+  let toolsWidth = $state(0);
+  let toolsInset = $derived(customCaption ? 138 : 8);
+  let previewW = $derived(settings.data.previewPane ? settings.data.previewWidth : 0);
+  let rightInset = $derived(Math.max(0, toolsWidth + toolsInset - previewW));
 </script>
 
 {#snippet splitBtn()}
@@ -28,21 +37,28 @@
   </button>
 {/snippet}
 
-<header class="titlebar" class:mac={ws.platform === "macos"} class:win={customCaption} data-tauri-drag-region>
+<header class="titlebar" class:mac={ws.platform === "macos"} class:win={customCaption} style:padding-right={!ws.dual ? `${toolsWidth + toolsInset}px` : undefined} data-tauri-drag-region>
   {#if ws.dual}
     <div class="sidebar-gap" style:width="{sidebarGap}px" data-tauri-drag-region></div>
-    <!-- Capped at .panes' real width so the divider lines up with the panes,
-         but allowed to shrink. A fixed width pushed the caption buttons past
-         the window edge, where overflow:hidden clipped them. -->
-    <div class="dual-tabs" style:max-width={ws.panesWidth > 0 ? `${ws.panesWidth}px` : undefined}>
+    <!-- Exactly as wide as .panes, and not allowed to shrink. A max-width
+         left this at the tabs' own width (the search box's auto margin ate
+         the free space), so the split between the clusters landed left of
+         the split between the panes. -->
+    <div class="dual-tabs" class:measured={ws.panesWidth > 0} style:width={ws.panesWidth > 0 ? `${ws.panesWidth}px` : undefined}>
       <div class="pane-tabs" class:active={ws.activePane === 0}><TabStrip pane={ws.panes[0]} compact /></div>
-      <div class="pane-tabs" class:active={ws.activePane === 1}><TabStrip pane={ws.panes[1]} compact trailing={splitBtn} /></div>
+      <div class="pane-tabs" class:active={ws.activePane === 1}>
+        <!-- Padding lives inside the cluster. On the cluster itself it
+             widened that flex item and pulled the divider off the panes. -->
+        <div class="pane-tabs-in" style:padding-right={rightInset > 0 ? `${rightInset}px` : undefined}>
+          <TabStrip pane={ws.panes[1]} compact trailing={splitBtn} />
+        </div>
+      </div>
     </div>
   {:else}
     <TabStrip pane={ws.panes[0]} trailing={splitBtn} />
   {/if}
 
-  <div class="tools">
+  <div class="tools" bind:clientWidth={toolsWidth}>
     {#if transfers.jobs.length}<TransferCapsule />{/if}
     <button class="palette" title="Command palette ({shortcut('app.palette')})" onclick={() => run("app.palette")}>
       <Icon name="search" size={14} />
@@ -89,17 +105,25 @@
   .dual-tabs {
     display: flex;
     align-items: flex-end;
-    /* Grow up to the pane width, and shrink when the caption buttons and
-       the search box need the right edge. */
     flex: 1 1 auto;
     min-width: 0;
     height: 100%;
+  }
+  .dual-tabs.measured {
+    flex: none;
   }
   .pane-tabs {
     display: flex;
     flex: 1;
     min-width: 0;
     height: 100%;
+  }
+  .pane-tabs-in {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    box-sizing: border-box;
   }
   .pane-tabs.active {
     /* The tab strip of the pane that has focus reads slightly stronger. */
@@ -126,13 +150,17 @@
     color: var(--accent);
   }
   .tools {
+    position: absolute;
+    top: 0;
+    right: 8px;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 4px;
-    align-self: center;
-    flex: none;
-    margin-left: auto;
-    padding-right: 8px;
+    height: 100%;
+  }
+  .titlebar.win .tools {
+    right: 138px;
   }
   .palette {
     display: flex;
