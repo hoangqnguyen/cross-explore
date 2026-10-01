@@ -205,6 +205,46 @@ try {
   await sleep(200);
   check("close tab", (await t.eval(`document.querySelectorAll('.titlebar .tab').length`)) === 1);
 
+  // Terminal: each tab keeps its own PTY, switching tabs must not tear it
+  // down and reconnect (SSH sessions especially shouldn't sign in again).
+  {
+    const termId = (sel) => t.eval(`document.querySelector(${JSON.stringify(sel)})?.dataset.termId ?? null`);
+    const waitId = async (sel) => {
+      for (let i = 0; i < 30; i++) {
+        const id = await termId(sel);
+        if (id) return id;
+        await sleep(100);
+      }
+      return null;
+    };
+    await t.eval(`import('/src/lib/commands.svelte.ts').then((m) => m.run('view.terminal'))`);
+    await sleep(300);
+    check("terminal panel opens with a terminal for the active tab", await t.eval(`!!document.querySelector('.terminal .hosts .host.active')`));
+    const idTab1 = await waitId(".hosts .host.active");
+    check("it gets a backend session", !!idTab1);
+
+    await t.focusList();
+    await t.key("t", M);
+    await sleep(300);
+    check("a new tab starts its own terminal, not sharing the first", (await t.eval(`document.querySelectorAll('.hosts .host').length`)) === 2 && (await t.eval(`document.querySelectorAll('.hosts .host.active').length`)) === 1);
+    const idTab2 = await waitId(".hosts .host.active");
+    check("the second tab's terminal is a distinct session", !!idTab2 && idTab2 !== idTab1, `${idTab1} vs ${idTab2}`);
+
+    // Tabs activate on pointerdown, not click — dispatch a real pointer press.
+    const tab1Box = await t.eval(`(() => { const r = document.querySelectorAll('.titlebar .tab')[0].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    for (const type of ["mousePressed", "mouseReleased"]) await t.send("Input.dispatchMouseEvent", { type, x: tab1Box.x, y: tab1Box.y, button: "left", clickCount: 1 });
+    await sleep(250);
+    check("switching back to tab 1 reuses its terminal, no reconnect", (await termId(".hosts .host.active")) === idTab1);
+    check("still exactly two terminals, none leaked", (await t.eval(`document.querySelectorAll('.hosts .host').length`)) === 2);
+
+    await t.key("w", M);
+    await sleep(200);
+    check("closing a tab also closes its terminal", (await t.eval(`document.querySelectorAll('.hosts .host').length`)) === 1);
+    await t.eval(`import('/src/lib/commands.svelte.ts').then((m) => m.run('view.terminal'))`);
+    await sleep(150);
+    check("terminal panel closes", !(await t.eval(`!!document.querySelector('.terminal')`)));
+  }
+
   // NAS needs a password.
   await t.open("?path=smb://nas.local/Media");
   await sleep(300);

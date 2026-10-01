@@ -1,6 +1,10 @@
 <script lang="ts">
   // Commander One-style terminal under the file panes. Opens in the current
-  // folder (an SSH session for SFTP folders).
+  // folder (an SSH session for SFTP folders). Each tab keeps its own PTY and
+  // xterm instance for as long as this panel stays open: switching tabs only
+  // shows/hides the right one, it never reconnects — important for SSH,
+  // where tearing a session down meant losing the shell and signing in again.
+  import { untrack } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
   import { Terminal } from "@xterm/xterm";
   import "@xterm/xterm/css/xterm.css";
@@ -9,11 +13,6 @@
   import { ui } from "../stores/ui.svelte";
   import { ws } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
-
-  let host: HTMLDivElement | undefined = $state();
-  let id: number | null = null;
-  let status = $state<string | null>(null);
-  let startedIn = $state("");
 
   function theme() {
     const css = getComputedStyle(document.documentElement);
@@ -28,97 +27,178 @@
     return bytes;
   }
 
-  $effect(() => {
-    if (!host) return;
-    const el = host;
-    let disposed = false;
-    let term: Terminal | null = null;
-    let input: { dispose: () => void } | null = null;
-    let ro: ResizeObserver | null = null;
-    let mq: MediaQueryList | null = null;
-    let retheme: (() => void) | null = null;
-    const dir = ws.activeTab.folder.kind === "folder" ? ws.activeTab.dirUri : (ws.places?.home.uri ?? "~");
-    startedIn = ws.activeTab.title;
-    const ssh = sftpTarget(dir);
-    let offered = false;
+  class Session {
+    readonly container: HTMLDivElement;
+    readonly term: Terminal;
+    readonly fit: FitAddon;
+    id: number | null = null;
+    status = $state<string | null>(null);
+    startedIn = $state("");
+    #disposed = false;
+    #offered = false;
+    #queuedAuth: TermEvent | null = null;
+    #input: { dispose: () => void };
+    #mq: MediaQueryList;
+    #retheme: () => void;
 
-    void (async () => {
-      const target = await resolveSshUri(dir);
-      if (disposed) return;
-      if (!target) {
-        ui.terminalOpen = false;
-        return;
-      }
-      if (ssh) {
-        const user = sftpTarget(target)?.user;
-        if (user) startedIn = `${ws.activeTab.title} (${user})`;
-      }
-      term = new Terminal({ fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace', fontSize: 12.5, cursorBlink: true, theme: theme(), allowProposedApi: true, scrollback: 5000 });
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      term.open(el);
-      fit.fit();
-      let queued: TermEvent | null = null;
-      const onAuth = (sid: number, e: TermEvent) => {
-        if (offered || e.kind !== "authenticated" || !ssh) return;
-        offered = true;
-        const user = sftpTarget(target)?.user ?? ssh.user ?? "";
-        void offerSshKey(sid, e.method, e.copyId, user, ssh.host);
-      };
-      termOpen(target, term.cols, term.rows, (e) => {
-        if (!term) return;
-        if (e.kind === "output") term.write(decode(e.data));
-        else if (e.kind === "authenticated") {
-          if (id != null) onAuth(id, e);
-          else queued = e;
-        } else {
-          status = `Process exited${e.code != null ? ` (${e.code})` : ""}`;
-          id = null;
+    constructor(parent: HTMLDivElement, dir: string, title: string) {
+      this.startedIn = title;
+      this.container = document.createElement("div");
+      this.container.className = "host";
+      parent.appendChild(this.container);
+
+      this.term = new Terminal({ fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace', fontSize: 12.5, cursorBlink: true, theme: theme(), allowProposedApi: true, scrollback: 5000 });
+      this.fit = new FitAddon();
+      this.term.loadAddon(this.fit);
+      this.term.open(this.container);
+      this.fit.fit();
+      this.#input = this.term.onData((d) => this.id != null && void termWrite(this.id, d));
+      this.#mq = matchMedia("(prefers-color-scheme: dark)");
+      this.#retheme = () => (this.term.options.theme = theme());
+      this.#mq.addEventListener("change", this.#retheme);
+
+      const ssh = sftpTarget(dir);
+      const term = this.term;
+      void (async () => {
+        const target = await resolveSshUri(dir);
+        if (this.#disposed) return;
+        if (!target) {
+          this.status = "Cancelled";
+          return;
         }
-      })
-        .then((sid) => {
-          if (disposed) void termClose(sid);
-          else {
-            id = sid;
-            if (queued) onAuth(sid, queued);
+        if (ssh) {
+          const user = sftpTarget(target)?.user;
+          if (user) this.startedIn = `${title} (${user})`;
+        }
+        const onAuth = (sid: number, e: TermEvent) => {
+          if (this.#offered || e.kind !== "authenticated" || !ssh) return;
+          this.#offered = true;
+          const user = sftpTarget(target)?.user ?? ssh.user ?? "";
+          void offerSshKey(sid, e.method, e.copyId, user, ssh.host);
+        };
+        termOpen(target, term.cols, term.rows, (e) => {
+          if (this.#disposed) return;
+          if (e.kind === "output") term.write(decode(e.data));
+          else if (e.kind === "authenticated") {
+            if (this.id != null) onAuth(this.id, e);
+            else this.#queuedAuth = e;
+          } else {
+            this.status = `Process exited${e.code != null ? ` (${e.code})` : ""}`;
+            this.id = null;
           }
         })
-        .catch((e) => (status = errorText(e)));
-      input = term.onData((d) => id != null && void termWrite(id, d));
-      ro = new ResizeObserver(() => {
-        fit.fit();
-        if (id != null && term) void termResize(id, term.cols, term.rows);
-      });
-      ro.observe(el);
-      mq = matchMedia("(prefers-color-scheme: dark)");
-      retheme = () => {
-        if (term) term.options.theme = theme();
-      };
-      mq.addEventListener("change", retheme);
-      term.focus();
-    })();
+          .then((sid) => {
+            if (this.#disposed) void termClose(sid);
+            else {
+              this.id = sid;
+              this.container.dataset.termId = String(sid);
+              if (this.#queuedAuth) onAuth(sid, this.#queuedAuth);
+            }
+          })
+          .catch((e) => (this.status = errorText(e)));
+      })();
+    }
 
+    /** Make this the one visible terminal and give it focus. */
+    show() {
+      this.container.classList.add("active");
+      this.term.focus();
+    }
+
+    hide() {
+      this.container.classList.remove("active");
+    }
+
+    /** Re-measure after the panel (or window) resizes. */
+    refit() {
+      this.fit.fit();
+      if (this.id != null) void termResize(this.id, this.term.cols, this.term.rows);
+    }
+
+    cdHere(path: string) {
+      if (this.id == null) return;
+      void termWrite(this.id, ` cd '${path.replaceAll("'", `'\\''`)}'\r`);
+    }
+
+    cwd() {
+      return this.id != null ? termCwd(this.id) : Promise.resolve(null);
+    }
+
+    dispose() {
+      this.#disposed = true;
+      this.#input.dispose();
+      this.#mq.removeEventListener("change", this.#retheme);
+      if (this.id != null) void termClose(this.id);
+      this.id = null;
+      this.term.dispose();
+      this.container.remove();
+    }
+  }
+
+  let hostsEl: HTMLDivElement | undefined = $state();
+  const sessions = new Map<number, Session>();
+  let activeSession = $state<Session | null>(null);
+
+  // Tear every session down only when the panel itself closes (it unmounts
+  // on close — see App.svelte), not on every tab switch.
+  $effect(() => {
     return () => {
-      disposed = true;
-      ro?.disconnect();
-      input?.dispose();
-      if (mq && retheme) mq.removeEventListener("change", retheme);
-      if (id != null) void termClose(id);
-      id = null;
-      term?.dispose();
+      for (const s of sessions.values()) s.dispose();
+      sessions.clear();
     };
+  });
+
+  $effect(() => {
+    if (!hostsEl) return;
+    const el = hostsEl;
+    const ro = new ResizeObserver(() => activeSession?.refit());
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  // A closed tab's terminal (and, for SSH, its connection) shouldn't linger
+  // until the whole panel closes.
+  $effect(() => {
+    const live = new Set(ws.allTabs.map((t) => t.id));
+    for (const [id, s] of sessions) {
+      if (live.has(id)) continue;
+      s.dispose();
+      sessions.delete(id);
+      if (activeSession === s) activeSession = null;
+    }
+  });
+
+  $effect(() => {
+    if (!hostsEl) return;
+    const tab = ws.activeTab;
+    if (!tab) return;
+    let s = sessions.get(tab.id);
+    if (!s) {
+      // Read the folder/title snapshot untracked: this effect should only
+      // react to *which tab* is active, never to that tab's own navigation,
+      // or switching folders inside a tab would tear its terminal down too.
+      const dir = untrack(() => (tab.folder.kind === "folder" ? tab.dirUri : (ws.places?.home.uri ?? "~")));
+      const title = untrack(() => tab.title);
+      s = new Session(hostsEl, dir, title);
+      sessions.set(tab.id, s);
+    }
+    if (s !== activeSession) {
+      activeSession?.hide();
+      activeSession = s;
+      s.show();
+    }
   });
 
   function cdHere() {
     const t = ws.activeTab;
-    if (id == null || !t.folder.info?.local || t.folder.kind !== "folder") return;
+    if (!activeSession || !t.folder.info?.local || t.folder.kind !== "folder") return;
     const path = decodeURIComponent(t.dirUri.replace(/^file:\/\//, ""));
-    void termWrite(id, ` cd '${path.replaceAll("'", `'\\''`)}'\r`);
+    activeSession.cdHere(path);
   }
 
   async function followShell() {
-    if (id == null) return;
-    const uri = await termCwd(id);
+    if (!activeSession) return;
+    const uri = await activeSession.cwd();
     if (uri) ws.activeTab.navigate(uri);
   }
 
@@ -141,14 +221,14 @@
   ></div>
   <header>
     <Icon name="terminal" size={14} />
-    <span class="title">Terminal — {startedIn}</span>
-    {#if status}<span class="status">{status}</span>{/if}
+    <span class="title">Terminal — {activeSession?.startedIn ?? ""}</span>
+    {#if activeSession?.status}<span class="status">{activeSession.status}</span>{/if}
     <span class="spacer"></span>
     <button title="cd to the folder shown above" onclick={cdHere}><Icon name="forward" size={13} /> Go to current folder</button>
     <button title="Show the shell's folder above" onclick={followShell}><Icon name="up" size={13} /> Show shell's folder</button>
     <button class="icon" aria-label="Close terminal" onclick={() => (ui.terminalOpen = false)}><Icon name="close" size={12} /></button>
   </header>
-  <div class="host" bind:this={host}></div>
+  <div class="hosts" bind:this={hostsEl}></div>
 </section>
 
 <style>
@@ -206,12 +286,25 @@
   header .icon {
     padding: 0 6px;
   }
-  .host {
+  .hosts {
+    position: relative;
     flex: 1;
     min-height: 0;
-    padding: 4px 0 0 10px;
   }
-  .host :global(.xterm-viewport) {
+  /* Every tab's terminal stays mounted (so its PTY and scrollback survive a
+     tab switch); only the active one is shown. Absolute + inset keeps every
+     one correctly sized even while hidden, so there's no reflow/measure lag
+     when it's switched to. */
+  .hosts :global(.host) {
+    position: absolute;
+    inset: 0;
+    padding: 4px 0 0 10px;
+    visibility: hidden;
+  }
+  .hosts :global(.host.active) {
+    visibility: visible;
+  }
+  .hosts :global(.xterm-viewport) {
     background: transparent !important;
   }
 </style>
