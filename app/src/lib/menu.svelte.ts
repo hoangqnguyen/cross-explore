@@ -2,10 +2,12 @@
 import type { IconName } from "./components/Icon.svelte";
 
 export type MenuItem =
-  | { label: string; icon?: IconName; shortcut?: string; checked?: boolean; disabled?: boolean; danger?: boolean; action: () => void }
+  // `fileIcon`: a file name (or bare extension) to draw the real colored
+  // file-type icon instead of `icon` — e.g. "New File"'s per-type entries.
+  | { label: string; icon?: IconName; fileIcon?: string; shortcut?: string; checked?: boolean; disabled?: boolean; danger?: boolean; action: () => void }
   // A submenu. `items` can load lazily (e.g. "Open With" asks the OS for
   // candidate apps only once it's actually opened).
-  | { label: string; icon?: IconName; disabled?: boolean; items: MenuItem[] | (() => MenuItem[] | Promise<MenuItem[]>) }
+  | { label: string; icon?: IconName; fileIcon?: string; disabled?: boolean; items: MenuItem[] | (() => MenuItem[] | Promise<MenuItem[]>) }
   | { separator: true };
 
 class MenuState {

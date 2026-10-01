@@ -36,7 +36,7 @@ function newFileMenu(tab: Tab): MenuItem {
     icon: "plus",
     disabled: !tab.writable,
     items: [
-      ...NEW_FILE_TYPES.map((t): MenuItem => ({ label: t.label, action: () => void tab.newFile("Untitled", t.ext) })),
+      ...NEW_FILE_TYPES.map((t): MenuItem => ({ label: t.label, fileIcon: `x.${t.ext}`, action: () => void tab.newFile("Untitled", t.ext) })),
       { separator: true },
       {
         label: "Other…",

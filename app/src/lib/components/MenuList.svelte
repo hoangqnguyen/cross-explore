@@ -2,6 +2,7 @@
   // The actual popup (positioning, keyboard nav, submenus). Recursive: a
   // submenu is just another MenuList, opened to the side of its parent row.
   import type { MenuItem } from "../menu.svelte";
+  import FileIcon from "./FileIcon.svelte";
   import Icon from "./Icon.svelte";
   import MenuList from "./MenuList.svelte";
 
@@ -102,7 +103,7 @@
         onclick={() => (isSub(item) ? openSub(i, item) : run(item))}
       >
         <span class="icon">
-          {#if "checked" in item && item.checked}<Icon name="check" />{:else if item.icon}<Icon name={item.icon} />{/if}
+          {#if "checked" in item && item.checked}<Icon name="check" />{:else if item.fileIcon}<FileIcon name={item.fileIcon} isDir={false} size={16} />{:else if item.icon}<Icon name={item.icon} />{/if}
         </span>
         <span class="label">{item.label}</span>
         {#if "shortcut" in item && item.shortcut}<span class="shortcut">{item.shortcut}</span>{/if}
