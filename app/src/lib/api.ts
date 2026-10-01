@@ -176,9 +176,18 @@ export async function watchDir(uri: string, onChange: (changes: Change[]) => voi
 
 export const unwatchDir = (id: number) => invoke<void>("unwatch_dir", { id });
 export const createFolder = (uri: string, name?: string) => invoke<Entry>("create_folder", { uri, name });
+export const createFile = (uri: string, stem: string, ext: string) => invoke<Entry>("create_file", { uri, stem, ext });
 export const renameEntry = (uri: string, from: string, to: string) => invoke<Entry>("rename_entry", { uri, from, to });
 export const trashEntries = (uri: string, names: string[]) => invoke<TrashedItem[]>("trash_entries", { uri, names });
 export const openEntry = (uri: string) => invoke<void>("open_entry", { uri });
+export interface AppChoice {
+  name: string;
+  /** What `openEntryWith` is given back: an app name (macOS) or an executable path (Linux). */
+  id: string;
+}
+export const appsForExtension = (ext: string) => invoke<AppChoice[]>("apps_for_extension", { ext });
+export const openEntryWith = (uri: string, withApp: string) => invoke<void>("open_entry_with", { uri, with: withApp });
+export const openWithDialog = (uri: string) => invoke<void>("open_with_dialog", { uri });
 export const revealEntry = (uri: string) => invoke<void>("reveal_entry", { uri });
 export const openTerminal = (uri: string) => invoke<void>("open_terminal", { uri });
 export const osClipboardSet = (uris: string[]) => invoke<void>("os_clipboard_set", { uris });

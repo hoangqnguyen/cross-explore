@@ -47,6 +47,16 @@
   let office = $state<OfficeView | null>(null);
   let pdfFailed = $state(false);
   let officeFailed = $state(false);
+  let mediaEl = $state<HTMLMediaElement>();
+
+  // Every call site keys this component by uri, so one instance ever shows
+  // one file: destroy (navigating away, picking a different file, closing
+  // Quick Look) always unmounts it. But removing a playing <video>/<audio>
+  // from the DOM doesn't reliably stop it — the webview can keep decoding
+  // and playing audio from what's already buffered — so pause it explicitly.
+  $effect(() => {
+    return () => mediaEl?.pause();
+  });
 
   $effect(() => {
     const u = uri;
@@ -98,11 +108,11 @@
     <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={() => (imageFailed = true)} />
   {:else if kind === "video"}
     <!-- svelte-ignore a11y_media_has_caption -->
-    <video src={fileUrl(uri)} controls autoplay={large} preload="metadata" poster={thumbUrl(uri, 640, entry.modified)}></video>
+    <video bind:this={mediaEl} src={fileUrl(uri)} controls autoplay={large} preload="metadata" poster={thumbUrl(uri, 640, entry.modified)}></video>
   {:else if kind === "audio"}
     <div class="audio">
       <FileIcon name={entry.name} isDir={false} size={96} />
-      <audio src={fileUrl(uri)} controls autoplay={large}></audio>
+      <audio bind:this={mediaEl} src={fileUrl(uri)} controls autoplay={large}></audio>
     </div>
   {:else if kind === "pdf" && !pdfFailed}
     <!-- pdf.js, not a thumbnail: a remote PDF has no fast native thumbnail

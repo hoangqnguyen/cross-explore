@@ -45,6 +45,31 @@ fn tiny_pdf() -> Vec<u8> {
     out.into_bytes()
 }
 
+/// A quarter-second 440Hz tone: real enough for `<audio>`/`<video>` to load
+/// and play, for the "does the preview actually stop on navigate-away" check.
+fn tiny_wav() -> Vec<u8> {
+    const RATE: u32 = 8000;
+    let n = RATE / 4;
+    let mut out = Vec::with_capacity(44 + n as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + n).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&RATE.to_le_bytes());
+    out.extend_from_slice(&RATE.to_le_bytes()); // byte rate (1 byte/sample)
+    out.extend_from_slice(&1u16.to_le_bytes()); // block align
+    out.extend_from_slice(&8u16.to_le_bytes()); // bits per sample
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&n.to_le_bytes());
+    for i in 0..n {
+        let v = 128.0 + 20.0 * (2.0 * std::f64::consts::PI * 440.0 * i as f64 / RATE as f64).sin();
+        out.push(v.round() as u8);
+    }
+    out
+}
+
 fn dir() -> &'static Option<PathBuf> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(|| {
@@ -56,6 +81,7 @@ fn dir() -> &'static Option<PathBuf> {
         std::fs::write(base.join("beta.md"), "# Beta\n\nSome *markdown*.\n").ok()?;
         std::fs::write(base.join("photo.png"), PNG).ok()?;
         std::fs::write(base.join("doc.pdf"), tiny_pdf()).ok()?;
+        std::fs::write(base.join("tone.wav"), tiny_wav()).ok()?;
         // A few MiB of known bytes, for ranged reads of non-local files.
         std::fs::create_dir_all(base.join("media")).ok()?;
         std::fs::write(

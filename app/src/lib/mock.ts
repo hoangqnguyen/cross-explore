@@ -290,9 +290,17 @@ function fakePdf(uri: string) {
   return "data:application/pdf;base64," + btoa(out);
 }
 
+// A quarter-second 440Hz tone, real enough for <video>/<audio> to actually
+// load and play (Chrome plays the audio track of a video-less file fine),
+// so a UI test can check playback state instead of just DOM presence.
+const TONE_WAV =
+  "data:audio/wav;base64,UklGRvQHAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YdAHAACAh42RlJSSjYeBenRvbGxucnh/hoyRk5SSjomCe3VwbWxucXd9hIuQk5STj4qDfHZxbWxtcXZ8g4qPk5STkIuEfXdxbmxtcHV7gomOkpSTkYyGf3hybmxsb3R6gYeNkpSUkY2HgHlzb2xsbnN5f4aMkZSUko6IgXp0b21sbnJ3foWLkJOUko+Jg3x1cG1sbXF2fYSKj5OUk4+KhH12cW1sbXB1fIOJj5KUk5CLhX53cm5sbW90eoGIjpKUlJGMhn95c25sbG9zeYCHjZGUlJKNh4F6dG9sbG5yeH+GjJGTlJKOiYJ7dXBtbG5xd32Ei5CTlJOPioN8dnFtbG1xdnyDio+TlJOQi4R9d3FubG1wdXuCiY6SlJORjIZ/eHJubGxvdHqBh42SlJSRjYeAeXNvbGxuc3l/hoyRlJSSjoiBenRvbWxucnd+hYuQk5SSj4mDfHVwbWxtcXZ9hIqPk5STj4qEfXZxbWxtcHV8g4mPkpSTkIuFfndybmxtb3R6gYiOkpSUkYyGf3lzbmxsb3N5gIeNkZSUko2HgXp0b2xsbnJ4f4aMkZOUko6Jgnt1cG1sbnF3fYSLkJOUk4+Kg3x2cW1sbXF2fIOKj5OUk5CLhH13cW5sbXB1e4KJjpKUk5GMhn94cm5sbG90eoGHjZKUlJGNh4B5c29sbG5zeX+GjJGUlJKOiIF6dG9tbG5yd36Fi5CTlJKPiYN8dXBtbG1xdn2Eio+TlJOPioR9dnFtbG1wdXyDiY+SlJOQi4V+d3JubG1vdHqBiI6SlJSRjIZ/eXNubGxvc3mAh42RlJSSjYeBenRvbGxucnh/hoyRk5SSjomCe3VwbWxucXd9hIuQk5STj4qDfHZxbWxtcXZ8g4qPk5STkIuEfXdxbmxtcHV7gomOkpSTkYyGf3hybmxsb3R6gYeNkpSUkY2HgHlzb2xsbnN5f4aMkZSUko6IgXp0b21sbnJ3foWLkJOUko+Jg3x1cG1sbXF2fYSKj5OUk4+KhH12cW1sbXB1fIOJj5KUk5CLhX53cm5sbW90eoGIjpKUlJGMhn95c25sbG9zeYCHjZGUlJKNh4F6dG9sbG5yeH+GjJGTlJKOiYJ7dXBtbG5xd32Ei5CTlJOPioN8dnFtbG1xdnyDio+TlJOQi4R9d3FubG1wdXuCiY6SlJORjIZ/eHJubGxvdHqBh42SlJSRjYeAeXNvbGxuc3l/hoyRlJSSjoiBenRvbWxucnd+hYuQk5SSj4mDfHVwbWxtcXZ9hIqPk5STj4qEfXZxbWxtcHV8g4mPkpSTkIuFfndybmxtb3R6gYiOkpSUkYyGf3lzbmxsb3N5gIeNkZSUko2HgXp0b2xsbnJ4f4aMkZOUko6Jgnt1cG1sbnF3fYSLkJOUk4+Kg3x2cW1sbXF2fIOKj5OUk5CLhH13cW5sbXB1e4KJjpKUk5GMhn94cm5sbG90eoGHjZKUlJGNh4B5c29sbG5zeX+GjJGUlJKOiIF6dG9tbG5yd36Fi5CTlJKPiYN8dXBtbG1xdn2Eio+TlJOPioR9dnFtbG1wdXyDiY+SlJOQi4V+d3JubG1vdHqBiI6SlJSRjIZ/eXNubGxvc3mAh42RlJSSjYeBenRvbGxucnh/hoyRk5SSjomCe3VwbWxucXd9hIuQk5STj4qDfHZxbWxtcXZ8g4qPk5STkIuEfXdxbmxtcHV7gomOkpSTkYyGf3hybmxsb3R6gYeNkpSUkY2HgHlzb2xsbnN5f4aMkZSUko6IgXp0b21sbnJ3foWLkJOUko+Jg3x1cG1sbXF2fYSKj5OUk4+KhH12cW1sbXB1fIOJj5KUk5CLhX53cm5sbW90eoGIjpKUlJGMhn95c25sbG9zeYCHjZGUlJKNh4F6dG9sbG5yeH+GjJGTlJKOiYJ7dXBtbG5xd32Ei5CTlJOPioN8dnFtbG1xdnyDio+TlJOQi4R9d3FubG1wdXuCiY6SlJORjIZ/eHJubGxvdHqBh42SlJSRjYeAeXNvbGxuc3l/hoyRlJSSjoiBenRvbWxucnd+hYuQk5SSj4mDfHVwbWxtcXZ9hIqPk5STj4qEfXZxbWxtcHV8g4mPkpSTkIuFfndybmxtb3R6gYiOkpSUkYyGf3lzbmxsb3N5gIeNkZSUko2HgXp0b2xsbnJ4f4aMkZOUko6Jgnt1cG1sbnF3fYSLkJOUk4+Kg3x2cW1sbXF2fIOKj5OUk5CLhH13cW5sbXB1e4KJjpKUk5GMhn94cm5sbG90eoGHjZKUlJGNh4B5c29sbG5zeX+GjJGUlJKOiIF6dG9tbG5yd36Fi5CTlJKPiYN8dXBtbG1xdn2Eio+TlJOPioR9dnFtbG1wdXyDiY+SlJOQi4V+d3JubG1vdHqBiI6SlJSRjIZ/eXNubGxvc3mAh42RlJSSjYeBenRvbGxucnh/hoyRk5SSjomCe3VwbWxucXd9hIuQk5STj4qDfHZxbWxtcXZ8g4qPk5STkIuEfXdxbmxtcHV7gomOkpSTkYyGf3hybmxsb3R6gYeNkpSUkY2HgHlzb2xsbnN5f4aMkZSUko6IgXp0b21sbnJ3foWLkJOUko+Jg3x1cG1sbXF2fYSKj5OUk4+KhH12cW1sbXB1fIOJj5KUk5CLhX53cm5sbW90eoGIjpKUlJGMhn95c25sbG9zeQ==";
+
 export function fileUrl(uri: string) {
   if (/\.pdf$/i.test(uri)) return fakePdf(uri);
-  return /\.(png|jpe?g|heic|gif|webp)$/i.test(uri) ? fakeImage(uri, 800) : "data:text/plain,preview";
+  if (/\.(png|jpe?g|heic|gif|webp)$/i.test(uri)) return fakeImage(uri, 800);
+  if (/\.(mp4|mov|mkv|avi|webm|m4v|wmv|flv|mpg|mpeg|3gp|mp3|wav|flac|aac|m4a|ogg|opus|aiff|wma|alac)$/i.test(uri)) return TONE_WAV;
+  return "data:text/plain,preview";
 }
 
 export function thumbUrl(uri: string, size: number) {
@@ -439,6 +447,15 @@ const handlers: Record<string, (a: Args) => unknown> = {
     notify(node, [{ type: "upsert", entry: strip(d) }]);
     return strip(d);
   },
+  create_file({ uri, stem, ext }: Args) {
+    const node = lookup(uri)!;
+    const wanted = ext ? `${stem}.${ext}` : stem;
+    const pick = uniqueName(node, wanted);
+    const f = file(pick, 0, 0, false, "");
+    node.children!.set(pick, f);
+    notify(node, [{ type: "upsert", entry: strip(f) }]);
+    return strip(f);
+  },
   rename_entry({ uri, from, to }: Args) {
     const node = lookup(uri)!;
     if (node.children!.has(to)) throw { kind: "alreadyExists", message: to };
@@ -454,6 +471,16 @@ const handlers: Record<string, (a: Args) => unknown> = {
     return names.map((n: string) => ({ original: uri + "/" + encodeURIComponent(n), trashed: null }));
   },
   open_entry: () => undefined,
+  apps_for_extension({ ext }: Args) {
+    const pretty = (e: string) => e.charAt(0).toUpperCase() + e.slice(1);
+    return [
+      { name: `${pretty(ext)} Opener`, id: `${ext}-opener` },
+      { name: "TextEdit", id: "TextEdit" },
+      { name: "Preview", id: "Preview" },
+    ];
+  },
+  open_entry_with: () => undefined,
+  open_with_dialog: () => undefined,
   os_clipboard_set: () => undefined,
   os_clipboard_get: () => [],
   full_disk_access: () => true,

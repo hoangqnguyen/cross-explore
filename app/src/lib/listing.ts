@@ -3,15 +3,75 @@
 // menus and drag-and-drop.
 import type { Item } from "./api";
 import { byId, enabled, run, shortcut } from "./commands.svelte";
+import { extOf } from "./format";
 import { keyOf } from "./folder.svelte";
 import { isMac, primary } from "./keys";
 import { menu, type MenuItem } from "./menu.svelte";
+import { dialogs } from "./stores/dialogs.svelte";
 import { settings, typeAction } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
-import { errorText, inTauri } from "./api";
+import { appsForExtension, errorText, inTauri, openEntryWith, openWithDialog } from "./api";
 import { toasts } from "./toasts.svelte";
 import { invoke } from "@tauri-apps/api/core";
+
+/** Common file types for "New file", plus "Other…" for anything else. */
+const NEW_FILE_TYPES: { label: string; ext: string }[] = [
+  { label: "Text File", ext: "txt" },
+  { label: "Markdown", ext: "md" },
+  { label: "JSON", ext: "json" },
+  { label: "YAML", ext: "yaml" },
+  { label: "HTML", ext: "html" },
+  { label: "CSS", ext: "css" },
+  { label: "JavaScript", ext: "js" },
+  { label: "TypeScript", ext: "ts" },
+  { label: "Python", ext: "py" },
+  { label: "Shell Script", ext: "sh" },
+  { label: "CSV", ext: "csv" },
+];
+
+function newFileMenu(tab: Tab): MenuItem {
+  return {
+    label: "New File",
+    icon: "plus",
+    disabled: !tab.writable,
+    items: [
+      ...NEW_FILE_TYPES.map((t): MenuItem => ({ label: t.label, action: () => void tab.newFile("Untitled", t.ext) })),
+      { separator: true },
+      {
+        label: "Other…",
+        action: () => {
+          void (async () => {
+            const typed = await dialogs.prompt("New File", "File name", "", "Create", false, true);
+            if (!typed) return;
+            const dot = typed.lastIndexOf(".");
+            const [stem, ext] = dot > 0 ? [typed.slice(0, dot), typed.slice(dot + 1)] : [typed, ""];
+            void tab.newFile(stem, ext);
+          })();
+        },
+      },
+    ],
+  };
+}
+
+/** "Open With": on Windows the OS already has a picker, so skip straight to
+ * it; elsewhere (no such standalone dialog exists) list candidate apps. */
+function openWithItem(tab: Tab, item: Item): MenuItem {
+  const uri = tab.uriOf(item);
+  const openFail = (e: unknown) => toasts.show(errorText(e), "error");
+  if (ws.platform === "windows") {
+    return { label: "Open With…", icon: "external", action: () => void openWithDialog(uri).catch(openFail) };
+  }
+  return {
+    label: "Open With",
+    icon: "external",
+    items: async () => {
+      const apps = await appsForExtension(extOf(item.name)).catch(() => []);
+      if (!apps.length) return [{ label: "No apps found", disabled: true, action: () => {} }];
+      return apps.map((a): MenuItem => ({ label: a.name, action: () => void openEntryWith(uri, a.id).catch(openFail) }));
+    },
+  };
+}
 
 // ---- touch: tap opens, long-press selects (and shows the menu) ----
 
@@ -182,6 +242,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     ...(item.isDir || isArchive(item.name) ? [cmd("file.openTab")] : []),
     ...(item.parent ? [{ label: "Show in enclosing folder", icon: "up" as const, action: () => tab.navigate(item.parent!, item.name) }] : []),
     cmd("file.quicklook"),
+    ...(!item.isDir && !many ? [openWithItem(tab, item)] : []),
     { separator: true },
     cmd("edit.cut"),
     cmd("edit.copy"),
@@ -236,6 +297,7 @@ export function blankMenu(e: MouseEvent, tab: Tab) {
   menu.show(
     [
       cmd("file.newFolder"),
+      newFileMenu(tab),
       cmd("edit.paste"),
       { separator: true },
       { label: "Details", icon: "rows", checked: tab.view === "details", action: () => run("view.details") },

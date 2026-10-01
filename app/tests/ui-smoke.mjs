@@ -405,6 +405,45 @@ try {
     check("and removing takes it off the sidebar", !(await favs()).includes("My code"));
   }
 
+  // Right-click a file → "Open With" is a submenu listing candidate apps;
+  // picking one closes the whole (nested) menu, not just the submenu.
+  await t.open("?path=~/Downloads");
+  {
+    const menuOn = async (name) => {
+      await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')].find(r => r.querySelector('.text')?.textContent === ${JSON.stringify(name)}); r.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 })); })()`);
+      await sleep(150);
+    };
+    const menuLabels = () => t.eval(`[...document.querySelectorAll('.menu button, .menu [role=menuitem]')].map(b => b.textContent.trim())`);
+    await menuOn("dataset.csv");
+    check("file context menu offers Open With", (await menuLabels()).some((l) => l.startsWith("Open With")), JSON.stringify(await menuLabels()));
+    await t.clickText(".menu button, .menu [role=menuitem]", "Open With");
+    await sleep(250);
+    check("…opens a submenu listing candidate apps", (await menuLabels()).includes("TextEdit"), JSON.stringify(await menuLabels()));
+    await t.clickText(".menu button, .menu [role=menuitem]", "TextEdit");
+    await sleep(150);
+    check("picking an app closes the whole menu", !(await t.eval(`!!document.querySelector('.menu')`)));
+  }
+
+  // Right-click blank space → "New File": common types, plus "Other…" for
+  // anything else; picking one creates it and enters rename mode.
+  {
+    await t.eval(`document.querySelector('.pane.active .details')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 560 }))`);
+    await sleep(150);
+    const menuLabels = () => t.eval(`[...document.querySelectorAll('.menu button, .menu [role=menuitem]')].map(b => b.textContent.trim())`);
+    check("blank-area menu offers New File", (await menuLabels()).some((l) => l.startsWith("New File")), JSON.stringify(await menuLabels()));
+    await t.clickText(".menu button, .menu [role=menuitem]", "New File");
+    await sleep(200);
+    const subLabels = await menuLabels();
+    check("…lists common types", subLabels.includes("Text File") && subLabels.includes("Markdown"), JSON.stringify(subLabels));
+    check("…and an Other… escape hatch for any extension", subLabels.includes("Other…"), JSON.stringify(subLabels));
+    await t.clickText(".menu button, .menu [role=menuitem]", "Text File");
+    await sleep(250);
+    check("creating one enters rename mode on the new file", await t.eval(`document.activeElement?.classList.contains('rename') && document.activeElement.value === 'Untitled.txt'`), await t.eval(`document.activeElement?.value`));
+    await t.key("Escape");
+    await sleep(150);
+    check("the new file is in the listing", (await t.rows()).includes("Untitled.txt"), JSON.stringify(await t.rows()));
+  }
+
   // Column view: right-click works in every column, not just the focused one.
   await t.open("?path=~/Documents");
   await t.eval(`window.__cx.ws.activeTab.view = "columns"`);

@@ -4,8 +4,8 @@
 use super::AppState;
 use cx_core::poll::{poll_watch_from, PollConfig};
 use cx_core::{
-    Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space, TrashedItem,
-    WatchGuard,
+    validate_name, Capabilities, Change, CxError, Entry, Location, LocationInfo, Result, Space,
+    TrashedItem, WatchGuard, WriteMode,
 };
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
@@ -155,6 +155,32 @@ pub async fn create_folder(uri: String, name: Option<String>, app: AppState<'_>)
         .await?
         .create_dir(&loc, name.as_deref())
         .await
+}
+
+/// A new empty file named `stem` (plus `.{ext}`, when given). If that name is
+/// taken, tries `stem (2).ext`, `stem (3).ext`, … — unlike folders, the
+/// numbering has to land before the extension, so it isn't `create_dir`'s job.
+#[tauri::command]
+pub async fn create_file(uri: String, stem: String, ext: String, app: AppState<'_>) -> Result<Entry> {
+    let dir = Location::parse(&uri)?;
+    let provider = app.vfs.provider(&dir).await?;
+    let suffix = if ext.is_empty() { String::new() } else { format!(".{ext}") };
+    for n in 1..10_000u32 {
+        let name = if n == 1 { format!("{stem}{suffix}") } else { format!("{stem} ({n}){suffix}") };
+        validate_name(&name)?;
+        let loc = dir.join(&name);
+        match provider.open_write(&loc, WriteMode::CreateNew).await {
+            Ok(mut w) => {
+                tokio::io::AsyncWriteExt::shutdown(&mut w)
+                    .await
+                    .map_err(|e| CxError::io("couldn't create the file", e))?;
+                return provider.stat(&loc).await;
+            }
+            Err(CxError::AlreadyExists(_)) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(CxError::AlreadyExists(stem))
 }
 
 #[tauri::command]

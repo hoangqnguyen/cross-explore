@@ -2,6 +2,7 @@
 
 use super::AppState;
 use cx_core::{CxError, Location, Result, Scheme, WriteMode};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::AppHandle;
@@ -25,6 +26,262 @@ pub async fn open_entry(app_handle: AppHandle, uri: String, app: AppState<'_>) -
         .opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(|e| CxError::Io(format!("cannot open {}: {e}", path.display())))
+}
+
+/// Open with a specific app (not the default). Remote files are downloaded
+/// to a cache first, same as [`open_entry`].
+#[tauri::command]
+pub async fn open_entry_with(
+    app_handle: AppHandle,
+    uri: String,
+    with: String,
+    app: AppState<'_>,
+) -> Result<()> {
+    let loc = Location::parse(&uri)?;
+    let path = match loc.local_path() {
+        Some(p) => p.to_path_buf(),
+        None => download(&app, &loc).await?,
+    };
+    app_handle
+        .opener()
+        .open_path(path.to_string_lossy(), Some(with.as_str()))
+        .map_err(|e| CxError::Io(format!("cannot open {} with {with}: {e}", path.display())))
+}
+
+/// Apps that can open a file of this extension, for the "Open With" menu.
+/// Best effort and OS-specific: there's no single portable API for it.
+#[tauri::command]
+pub fn apps_for_extension(ext: String) -> Vec<AppInfo> {
+    let ext = ext.trim_start_matches('.').to_ascii_lowercase();
+    #[cfg(target_os = "macos")]
+    return macos_apps::for_extension(&ext);
+    #[cfg(all(target_os = "linux", not(target_os = "android")))]
+    return linux_apps::for_extension(&ext);
+    #[cfg(not(any(
+        target_os = "macos",
+        all(target_os = "linux", not(target_os = "android"))
+    )))]
+    {
+        let _ = ext;
+        Vec::new()
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct AppInfo {
+    name: String,
+    /// What [`open_entry_with`] is given back as `with`: an app name on
+    /// macOS, an executable path on Linux.
+    id: String,
+}
+
+/// Windows has its own "Open With" picker; use it instead of enumerating
+/// apps ourselves, since it already knows file associations better than we
+/// could by scanning the registry.
+#[tauri::command]
+pub fn open_with_dialog(uri: String) -> Result<()> {
+    let loc = Location::parse(&uri)?;
+    let path = loc
+        .local_path()
+        .ok_or_else(|| CxError::Unsupported("Open With for a remote file".into()))?;
+    #[cfg(windows)]
+    return spawn(
+        Command::new("rundll32").arg("shell32.dll,OpenAs_RunDLL").arg(path),
+    );
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err(CxError::Unsupported("the Open With dialog on this OS".into()))
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos_apps {
+    use super::AppInfo;
+    use std::path::{Path, PathBuf};
+
+    /// Where `.app` bundles actually live. Not recursive beyond one extra
+    /// level (e.g. `/Applications/Utilities`), since apps don't nest apps.
+    fn roots() -> Vec<PathBuf> {
+        let mut v = vec![
+            PathBuf::from("/Applications"),
+            PathBuf::from("/System/Applications"),
+            PathBuf::from("/System/Applications/Utilities"),
+        ];
+        if let Some(home) = dirs::home_dir() {
+            v.push(home.join("Applications"));
+        }
+        v
+    }
+
+    fn bundles_in(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "app") {
+                out.push(p);
+            } else if p.is_dir() {
+                // One extra level only (e.g. a vendor subfolder), see `roots`.
+                if let Ok(inner) = std::fs::read_dir(&p) {
+                    for e in inner.flatten() {
+                        let p = e.path();
+                        if p.extension().is_some_and(|x| x == "app") {
+                            out.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// `CFBundleName`/`CFBundleDisplayName`, falling back to the bundle's
+    /// own file name, and the extensions it declares handling (classic
+    /// `CFBundleDocumentTypes`; most apps still list these even when they
+    /// also declare UTIs, which plist alone can't resolve to extensions).
+    fn read_bundle(path: &Path) -> Option<(String, Vec<String>)> {
+        let info = plist::Value::from_file(path.join("Contents/Info.plist")).ok()?;
+        let dict = info.as_dictionary()?;
+        let name = dict
+            .get("CFBundleDisplayName")
+            .or_else(|| dict.get("CFBundleName"))
+            .and_then(|v| v.as_string())
+            .map(str::to_owned)
+            .unwrap_or_else(|| path.file_stem().unwrap_or_default().to_string_lossy().into_owned());
+        let mut exts = Vec::new();
+        if let Some(types) = dict.get("CFBundleDocumentTypes").and_then(|v| v.as_array()) {
+            for t in types {
+                let Some(list) = t.as_dictionary().and_then(|d| d.get("CFBundleTypeExtensions")).and_then(|v| v.as_array()) else {
+                    continue;
+                };
+                for x in list {
+                    if let Some(s) = x.as_string() {
+                        exts.push(s.to_ascii_lowercase());
+                    }
+                }
+            }
+        }
+        Some((name, exts))
+    }
+
+    pub fn for_extension(ext: &str) -> Vec<AppInfo> {
+        let mut bundles = Vec::new();
+        for r in roots() {
+            bundles_in(&r, &mut bundles);
+        }
+        let mut matched = Vec::new();
+        let mut all = Vec::new();
+        for path in bundles {
+            let Some((name, exts)) = read_bundle(&path) else {
+                continue;
+            };
+            let info = AppInfo { name, id: path.to_string_lossy().into_owned() };
+            if exts.iter().any(|e| e == ext || e == "*") {
+                matched.push(info);
+            } else {
+                all.push(info);
+            }
+        }
+        let mut list = if matched.is_empty() { all } else { matched };
+        list.sort_by_key(|a| a.name.to_ascii_lowercase());
+        list.dedup_by(|a, b| a.name == b.name);
+        list
+    }
+}
+
+#[cfg(all(target_os = "linux", not(target_os = "android")))]
+mod linux_apps {
+    use super::AppInfo;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    fn desktop_dirs() -> Vec<PathBuf> {
+        let mut v = vec![PathBuf::from("/usr/share/applications"), PathBuf::from("/usr/local/share/applications")];
+        if let Some(home) = dirs::home_dir() {
+            v.push(home.join(".local/share/applications"));
+        }
+        v
+    }
+
+    /// The `Exec=` line, minus the `%f`/`%u`/etc. field codes `open` doesn't
+    /// understand (it runs the program directly with the path as the only
+    /// argument, same as any other app here).
+    fn exec_program(exec: &str) -> Option<String> {
+        exec.split_whitespace().find(|t| !t.starts_with('%')).map(str::to_owned)
+    }
+
+    fn parse_desktop(path: &std::path::Path) -> Option<(String, String, Vec<String>)> {
+        let text = std::fs::read_to_string(path).ok()?;
+        let mut name = None;
+        let mut exec = None;
+        let mut mimes = Vec::new();
+        let mut no_display = false;
+        let mut in_entry = false;
+        for line in text.lines() {
+            let line = line.trim();
+            if line == "[Desktop Entry]" {
+                in_entry = true;
+            } else if line.starts_with('[') {
+                in_entry = false;
+            } else if in_entry {
+                if let Some(v) = line.strip_prefix("Name=") {
+                    name.get_or_insert_with(|| v.to_string());
+                } else if let Some(v) = line.strip_prefix("Exec=") {
+                    exec = exec_program(v);
+                } else if let Some(v) = line.strip_prefix("MimeType=") {
+                    mimes.extend(v.split(';').filter(|s| !s.is_empty()).map(str::to_owned));
+                } else if line == "NoDisplay=true" || line == "Terminal=true" {
+                    no_display = true;
+                }
+            }
+        }
+        if no_display {
+            return None;
+        }
+        Some((name?, exec?, mimes))
+    }
+
+    pub fn for_extension(ext: &str) -> Vec<AppInfo> {
+        // There's no portable ext→mimetype table; ask the desktop for it,
+        // the same way the file manager would.
+        let mime = Command::new("xdg-mime")
+            .arg("query")
+            .arg("filetype")
+            .arg(format!("x.{ext}"))
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let mut matched = Vec::new();
+        let mut all = Vec::new();
+        for dir in desktop_dirs() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.extension().is_none_or(|x| x != "desktop") {
+                    continue;
+                }
+                let Some((name, exec, mimes)) = parse_desktop(&path) else {
+                    continue;
+                };
+                let info = AppInfo { name, id: exec };
+                if mime.as_deref().is_some_and(|m| mimes.iter().any(|x| x == m)) {
+                    matched.push(info);
+                } else {
+                    all.push(info);
+                }
+            }
+        }
+        let mut list = if matched.is_empty() { all } else { matched };
+        list.sort_by_key(|a| a.name.to_ascii_lowercase());
+        list.dedup_by(|a, b| a.name == b.name);
+        list
+    }
 }
 
 /// A local copy of a remote file, cached by URI + size + mtime. Concurrent

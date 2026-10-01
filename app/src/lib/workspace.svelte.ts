@@ -1,6 +1,7 @@
 // Panes, tabs, navigation history, selection and the file actions on them.
 import {
   childUri,
+  createFile,
   createFolder,
   errorText,
   osClipboardGet,
@@ -315,6 +316,21 @@ export class Tab {
       this.selectOnly(entry.name);
       this.renaming = entry.name;
       transfers.pushUndo(`New folder “${entry.name}”`, { type: "newFolder", uri: childUri(this.dirUri, entry.name) });
+    } catch (e) {
+      toasts.show(errorText(e), "error");
+    }
+  }
+
+  /** `stem` + `.ext` (no leading dot); picks a free name the same way
+   * `newFolder` does, but has to land the "(2)" before the extension. */
+  async newFile(stem: string, ext: string) {
+    if (!this.writable) return;
+    try {
+      const entry = await createFile(this.dirUri, stem, ext);
+      this.filter = "";
+      this.folder.upsertLocal(entry);
+      this.selectOnly(entry.name);
+      this.renaming = entry.name;
     } catch (e) {
       toasts.show(errorText(e), "error");
     }

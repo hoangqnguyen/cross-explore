@@ -2,7 +2,7 @@
 // started with CX_SELFTEST=1: drives the UI state layer through a realistic
 // session and reports each check to the terminal, then exits.
 import { invoke } from "@tauri-apps/api/core";
-import { termClose, termOpen, termWrite, asCxError, connectServer, trustHostKey, childUri, dirSize, renameEntry, fileUrl, getTags, previewOffice, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
+import { termClose, termOpen, termWrite, appsForExtension, asCxError, connectServer, trustHostKey, childUri, createFile, dirSize, renameEntry, fileUrl, getTags, previewOffice, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
@@ -69,6 +69,28 @@ export async function selftest() {
     await until("Made", () => has("Made") && !has("New folder"));
     await transfers.undo();
     await until("undo rename", () => has("New folder") && !has("Made"));
+  });
+
+  await check("new file picks a free name next to the extension", async () => {
+    await tab().newFile("Untitled", "txt");
+    await until("Untitled.txt", () => has("Untitled.txt"));
+    await tab().newFile("Untitled", "txt");
+    await until("Untitled (2).txt", () => has("Untitled (2).txt"));
+  });
+
+  await check("create_file rejects a path-traversal name", async () => {
+    try {
+      await createFile(dir, "../evil", "txt");
+      throw new Error("should have rejected the name");
+    } catch (e) {
+      if (asCxError(e)?.kind !== "invalidName") throw new Error(`wrong error: ${JSON.stringify(e)}`);
+    }
+  });
+
+  await check("apps_for_extension finds real installed apps", async () => {
+    const apps = await appsForExtension("txt");
+    if (!apps.length) throw new Error("no apps found for .txt");
+    if (!apps.every((a) => a.name && a.id)) throw new Error(JSON.stringify(apps));
   });
 
   await check("copy into a subfolder (transfer engine)", async () => {
@@ -159,6 +181,22 @@ export async function selftest() {
       quicklook.close();
       document.removeEventListener("securitypolicyviolation", onViolation);
     }
+  });
+
+  await check("closing Quick Look actually stops a playing video/audio", async () => {
+    // Removing the element should already stop it per spec, but a custom
+    // URI scheme handler (cxfile://) backing the media is exactly the kind
+    // of thing that can make a webview's implicit stop-on-remove unreliable,
+    // so Preview.svelte pauses explicitly on destroy. Exercise it for real.
+    await until("listing", () => tab().folder.status === "ready" && has("tone.wav"));
+    tab().selectOnly(keyOf(tab().folder.items.find((e) => e.name === "tone.wav")!));
+    quicklook.open = true;
+    const audio = await until("audio element", () => document.querySelector<HTMLAudioElement>(".ql audio"));
+    await audio!.play().catch(() => {});
+    await until("it's actually playing", () => !audio!.paused);
+    quicklook.close();
+    await until("ql closed", () => !document.querySelector(".ql"));
+    if (!audio!.paused) throw new Error("audio kept playing after Quick Look closed");
   });
 
   await check("the (small) preview pane also draws a remote PDF, not a broken thumbnail", async () => {

@@ -13,7 +13,7 @@ export const MOD = { alt: 1, ctrl: 2, meta: 4, shift: 8 };
 
 export async function launch({ width = 1280, height = 800, dark = true } = {}) {
   const port = 9300 + Math.floor(Math.random() * 500);
-  const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${port}`, `--window-size=${width},${height}`, `--user-data-dir=/tmp/cx-ui-${port}`, "--hide-scrollbars", ...(dark ? ["--force-dark-mode"] : []), "about:blank"], { stdio: "ignore" });
+  const chrome = spawn(CHROME, ["--headless=new", `--remote-debugging-port=${port}`, `--window-size=${width},${height}`, `--user-data-dir=/tmp/cx-ui-${port}`, "--hide-scrollbars", "--autoplay-policy=no-user-gesture-required", "--mute-audio", ...(dark ? ["--force-dark-mode"] : []), "about:blank"], { stdio: "ignore" });
   let target;
   for (let i = 0; i < 80 && !target; i++) {
     await sleep(100);
