@@ -185,6 +185,12 @@ export interface AppChoice {
   /** What `openEntryWith` is given back: an app name (macOS) or an executable path (Linux). */
   id: string;
 }
+/** The running app's version, as built (the browser preview reports tauri.conf.json's). */
+export async function appVersion(): Promise<string> {
+  if (mock) return __APP_VERSION__;
+  return (await import("@tauri-apps/api/app")).getVersion();
+}
+
 /** Shortcuts of the macOS menu items, by command id (no-op elsewhere). */
 export const setMenuKeys = (keys: Record<string, string | null>) => invoke<void>("menu_set_keys", { keys });
 export const appsForExtension = (ext: string) => invoke<AppChoice[]>("apps_for_extension", { ext });

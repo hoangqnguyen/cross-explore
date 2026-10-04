@@ -2,7 +2,7 @@
 // started with CX_SELFTEST=1: drives the UI state layer through a realistic
 // session and reports each check to the terminal, then exits.
 import { invoke } from "@tauri-apps/api/core";
-import { termClose, termOpen, termWrite, appsForExtension, setMenuKeys, asCxError, connectServer, trustHostKey, childUri, createFile, dirSize, renameEntry, fileUrl, getTags, previewOffice, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
+import { termClose, termOpen, termWrite, appsForExtension, appVersion, setMenuKeys, asCxError, connectServer, trustHostKey, childUri, createFile, dirSize, renameEntry, fileUrl, getTags, previewOffice, previewText, search, setTags, thumbUrl, compareDirs, peerStatus, devices as listDevices, listDir, type Entry } from "./api";
 import { keyOf } from "./folder.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
@@ -91,6 +91,11 @@ export async function selftest() {
     const apps = await appsForExtension("txt");
     if (!apps.length) throw new Error("no apps found for .txt");
     if (!apps.every((a) => a.name && a.id)) throw new Error(JSON.stringify(apps));
+  });
+
+  await check("About shows the version the app was built as", async () => {
+    const v = await appVersion();
+    if (!/^\d+\.\d+\.\d+/.test(v)) throw new Error(`version: ${v}`);
   });
 
   await check("custom shortcuts reach the menu bar and change what keys run", async () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack, type Snippet } from "svelte";
-  import { errorText, fileUriToPath, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
+  import { appVersion, errorText, fileUriToPath, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
   import Icon, { type IconName } from "../components/Icon.svelte";
   import Toggle from "../components/Toggle.svelte";
   import { devices } from "../stores/devices.svelte";
@@ -24,6 +24,8 @@
   let section = $state<Section>(untrack(() => initial));
   let s = settings.data;
   let code = $state<string | null>(null);
+  let version = $state<string | null>(null);
+  void appVersion().then((v) => (version = v));
 
   async function peer<T>(p: Promise<T>) {
     try {
@@ -248,7 +250,7 @@
         <div class="about">
           <img src="/app-icon.svg" alt="" width="64" height="64" />
           <h3>Cross Explore</h3>
-          <p class="row-hint">Version 0.1.0</p>
+          <p class="row-hint">Version {version ?? "…"}</p>
           <p class="tagline">A fast, live file explorer for your devices, network and tailnet.</p>
           <button type="button" class="reset" onclick={() => { settings.reset(); toasts.show("Settings reset"); }}>Reset all settings</button>
         </div>

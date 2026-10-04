@@ -14,9 +14,36 @@ fn trash_one(path: &Path) -> Result<Option<PathBuf>> {
     let fm = NSFileManager::defaultManager();
     let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
     let mut result: Option<Retained<NSURL>> = None;
-    fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut result))
-        .map_err(|e| CxError::Io(format!("move to trash failed: {}", e.localizedDescription())))?;
-    Ok(result.and_then(|u| u.path()).map(|p| PathBuf::from(p.to_string())))
+    match fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut result)) {
+        Ok(()) => Ok(result.and_then(|u| u.path()).map(|p| PathBuf::from(p.to_string()))),
+        // Items under an iCloud-synced Desktop or Documents go to iCloud
+        // Drive's own trash, and the system can refuse an app that may
+        // otherwise change the file (seen with Full Disk Access granted).
+        // Moving it into the user's Trash ourselves is what `mv` would do.
+        Err(e) => move_to_user_trash(path).map(Some).map_err(|_| {
+            CxError::Io(format!("move to trash failed: {} ({} {})", e.localizedDescription(), e.domain(), e.code()))
+        }),
+    }
+}
+
+/// Move `path` into ~/.Trash under a free name ("a.txt", "a 2.txt"…).
+/// Only within the home volume: elsewhere the item belongs in that volume's trash.
+#[cfg(target_os = "macos")]
+fn move_to_user_trash(path: &Path) -> std::io::Result<PathBuf> {
+    let trash = dirs::home_dir().ok_or(std::io::ErrorKind::NotFound)?.join(".Trash");
+    let name = path.file_name().ok_or(std::io::ErrorKind::InvalidInput)?;
+    let (stem, ext) = match (path.file_stem(), path.extension()) {
+        (Some(stem), Some(ext)) if !path.is_dir() => (stem.to_string_lossy(), format!(".{}", ext.to_string_lossy())),
+        _ => (name.to_string_lossy(), String::new()),
+    };
+    let mut dest = trash.join(name);
+    let mut n = 2;
+    while dest.symlink_metadata().is_ok() {
+        dest = trash.join(format!("{stem} {n}{ext}"));
+        n += 1;
+    }
+    std::fs::rename(path, &dest)?;
+    Ok(dest)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
@@ -104,5 +131,26 @@ mod tests {
         assert!(!f.exists());
         restore(&items).unwrap();
         assert_eq!(std::fs::read(&f).unwrap(), b"hello");
+    }
+
+    // The fallback when the system refuses: ~/.Trash under a free name, undoable.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn fallback_trash_picks_a_free_name_and_restores() {
+        let dir = tempfile::tempdir_in(dirs::home_dir().unwrap()).unwrap();
+        let a = dir.path().join("cx fallback.txt");
+        let b = dir.path().join("b").join("cx fallback.txt");
+        std::fs::create_dir(b.parent().unwrap()).unwrap();
+        std::fs::write(&a, b"one").unwrap();
+        std::fs::write(&b, b"two").unwrap();
+        let ta = move_to_user_trash(&a).unwrap();
+        let tb = move_to_user_trash(&b).unwrap();
+        assert_ne!(ta, tb);
+        assert!(tb.file_name().unwrap().to_string_lossy().starts_with("cx fallback "), "{tb:?}");
+        let items = [(&a, ta), (&b, tb)].map(|(o, t)| TrashedItem { original: Location::local(o).uri(), trashed: Some(Location::local(t).uri()) });
+        restore(&items).unwrap();
+        assert_eq!(std::fs::read(&a).unwrap(), b"one");
+        assert_eq!(std::fs::read(&b).unwrap(), b"two");
     }
 }

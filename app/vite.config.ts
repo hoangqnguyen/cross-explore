@@ -35,8 +35,12 @@ function pdfjsAssets(): Plugin {
 }
 
 // Tauri expects a fixed port and must not have the terminal cleared.
+// The browser preview has no app to ask for its version; give it the config's.
+const appVersion = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).version;
+
 export default defineConfig({
   plugins: [svelte(), pdfjsAssets()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   clearScreen: false,
   server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
   build: { target: "es2022", sourcemap: false },
