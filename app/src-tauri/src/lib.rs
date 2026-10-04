@@ -22,6 +22,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_drag::init());
     builder
         .manage(cmd::files::Watches::default())
+        .manage(menu::MenuKeys::default())
         .manage(cmd::files::RecentListings::default())
         .manage(cx_term::Terminals::new())
         .register_asynchronous_uri_scheme_protocol("cxfile", protocols::file_protocol)
@@ -45,6 +46,7 @@ pub fn run() {
             cmd::office::preview_office,
             cmd::office::office_has_libreoffice,
             cmd::files::ui_log,
+            menu::menu_set_keys,
             cmd::files::subscribe,
             cmd::system::open_entry,
             cmd::system::open_entry_with,

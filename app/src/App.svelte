@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { appWindow, inTauri } from "./lib/api";
-  import { handleKey } from "./lib/commands.svelte";
+  import { appWindow, inTauri, setMenuKeys } from "./lib/api";
+  import { handleKey, menuAccelerators } from "./lib/commands.svelte";
   import AddressBar from "./lib/components/AddressBar.svelte";
   import CommandBar from "./lib/components/CommandBar.svelte";
   import CommandPalette from "./lib/components/CommandPalette.svelte";
@@ -19,11 +19,21 @@
   import MobileBar from "./lib/components/MobileBar.svelte";
   import AccessBanner from "./lib/components/AccessBanner.svelte";
   import { ui } from "./lib/stores/ui.svelte";
-  import { isTextInput } from "./lib/keys";
+  import { isMac, isTextInput } from "./lib/keys";
   import { dropDestAt, dropElementAt, dropIsMove, nativeDrag } from "./lib/listing";
   import { dialogs } from "./lib/stores/dialogs.svelte";
   import { settings } from "./lib/stores/settings.svelte";
   import { ws } from "./lib/workspace.svelte";
+
+  // The macOS menu bar takes its keys before the page sees them: keep its
+  // shortcuts in line with the user's own (it starts with the standard ones).
+  let menuSynced = false;
+  $effect(() => {
+    const keys = menuAccelerators();
+    if (!inTauri || !isMac || (!menuSynced && !Object.keys(settings.data.keyBindings).length)) return;
+    menuSynced = true;
+    void setMenuKeys(keys).catch(() => {});
+  });
 
   onMount(async () => {
     await ws.init();

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { byId, enabled, run, shortcut } from "../commands.svelte";
+  import { byId, enabled, forgetRecent, run, shortcut } from "../commands.svelte";
   import { menu, type MenuItem } from "../menu.svelte";
   import type { SortKey } from "../sort";
   import { settings } from "../stores/settings.svelte";
@@ -82,6 +82,18 @@
     );
   }
 
+  // Recently used commands fill the bar's free space: as many as fit, newest
+  // first (the rest wrap onto a hidden second line).
+  let recent = $derived(settings.data.recentCommands.map((id) => byId.get(id)).filter((c) => !!c));
+
+  function recentMenu(e: MouseEvent, id: string) {
+    e.preventDefault();
+    menu.show([
+      { label: "Remove from recent", action: () => forgetRecent(id) },
+      { label: "Clear recent commands", action: () => forgetRecent() },
+    ], e.clientX, e.clientY);
+  }
+
   const actions: { id: string; icon: IconName }[] = [
     { id: "edit.cut", icon: "cut" },
     { id: "edit.copy", icon: "copy" },
@@ -106,7 +118,18 @@
   <button class="labeled" onclick={sortMenu}><Icon name="sort" size={18} /> Sort <Icon name="chevronDown" size={12} /></button>
   <button class="labeled" onclick={viewMenu}><Icon name={tab.view === "icons" ? "grid" : tab.view === "columns" ? "columns" : tab.view === "gallery" ? "gallery" : "rows"} size={18} /> View <Icon name="chevronDown" size={12} /></button>
   <button title="More" aria-label="More" onclick={moreMenu}><Icon name="more" size={18} stroke={2.4} /></button>
-  <span class="spacer"></span>
+  {#if recent.length}
+    <div class="divider"></div>
+    <div class="recent" role="group" aria-label="Recently used commands">
+      {#each recent as c (c.id)}
+        <button class="labeled" disabled={!enabled(c.id)} title="{c.label}{shortcut(c.id) ? ` (${shortcut(c.id)})` : ''}" onclick={() => run(c.id, false, false)} oncontextmenu={(e) => recentMenu(e, c.id)}>
+          <Icon name={c.icon ?? "command"} size={16} /> <span>{c.label.replace(/…$/, "")}</span>
+        </button>
+      {/each}
+    </div>
+  {:else}
+    <span class="spacer"></span>
+  {/if}
   <button class:on={settings.data.previewPane} title="Preview pane ({shortcut('view.preview')})" aria-label="Preview pane" onclick={() => run("view.preview")}><Icon name="sidebarRight" size={18} /></button>
 </div>
 
@@ -165,5 +188,20 @@
   }
   .spacer {
     flex: 1;
+  }
+  .recent {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 2px;
+    min-width: 0;
+    height: 32px;
+    overflow: hidden;
+  }
+  .recent span {
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-2);
   }
 </style>

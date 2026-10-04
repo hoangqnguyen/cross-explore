@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
   import { errorText, fileUriToPath, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
   import Icon, { type IconName } from "../components/Icon.svelte";
   import Toggle from "../components/Toggle.svelte";
@@ -9,15 +9,19 @@
   import { toasts } from "../toasts.svelte";
   import { ws } from "../workspace.svelte";
   import Modal from "./Modal.svelte";
+  import ShortcutsSettings from "./ShortcutsSettings.svelte";
 
-  const SECTIONS: { id: "general" | "sharing" | "network" | "about"; label: string; icon: IconName }[] = [
+  const SECTIONS: { id: "general" | "shortcuts" | "sharing" | "network" | "about"; label: string; icon: IconName }[] = [
     { id: "general", label: "General", icon: "settings" },
+    { id: "shortcuts", label: "Shortcuts", icon: "command" },
     { id: "sharing", label: "Sharing & devices", icon: "laptop" },
     { id: "network", label: "Servers", icon: "server" },
     { id: "about", label: "About", icon: "info" },
   ];
 
-  let section = $state<(typeof SECTIONS)[number]["id"]>("general");
+  type Section = (typeof SECTIONS)[number]["id"];
+  let { section: initial = "general" }: { section?: Section } = $props();
+  let section = $state<Section>(untrack(() => initial));
   let s = settings.data;
   let code = $state<string | null>(null);
 
@@ -112,6 +116,10 @@
               <span>Explorer keys plus F3 view, F5 copy, F6 move, F7 new folder, F8 delete, Tab switch pane, Insert select.</span>
             </label>
           </div>
+          {@render row("Your own shortcuts", "Change the key for any command", shortcutsCtl)}
+          {#snippet shortcutsCtl()}
+            <button type="button" class="open-shortcuts" onclick={() => (section = "shortcuts")}>Customize…</button>
+          {/snippet}
           {@render row("Typing in a file list", undefined, typingCtl)}
           {#snippet typingCtl()}
             <select value={s.typeAction ?? "auto"} onchange={(e) => { const v = (e.currentTarget as HTMLSelectElement).value; s.typeAction = v === "auto" ? undefined : (v as "select" | "filter"); }}>
@@ -162,6 +170,8 @@
             <Toggle bind:checked={s.confirmPermanentDelete} />
           {/snippet}
         {/snippet}
+      {:else if section === "shortcuts"}
+        <ShortcutsSettings />
       {:else if section === "sharing"}
         {#if devices.peer}
           {@render group("This device", deviceBody)}
@@ -360,6 +370,18 @@
     color: var(--text);
     font: inherit;
     font-size: 12.5px;
+  }
+  .open-shortcuts {
+    flex: none;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--radius);
+    background: var(--layer);
+    box-shadow: inset 0 0 0 1px var(--stroke-strong);
+    font-size: 12.5px;
+  }
+  .open-shortcuts:hover {
+    background: var(--hover);
   }
   .empty {
     margin: 0;

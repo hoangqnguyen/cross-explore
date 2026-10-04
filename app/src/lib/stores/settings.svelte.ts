@@ -66,6 +66,14 @@ export interface SettingsData {
    * Explorer) or filter the list (Total Commander). Unset follows the keymap.
    */
   typeAction?: "select" | "filter";
+  /**
+   * Shortcuts the user set, by command id. They replace that command's keys
+   * in every keyboard style ([] = no shortcut), and a key used here no
+   * longer runs whatever the style had on it. Replaced as a whole on change.
+   */
+  keyBindings: Record<string, string[]>;
+  /** Command ids last run, newest first, for the command bar's recent strip. */
+  recentCommands: string[];
 }
 
 /** What typing in a file list does, given the settings. */
@@ -102,6 +110,8 @@ const defaults: SettingsData = {
   stripes: true,
   recentDestinations: [],
   pathBar: true,
+  keyBindings: {},
+  recentCommands: [],
 };
 
 function load(): SettingsData {

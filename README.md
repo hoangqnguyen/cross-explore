@@ -222,6 +222,11 @@ The in-app self test covers:
 
 ## Keys
 
+Every shortcut can be changed in Settings → Shortcuts (or "Customize keyboard shortcuts…" in the
+command palette): click + next to a command and press the keys. A key taken from another command moves
+over, changed commands keep their keys in every keyboard style, and the macOS menu bar follows along.
+The defaults:
+
 | | macOS | Windows / Linux |
 |---|---|---|
 | Command palette | ⌘P | Ctrl+P |
@@ -232,9 +237,10 @@ The in-app self test covers:
 | Copy, cut, paste, duplicate, undo | ⌘C ⌘X ⌘V ⌘D ⌘Z | Ctrl+C X V, Ctrl+Shift+D, Ctrl+Z |
 | Move to Trash / delete permanently | ⌘⌫ / ⌘⌥⌫ | Del / Shift+Del |
 | New folder, new tab, close tab | ⌘⇧N, ⌘T, ⌘W | Ctrl+Shift+N, Ctrl+T, Ctrl+W |
-| Views: icons, details, columns, gallery | ⌘1 ⌘2 ⌘3 ⌘4 | Ctrl+Shift+2 6 7 8 |
+| Views: icons, details, columns, gallery | ⌘1 ⌘2 ⌘3 ⌘4 | Ctrl+Shift+2 6 5 8 |
 | Dual pane / preview pane / terminal | F9 / ⌘⇧P / ⌃\` | F9 / Alt+P / Ctrl+\` |
 | Connect to server / settings | ⌘K / ⌘, | Ctrl+K / Ctrl+, |
+| Explorer keys on a Mac | macOS keeps ⌘\` ⌘Tab ⌘H ⌘M ⌘⇧5 for itself, so those commands also answer to ⌃\` (terminal), ⌃⇧\` (Terminal app), ⌃Tab (next tab), ⌘⇧. (hidden items), ⌃M (rename multiple), ⌃⇧5 (columns) | — |
 | Commander preset | F3 view · F5 copy · F6 move · F7 new folder · F8 delete · Tab switch pane · Insert select · Num+ / Num- / Num* select | same |
 
 ## Known limitations

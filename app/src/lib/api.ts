@@ -185,6 +185,8 @@ export interface AppChoice {
   /** What `openEntryWith` is given back: an app name (macOS) or an executable path (Linux). */
   id: string;
 }
+/** Shortcuts of the macOS menu items, by command id (no-op elsewhere). */
+export const setMenuKeys = (keys: Record<string, string | null>) => invoke<void>("menu_set_keys", { keys });
 export const appsForExtension = (ext: string) => invoke<AppChoice[]>("apps_for_extension", { ext });
 export const openEntryWith = (uri: string, withApp: string) => invoke<void>("open_entry_with", { uri, with: withApp });
 export const openWithDialog = (uri: string) => invoke<void>("open_with_dialog", { uri });

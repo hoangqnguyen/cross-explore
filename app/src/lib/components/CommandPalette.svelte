@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fileUriToPath, uriName } from "../api";
-  import { commands, enabled, keysFor } from "../commands.svelte";
+  import { commands, enabled, keysFor, run } from "../commands.svelte";
   import { fuzzy, markMatches } from "../fuzzy";
   import { formatCombo } from "../keys";
   import { tagUri } from "../search.svelte";
@@ -45,7 +45,7 @@
     for (const c of commands) {
       if (!enabled(c.id)) continue;
       const k = keysFor(c)[0];
-      out.push({ label: c.label, detail: c.group, icon: c.icon ?? "command", kind: "Command", keys: k ? formatCombo(k) : undefined, run: () => void c.run() });
+      out.push({ label: c.label, detail: c.group, icon: c.icon ?? "command", kind: "Command", keys: k ? formatCombo(k) : undefined, run: () => run(c.id) });
     }
     for (const p of ws.panes) for (const t of p.tabs) out.push({ label: t.title || "Tab", detail: t.folder.info?.display, icon: "folder", kind: "Tab", run: () => (ws.focusPane(p.id), p.activate(t.id)) });
     for (const f of ws.places?.favorites ?? []) out.push({ label: f.name, detail: pretty(f.uri), icon: f.icon as IconName, kind: "Favorite", run: go(f.uri) });

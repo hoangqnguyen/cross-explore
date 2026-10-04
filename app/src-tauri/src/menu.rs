@@ -4,16 +4,39 @@
 //! always reach them. Items run UI commands by id.
 
 use crate::events::Events;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+/// The items that run commands, by command id, so their shortcuts can follow
+/// the user's own key bindings.
+#[derive(Default)]
+pub struct MenuKeys(Mutex<HashMap<String, tauri::menu::MenuItem<tauri::Wry>>>);
+
+/// Set the shortcut of each named menu item (`None` = no shortcut). The UI
+/// sends these when the user changes key bindings, so a key given to another
+/// command stops being taken by the menu. Unparsable keys leave the item without one.
+#[tauri::command]
+pub async fn menu_set_keys(keys: HashMap<String, Option<String>>, state: tauri::State<'_, MenuKeys>) -> Result<(), String> {
+    let items = state.0.lock().unwrap().clone();
+    for (id, accel) in keys {
+        let Some(item) = items.get(&id) else { continue };
+        if item.set_accelerator(accel.as_deref()).is_err() {
+            let _ = item.set_accelerator(None::<&str>);
+        }
+    }
+    Ok(())
+}
 
 #[cfg(target_os = "macos")]
 pub fn install(app: &tauri::App, events: Arc<Events>) -> tauri::Result<()> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+    use tauri::Manager;
     let h = app.handle();
+    let keys = app.state::<MenuKeys>();
     let item = |id: &str, label: &str, accel: &str| {
-        MenuItemBuilder::with_id(id, label)
-            .accelerator(accel)
-            .build(h)
+        let item = MenuItemBuilder::with_id(id, label).accelerator(accel).build(h)?;
+        keys.0.lock().unwrap().insert(id.to_string(), item.clone());
+        Ok::<_, tauri::Error>(item)
     };
 
     let app_menu = SubmenuBuilder::new(h, "Cross Explore")

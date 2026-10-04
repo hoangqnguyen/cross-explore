@@ -4,7 +4,7 @@
 import { errorText, openTerminal, revealEntry, uriName } from "./api";
 import type { IconName } from "./components/Icon.svelte";
 import { keyOf } from "./folder.svelte";
-import { comboOf, formatCombo, isMac, isTextInput } from "./keys";
+import { comboOf, formatCombo, isMac, isTextInput, reachable } from "./keys";
 import { menu } from "./menu.svelte";
 import { searchUri } from "./search.svelte";
 import { clipboard } from "./stores/clipboard.svelte";
@@ -26,7 +26,9 @@ export interface Command {
   /**
    * Shortcuts per keymap. `all` applies to every keymap; Commander also
    * inherits Explorer's keys (Total Commander is a Windows tool), with its
-   * own keys winning where they clash.
+   * own keys winning where they clash. "Ctrl+…" only ever matches the
+   * Control key on macOS (elsewhere Ctrl is Mod), which makes it the Mac
+   * fallback for Explorer keys macOS reserves (see `reachable`).
    */
   keys?: { all?: string[]; finder?: string[]; explorer?: string[]; commander?: string[] };
   /** Only when a file list has focus (so typing in fields isn't hijacked). */
@@ -91,12 +93,12 @@ export const commands: Command[] = [
   { id: "file.moveOther", label: "Move to other pane", group: "Panes", icon: "move", keys: { commander: ["F6"] }, list: true, when: () => ws.dual && hasTargets(), run: () => ws.toOtherPane(true) },
   { id: "file.copyPath", label: "Copy path", group: "File", icon: "link", keys: { finder: ["Mod+Alt+C"], explorer: ["Mod+Shift+C"] }, run: () => tab().copyPath() },
   { id: "file.reveal", label: isMac ? "Show in Finder" : "Show in Explorer", group: "File", icon: "open", keys: { finder: ["Mod+Shift+R"], explorer: ["Mod+Shift+E"] }, when: () => tab().folder.info?.local === true && tab().folder.kind !== "home", run: () => revealEntry(tab().targets()[0] ? tab().uriOf(tab().targets()[0]) : tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
-  { id: "view.terminal", label: "Toggle terminal panel", group: "View", icon: "terminal", keys: { finder: ["Ctrl+`"], explorer: ["Mod+`"] }, when: () => !ui.phone, run: () => (ui.terminalOpen = !ui.terminalOpen) },
-  { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => void openExternalTerminal() },
+  { id: "view.terminal", label: "Toggle terminal panel", group: "View", icon: "terminal", keys: { finder: ["Ctrl+`"], explorer: ["Mod+`", "Ctrl+`"] }, when: () => !ui.phone, run: () => (ui.terminalOpen = !ui.terminalOpen) },
+  { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`", "Ctrl+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => void openExternalTerminal() },
   { id: "file.calcSize", label: "Calculate folder sizes", group: "Tools", icon: "sigma", keys: { all: ["Alt+Shift+Enter"], commander: ["Space"] }, list: true, when: () => tab().targets().some((e) => e.isDir) || tab().visible.some((e) => e.isDir), run: () => calcSizes() },
   { id: "file.compress", label: "Compress to ZIP", group: "Tools", icon: "archive", when: () => hasTargets() && writable(), run: () => compress() },
   { id: "file.extract", label: "Extract here", group: "Tools", icon: "archive", when: () => tab().targets().some((e) => isArchive(e.name)) && writable(), run: () => extract() },
-  { id: "file.multiRename", label: "Rename multiple…", group: "Tools", icon: "rename", keys: { finder: ["Mod+Shift+Enter"], explorer: ["Mod+M"] }, list: true, when: () => tab().targets().length > 0, run: () => dialogs.ask("multiRename", { tab: tab() }) },
+  { id: "file.multiRename", label: "Rename multiple…", group: "Tools", icon: "rename", keys: { finder: ["Mod+Shift+Enter"], explorer: ["Mod+M", "Ctrl+M"] }, list: true, when: () => tab().targets().length > 0, run: () => dialogs.ask("multiRename", { tab: tab() }) },
   { id: "file.tags", label: "Tags…", group: "File", icon: "tag", keys: { all: ["Mod+Alt+G"] }, list: true, when: hasTargets, run: () => dialogs.ask("tags", { uris: tab().targets().map((e) => tab().uriOf(e)) }) },
   { id: "file.sendTo", label: "Send to device…", group: "Network", icon: "send", when: () => hasTargets() && tab().folder.info?.local === true, run: () => dialogs.ask("sendTo", { uris: tab().targets().map((e) => tab().uriOf(e)) }) },
   { id: "file.diff", label: "Compare files", group: "Tools", icon: "diff", when: () => tab().selectedEntries.filter((e) => !e.isDir).length === 2 || (oneTarget() && !!ws.otherTab?.cursorEntry), run: () => diffFiles() },
@@ -112,11 +114,11 @@ export const commands: Command[] = [
   // ---- view ----
   { id: "view.details", label: "Details view", group: "View", icon: "rows", keys: { finder: ["Mod+2"], explorer: ["Mod+Shift+6"] }, run: () => setView("details") },
   { id: "view.icons", label: "Icons view", group: "View", icon: "grid", keys: { finder: ["Mod+1"], explorer: ["Mod+Shift+2"] }, run: () => setView("icons") },
-  { id: "view.columns", label: "Columns view", group: "View", icon: "columns", keys: { finder: ["Mod+3"], explorer: ["Mod+Shift+5"] }, run: () => setView("columns") },
+  { id: "view.columns", label: "Columns view", group: "View", icon: "columns", keys: { finder: ["Mod+3"], explorer: ["Mod+Shift+5", "Ctrl+Shift+5"] }, run: () => setView("columns") },
   { id: "view.gallery", label: "Gallery view", group: "View", icon: "gallery", keys: { finder: ["Mod+4"], explorer: ["Mod+Shift+8"] }, run: () => setView("gallery") },
   { id: "view.preview", label: "Toggle preview pane", group: "View", icon: "sidebarRight", keys: { finder: ["Mod+Shift+P"], explorer: ["Alt+P"] }, run: () => (settings.data.previewPane = !settings.data.previewPane) },
   { id: "file.info", label: "Get Info", group: "File", icon: "info", keys: { finder: ["Mod+I"], explorer: ["Alt+Enter"] }, run: () => (settings.data.previewPane = true) },
-  { id: "view.hidden", label: "Toggle hidden items", group: "View", icon: "eye", keys: { finder: ["Mod+Shift+."], explorer: ["Mod+H"] }, run: () => (settings.data.showHidden = !settings.data.showHidden) },
+  { id: "view.hidden", label: "Toggle hidden items", group: "View", icon: "eye", keys: { finder: ["Mod+Shift+."], explorer: ["Mod+H", "Mod+Shift+."] }, run: () => (settings.data.showHidden = !settings.data.showHidden) },
   { id: "view.compact", label: "Toggle compact spacing", group: "View", run: () => (settings.data.compact = !settings.data.compact) },
   { id: "view.stripes", label: "Toggle alternating row colors", group: "View", run: () => (settings.data.stripes = !settings.data.stripes) },
   { id: "view.pathBar", label: "Toggle path bar", group: "View", keys: { finder: ["Mod+Alt+P"] }, run: () => (settings.data.pathBar = !settings.data.pathBar) },
@@ -134,6 +136,7 @@ export const commands: Command[] = [
   { id: "transfers.show", label: "Show transfers", group: "App", icon: "transfer", keys: { finder: ["Mod+Alt+L"], explorer: ["Mod+J"] }, run: () => (transfers.flyoutOpen = !transfers.flyoutOpen) },
   { id: "app.palette", label: "Command palette…", group: "App", icon: "command", keys: { all: ["Mod+P"], explorer: ["Mod+Shift+P"] }, run: () => document.dispatchEvent(new CustomEvent("cx:palette")) },
   { id: "app.settings", label: "Settings…", group: "App", icon: "settings", keys: { all: ["Mod+,"] }, run: () => dialogs.ask("settings") },
+  { id: "app.shortcuts", label: "Customize keyboard shortcuts…", group: "App", icon: "command", run: () => dialogs.ask("settings", { section: "shortcuts" }) },
   { id: "app.keymap", label: "Switch keyboard style (Finder / Explorer / Commander)", group: "App", run: () => { const order = ["finder", "explorer", "commander"] as const; settings.data.keymap = order[(order.indexOf(settings.data.keymap) + 1) % 3]; toasts.show(`${{ finder: "Finder", explorer: "Explorer", commander: "Commander" }[settings.data.keymap]} keys`); } },
   { id: "app.saveWorkspace", label: "Save workspace…", group: "App", run: () => saveWorkspace() },
 ];
@@ -147,12 +150,32 @@ let lastRun = { id: "", at: 0 };
  * press (macOS menu key equivalents), so an identical command within 250 ms
  * is ignored.
  */
-export function run(id: string, fromMenu = false) {
+export function run(id: string, fromMenu = false, track = true) {
+  if (keyRecorder.active) return;
   const now = performance.now();
   if (fromMenu && lastRun.id === id && now - lastRun.at < 250) return;
   lastRun = { id, at: now };
   const c = byId.get(id);
-  if (c && (!c.when || c.when())) void c.run();
+  if (!c || (c.when && !c.when())) return;
+  if (track) noteUsed(c);
+  void c.run();
+}
+
+// ---- recently used (the command bar's strip) ----
+
+const RECENT_MAX = 12;
+/** Commands with a button of their own (command bar, address bar, title bar) or too routine to list. */
+const NOT_RECENT = new Set(["file.newFolder", "edit.cut", "edit.copy", "edit.paste", "file.rename", "file.sendTo", "file.trash", "file.open", "file.quicklook", "view.preview", "view.details", "view.icons", "view.columns", "view.gallery", "sel.all", "sel.none", "app.palette", "app.settings"]);
+
+function noteUsed(c: Command) {
+  if (NOT_RECENT.has(c.id) || c.group === "Navigate" || c.group === "Tabs") return;
+  const list = settings.data.recentCommands;
+  if (list[0] === c.id) return;
+  settings.data.recentCommands = [c.id, ...list.filter((x) => x !== c.id)].slice(0, RECENT_MAX);
+}
+
+export function forgetRecent(id?: string) {
+  settings.data.recentCommands = id == null ? [] : settings.data.recentCommands.filter((x) => x !== id);
 }
 
 export function enabled(id: string) {
@@ -160,18 +183,124 @@ export function enabled(id: string) {
   return !!c && (!c.when || c.when());
 }
 
-/** Keys for a command in the active keymap, most specific first. */
-export function keysFor(c: Command): string[] {
+// ---- the user's own shortcuts ----
+
+let claimedFor: Record<string, string[]> | null = null;
+let claimedSet = new Set<string>();
+
+/** Keys some custom shortcut uses: no default binding runs on them any more. */
+function claimed(): Set<string> {
+  const custom = settings.data.keyBindings;
+  if (custom !== claimedFor) {
+    claimedFor = custom;
+    claimedSet = new Set(Object.values(custom).flat());
+  }
+  return claimedSet;
+}
+
+export function isCustomized(id: string): boolean {
+  return id in settings.data.keyBindings;
+}
+
+/** Every key that runs a command right now, unreachable ones included. */
+export function boundKeys(c: Command): string[] {
   return ranked(c).map((r) => r.key);
 }
 
+/** Commands (other than `except`) a key would run now. */
+export function commandsOn(combo: string, except?: string): Command[] {
+  return commands.filter((c) => c.id !== except && boundKeys(c).includes(combo));
+}
+
+/** Give a command its own list of keys; each moves off any other custom command. */
+export function setKeys(id: string, keys: string[]) {
+  const next: Record<string, string[]> = {};
+  for (const [other, ks] of Object.entries(settings.data.keyBindings)) {
+    if (other !== id) next[other] = ks.filter((k) => !keys.includes(k));
+  }
+  next[id] = [...new Set(keys)];
+  settings.data.keyBindings = next;
+}
+
+/** Back to the keyboard style's own keys. */
+export function resetKeys(id?: string) {
+  if (id == null) {
+    settings.data.keyBindings = {};
+    return;
+  }
+  const next = { ...settings.data.keyBindings };
+  delete next[id];
+  settings.data.keyBindings = next;
+}
+
+/** Keys a text field keeps for editing (select all, clipboard, word jumps…). */
+const TEXT_EDIT_KEYS = ["Mod+A", "Mod+C", "Mod+V", "Mod+X", "Mod+Z", "Mod+Backspace", "Mod+Left", "Mod+Right"];
+
+/** The macOS menu bar's command items and the keys menu.rs gives them. */
+const MENU_KEYS: Record<string, string> = {
+  "app.settings": "Mod+,",
+  "tab.new": "Mod+T",
+  "file.newFolder": "Mod+Shift+N",
+  "file.copyTo": "Shift+F5",
+  "file.moveTo": "Shift+F6",
+  "tab.close": "Mod+W",
+  "nav.back": "Mod+[",
+  "nav.forward": "Mod+]",
+  "nav.up": "Mod+Up",
+  "nav.home": "Mod+Shift+H",
+  "nav.editPath": "Mod+Shift+G",
+  "net.connect": "Mod+K",
+};
+
+/** "Mod+Shift+N" → "Cmd+Shift+N", the menu's accelerator syntax. */
+function accelerator(combo: string): string {
+  const m = /^((?:(?:Mod|Ctrl|Alt|Shift)\+)*)(.+)$/.exec(combo)!;
+  const key = { "Num+": "NumpadAdd", "Num-": "NumpadSubtract", "Num*": "NumpadMultiply" }[m[2]] ?? m[2];
+  return m[1].replace("Mod+", "Cmd+") + key;
+}
+
+/**
+ * Shortcuts for the macOS menu items. Menu keys work even while typing, so a
+ * customized command only gets a ⌘ or F-key one; an untouched command keeps
+ * the standard key (mouse-button tools send those) unless another command
+ * was given it.
+ */
+export function menuAccelerators(): Record<string, string | null> {
+  const taken = claimed();
+  const out: Record<string, string | null> = {};
+  for (const [id, standard] of Object.entries(MENU_KEYS)) {
+    const custom = settings.data.keyBindings[id];
+    const key = custom ? custom.find((k) => reachable(k) && !TEXT_EDIT_KEYS.includes(k) && /^Mod\+|(^|\+)F\d+$/.test(k)) : taken.has(standard) ? undefined : standard;
+    out[id] = key ? accelerator(key) : null;
+  }
+  return out;
+}
+
+/** Set while Settings records a shortcut: key presses and menu items don't run commands. */
+export const keyRecorder = $state({ active: false });
+
+/**
+ * Keys to show for a command in the active keymap, most specific first.
+ * Leaves out keys the OS takes (they still match, in case someone turned the
+ * system shortcut off), so menus show one that works.
+ */
+export function keysFor(c: Command): string[] {
+  return ranked(c)
+    .map((r) => r.key)
+    .filter(reachable);
+}
+
 function ranked(c: Command): { key: string; rank: number }[] {
+  const custom = settings.data.keyBindings[c.id];
+  if (custom) return custom.map((key) => ({ key, rank: -1 }));
   const k = c.keys;
   if (!k) return [];
+  const taken = claimed();
+  const free = (key: string) => !taken.has(key);
   const map = settings.data.keymap;
   const own = (map === "finder" ? k.finder : map === "explorer" ? k.explorer : k.commander) ?? [];
   const inherited = map === "commander" ? (k.explorer ?? []) : [];
-  return [...own.map((key) => ({ key, rank: 0 })), ...(k.all ?? []).map((key) => ({ key, rank: 1 })), ...inherited.map((key) => ({ key, rank: 2 }))];
+  return [...own.map((key) => ({ key, rank: 0 })), ...(k.all ?? []).map((key) => ({ key, rank: 1 })), ...inherited.map((key) => ({ key, rank: 2 }))].filter((r) => free(r.key));
 }
 
 /** Shortcut label to show next to a command (first binding). */
@@ -183,7 +312,7 @@ export function shortcut(id: string): string | undefined {
 
 /** Handle a key press; returns true when a command ran. */
 export function handleKey(e: KeyboardEvent): boolean {
-  if (e.isComposing || menu.open) return false;
+  if (e.isComposing || menu.open || keyRecorder.active) return false;
   if (e.defaultPrevented) return false;
   const combo = comboOf(e);
   const inText = isTextInput(e.target);
@@ -199,10 +328,11 @@ export function handleKey(e: KeyboardEvent): boolean {
     if (c.list && !inList) continue;
     // In a text field only modifier shortcuts and F-keys apply.
     if (inText && !/^(Mod|Ctrl|Alt)\+|^F\d+$/.test(combo)) continue;
-    if (inText && ["Mod+A", "Mod+C", "Mod+V", "Mod+X", "Mod+Z", "Mod+Backspace", "Mod+Left", "Mod+Right"].includes(combo)) continue;
+    if (inText && TEXT_EDIT_KEYS.includes(combo)) continue;
     if (c.when && !c.when()) continue;
     e.preventDefault();
     lastRun = { id: c.id, at: performance.now() };
+    noteUsed(c);
     void c.run();
     return true;
   }
