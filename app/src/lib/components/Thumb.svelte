@@ -10,7 +10,12 @@
   let { entry, uri, size, fit = "contain", iconScale = 0.78 }: { entry: Item; uri: string; size: number; fit?: "contain" | "cover"; iconScale?: number } = $props();
 
   const thumbable = new Set(["image", "video", "pdf", "doc", "slides", "sheet", "font"]);
-  let wanted = $derived((!entry.isDir && thumbable.has(categoryOf(entry))) || hasOsIcon(entry.name, entry.isDir, uri, ws.platform) ? thumbUrl(uri, Math.round(size * (window.devicePixelRatio || 1)), entry.modified) : "");
+  // Thumbnails come in a few fixed sizes, scaled down to fit by CSS: zooming
+  // the icons in 10% steps then reuses cached thumbnails instead of making
+  // every visible one again at each step.
+  const SIZES = [32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024];
+  const bucket = (px: number) => SIZES.find((s) => s >= px) ?? Math.round(px);
+  let wanted = $derived((!entry.isDir && thumbable.has(categoryOf(entry))) || hasOsIcon(entry.name, entry.isDir, uri, ws.platform) ? thumbUrl(uri, bucket(size * (window.devicePixelRatio || 1)), entry.modified) : "");
 
   // Double-buffered: when the file changes (new mtime → new URL) the old
   // picture stays up until the new one has loaded, so refreshes don't blink.

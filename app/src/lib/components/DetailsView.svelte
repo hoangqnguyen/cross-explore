@@ -56,7 +56,7 @@
 
   /** Scroll so the cursor row is visible. */
   function reveal(center = false) {
-    const i = tab.cursor == null ? -1 : rows.findIndex((e) => keyOf(e) === tab.cursor);
+    const i = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
     if (!scroller || i < 0) return;
     const top = i * rowH;
     if (center) scroller.scrollTop = top - viewportH / 2 + rowH;

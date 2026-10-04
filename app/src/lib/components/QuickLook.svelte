@@ -13,7 +13,7 @@
 
   let tab = $derived(ws.activeTab);
   let entry = $derived(tab?.cursorEntry ?? tab?.selectedEntries[0] ?? null);
-  let index = $derived(entry ? tab.visible.findIndex((e) => keyOf(e) === keyOf(entry!)) : -1);
+  let index = $derived(entry ? tab.indexOf(keyOf(entry!)) : -1);
   let box: HTMLDivElement | undefined = $state();
 
   $effect(() => {

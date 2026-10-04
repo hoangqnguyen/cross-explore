@@ -98,18 +98,29 @@ export class Tab {
     const items = this.folder.items;
     if (!this.expanded.size) return showHidden && !q ? items : items.filter(keep);
     const out: Item[] = [];
-    const walk = (list: Item[], depth: number, parent: string | null) => {
+    const walk = (list: Item[], depth: number) => {
       for (const e of list) {
-        const uri = parent ? childUri(parent, e.name) : this.uriOf(e);
-        const sub = e.isDir ? this.expanded.get(uri) : undefined;
+        const sub = e.isDir ? this.expanded.get(this.uriOf(e)) : undefined;
         if (!keep(e) && !sub) continue;
-        out.push(parent ? { ...e, uri, parent, depth } : e);
-        if (sub) walk(sub.items, depth + 1, uri);
+        out.push(e);
+        if (sub) walk(this.#outlineRows(sub, depth + 1), depth + 1);
       }
     };
-    walk(items, 0, null);
+    walk(items, 0);
     return out;
   });
+
+  /** An expanded folder's rows, tagged with where they live; kept per listing so rows keep their identity. */
+  #outlined = new WeakMap<Item[], Item[]>();
+  #outlineRows(sub: Folder, depth: number): Item[] {
+    let rows = this.#outlined.get(sub.items);
+    if (!rows) {
+      const parent = sub.uri;
+      rows = sub.items.map((e) => ({ ...e, uri: childUri(parent, e.name), parent, depth }));
+      this.#outlined.set(sub.items, rows);
+    }
+    return rows;
+  }
 
   isExpanded(e: Item) {
     return this.expanded.has(this.uriOf(e));
@@ -148,7 +159,30 @@ export class Tab {
 
   selectedEntries = $derived.by(() => this.visible.filter((e) => this.selection.has(keyOf(e))));
   selectedUris = $derived(this.selectedEntries.map((e) => this.uriOf(e)));
-  cursorEntry = $derived(this.cursor == null ? null : (this.visible.find((e) => keyOf(e) === this.cursor) ?? null));
+  cursorEntry = $derived.by(() => {
+    const i = this.cursor == null ? -1 : this.indexOf(this.cursor);
+    return i < 0 ? null : this.visible[i];
+  });
+
+  /** Where `indexOf` last found a row; not reactive, only a starting guess. */
+  indexHint = 0;
+
+  /**
+   * Position of the row with `key` in `visible`, or -1. Looks around the
+   * last hit first: the cursor mostly stays put or moves a row or a page,
+   * which saves scanning a 100k folder on every arrow key.
+   */
+  indexOf(key: string): number {
+    const rows = this.visible;
+    const h = this.indexHint;
+    for (let d = 0; d <= 64; d++) {
+      if (h + d < rows.length && keyOf(rows[h + d]) === key) return (this.indexHint = h + d);
+      if (d && h - d >= 0 && h - d < rows.length && keyOf(rows[h - d]) === key) return (this.indexHint = h - d);
+    }
+    const i = rows.findIndex((e) => keyOf(e) === key);
+    if (i >= 0) this.indexHint = i;
+    return i;
+  }
 
   uriOf(e: Item): string {
     return e.uri ?? childUri(this.dirUri, e.name);
@@ -218,9 +252,12 @@ export class Tab {
   }
 
   activate() {
-    // Hidden tabs don't watch; catch up on whatever changed meanwhile, then
-    // watch (after the listing, which polled folders use as their baseline).
+    // A pushed watcher kept running while hidden, so the rows are current.
+    // Polled folders stop when hidden; catch up on whatever changed
+    // meanwhile, then watch (after the listing, which polling uses as its
+    // baseline).
     const f = this.folder;
+    if (f.live === "live") return;
     if (f.status !== "loading" && f.kind === "folder")
       void f.load().then(() => {
         if (this.folder === f) void f.watch();
@@ -229,7 +266,9 @@ export class Tab {
   }
 
   deactivate() {
-    this.folder.unwatch();
+    // Pushed changes are cheap to keep applying, and save re-listing the
+    // whole folder on every tab switch; polling a hidden tab is not.
+    if (this.folder.live !== "live") this.folder.unwatch();
   }
 
   close() {
@@ -264,13 +303,13 @@ export class Tab {
   }
 
   selectRange(to: string, additive = false) {
-    const keys = this.visible.map(keyOf);
-    const a = keys.indexOf(this.anchor ?? to);
-    const b = keys.indexOf(to);
+    const rows = this.visible;
+    const b = this.indexOf(to);
     if (b < 0) return;
+    const a = this.indexOf(this.anchor ?? to);
     const [lo, hi] = a < 0 ? [b, b] : [Math.min(a, b), Math.max(a, b)];
     const s = additive ? new Set(this.selection) : new Set<string>();
-    for (let i = lo; i <= hi; i++) s.add(keys[i]);
+    for (let i = lo; i <= hi; i++) s.add(keyOf(rows[i]));
     this.selection = s;
     this.cursor = to;
   }
@@ -379,14 +418,20 @@ export class Tab {
     const keys = targets.map(keyOf);
     // Move the cursor to the row after the deleted block, like Explorer.
     const vis = this.visible;
-    const last = Math.max(...keys.map((k) => vis.findIndex((e) => keyOf(e) === k)));
     const gone = new Set(keys);
+    let last = -1;
+    for (let i = vis.length - 1; i >= 0 && last < 0; i--) if (gone.has(keyOf(vis[i]))) last = i;
     const next = vis.slice(last + 1).find((e) => !gone.has(keyOf(e))) ?? vis.slice(0, last).reverse().find((e) => !gone.has(keyOf(e)));
     this.folder.removeLocal(keys);
     this.selectOnly(next ? keyOf(next) : null);
     // Group by folder (search results can span many).
     const byDir = new Map<string, Item[]>();
-    for (const t of targets) byDir.set(t.parent ?? this.dirUri, [...(byDir.get(t.parent ?? this.dirUri) ?? []), t]);
+    for (const t of targets) {
+      const dir = t.parent ?? this.dirUri;
+      const list = byDir.get(dir);
+      if (list) list.push(t);
+      else byDir.set(dir, [t]);
+    }
     try {
       const items = (await Promise.all([...byDir].map(([dir, es]) => trashEntries(dir, es.map((e) => e.name))))).flat();
       const label = targets.length === 1 ? `“${targets[0].name}”` : `${targets.length} items`;

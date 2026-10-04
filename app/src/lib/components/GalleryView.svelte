@@ -27,7 +27,7 @@
   });
 
   function reveal() {
-    const i = tab.cursor == null ? -1 : rows.findIndex((e) => keyOf(e) === tab.cursor);
+    const i = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
     if (!strip || i < 0) return;
     strip.scrollTo({ left: i * CELL - stripW / 2 + CELL / 2, behavior: "smooth" });
   }

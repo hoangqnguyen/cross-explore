@@ -59,7 +59,7 @@
   });
 
   function reveal() {
-    const i = tab.cursor == null ? -1 : rows.findIndex((e) => keyOf(e) === tab.cursor);
+    const i = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
     if (!scroller || i < 0) return;
     const top = Math.floor(i / cols) * cellH;
     if (top < scroller.scrollTop) scroller.scrollTop = top;

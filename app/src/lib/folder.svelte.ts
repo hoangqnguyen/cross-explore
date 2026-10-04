@@ -61,7 +61,9 @@ export class Folder implements Source {
   #wantWatch = false;
   /** Watch patches that arrive while a listing is in flight wait here. */
   #buffer: Change[] | null = null;
-  #freshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  #freshTimers = new Set<ReturnType<typeof setTimeout>>();
+  #freshOwner = new Map<string, number>();
+  #freshBatch = 0;
 
   constructor(uri: string, sort: SortSpec) {
     this.uri = uri;
@@ -192,7 +194,7 @@ export class Folder implements Source {
   dispose() {
     this.#gen++;
     this.unwatch();
-    for (const t of this.#freshTimers.values()) clearTimeout(t);
+    for (const t of this.#freshTimers) clearTimeout(t);
   }
 
   /** Apply the result of our own operation right away; the watcher confirms it later. */
@@ -223,9 +225,11 @@ export class Folder implements Source {
     const added: string[] = [];
     // Rows are matched by name (a folder can't hold two of the same), so a
     // change can never leave a duplicate row behind.
+    // `items` is sorted and names are unique, so the old row sits just
+    // before where it would be inserted; scan only if the sort moved on.
     const drop = (name: string, hint?: Entry) => {
-      let i = hint ? items.indexOf(hint) : -1;
-      if (i < 0 || items[i].name !== name) i = items.findIndex((x) => x.name === name);
+      let i = hint ? insertionIndex(items, hint, this.#cmp) - 1 : -1;
+      if (i < 0 || items[i] !== hint) i = items.findIndex((x) => x.name === name);
       if (i >= 0) items.splice(i, 1);
     };
     for (const c of changes) {
@@ -243,25 +247,50 @@ export class Folder implements Source {
         if (!bulk) drop(c.name, prev);
       }
     }
-    this.items = bulk ? [...this.#byName.values()].sort(this.#cmp) : items;
+    if (bulk) {
+      // Keep the untouched rows (already sorted) and merge in the changed
+      // ones: O(n + k log k) instead of re-sorting the whole folder.
+      const touched = new Set<string>();
+      for (const c of changes) {
+        if (c.type === "upsert") touched.add(c.entry.name);
+        else if (c.type === "remove") touched.add(c.name);
+      }
+      const changed: Entry[] = [];
+      for (const name of touched) {
+        const e = this.#byName.get(name);
+        if (e) changed.push(e);
+      }
+      this.items = mergeSorted(
+        items.filter((e) => !touched.has(e.name)),
+        changed.sort(this.#cmp),
+        this.#cmp,
+      );
+    } else {
+      this.items = items;
+    }
     if (highlight && added.length) this.#markFresh(added);
   }
 
   #markFresh(names: string[]) {
+    // Each batch fades out together on one timer; a bulk add (an unzip, a
+    // big paste) would otherwise schedule thousands of timers and re-renders.
     const next = new Set(this.fresh);
-    for (const n of names) {
-      next.add(n);
-      clearTimeout(this.#freshTimers.get(n));
-      this.#freshTimers.set(
-        n,
-        setTimeout(() => {
-          this.#freshTimers.delete(n);
-          const s = new Set(this.fresh);
-          s.delete(n);
-          this.fresh = s;
-        }, FRESH_MS),
-      );
-    }
+    for (const n of names) next.add(n);
     this.fresh = next;
+    const batch = ++this.#freshBatch;
+    for (const n of names) this.#freshOwner.set(n, batch);
+    const timer = setTimeout(() => {
+      this.#freshTimers.delete(timer);
+      const s = new Set(this.fresh);
+      for (const n of names) {
+        // A later batch re-highlighted this row; leave it to that timer.
+        if (this.#freshOwner.get(n) !== batch) continue;
+        this.#freshOwner.delete(n);
+        s.delete(n);
+      }
+      this.fresh = s;
+    }, FRESH_MS);
+    this.#freshTimers.add(timer);
   }
+
 }

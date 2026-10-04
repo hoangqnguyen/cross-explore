@@ -143,11 +143,12 @@ export interface NavLayout {
 /** Arrow keys, Home/End, paging, Escape and type-to-filter. Returns true if handled. */
 export function handleNavKey(e: KeyboardEvent, tab: Tab, layout: NavLayout): boolean {
   const rows = tab.visible;
-  const cur = tab.cursor == null ? -1 : rows.findIndex((r) => keyOf(r) === tab.cursor);
+  const cur = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
   const move = (to: number) => {
     if (!rows.length) return;
     const i = Math.max(0, Math.min(rows.length - 1, to));
     const key = keyOf(rows[i]);
+    tab.indexHint = i;
     if (e.shiftKey) tab.selectRange(key);
     else if (primary(e) && !isMac) tab.cursor = key; // Ctrl+arrows move focus only, like Explorer
     else tab.selectOnly(key);
@@ -190,6 +191,7 @@ export function handleNavKey(e: KeyboardEvent, tab: Tab, layout: NavLayout): boo
 /** Pause after which typing starts a new search, like Finder. */
 const TYPE_AHEAD_MS = 1000;
 const typed = new WeakMap<Tab, { text: string; at: number }>();
+const folded = new WeakMap<Item, string>();
 
 /** Lower-case and without accents, so "bien" finds "BIÊN BẢN". */
 export const foldName = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -206,22 +208,40 @@ export function typeToSelect(tab: Tab, key: string, layout: Pick<NavLayout, "rev
   const text = prev && now - prev.at < TYPE_AHEAD_MS ? prev.text + key : key;
   typed.set(tab, { text, at: now });
   const want = foldName(text);
-  const names = rows.map((r) => foldName(r.name));
-  const cur = tab.cursor == null ? -1 : rows.findIndex((r) => keyOf(r) === tab.cursor);
+  // Folded lazily and remembered per row: folding a 100k folder up front
+  // cost ~80 ms per keystroke, and most searches stop within a few rows.
+  const names = {
+    length: rows.length,
+    at: (i: number) => {
+      const r = rows[i];
+      let f = folded.get(r);
+      if (f === undefined) folded.set(r, (f = foldName(r.name)));
+      return f;
+    },
+  };
+  const cur = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
 
   let hit = -1;
   const same = [...want].every((c) => c === want[0]);
-  if (same && want.length > 1 && !names.some((n) => n.startsWith(want))) {
+  const first = (prefix: string) => {
+    for (let i = 0; i < names.length; i++) if (names.at(i).startsWith(prefix)) return i;
+    return -1;
+  };
+  const next = (prefix: string) => {
+    for (let n = 1; n <= rows.length; n++) if (names.at((cur + n) % rows.length).startsWith(prefix)) return (cur + n) % rows.length;
+    return -1;
+  };
+  if (same && want.length > 1 && first(want) < 0) {
     // "aaa": cycle through the "a" items.
-    const c = want[0];
-    for (let n = 1; n <= rows.length && hit < 0; n++) if (names[(cur + n) % rows.length].startsWith(c)) hit = (cur + n) % rows.length;
-  } else if (want.length === 1 && cur >= 0 && names[cur].startsWith(want)) {
+    hit = next(want[0]);
+  } else if (want.length === 1 && cur >= 0 && names.at(cur).startsWith(want)) {
     // A single letter when already on a match moves to the next match.
-    for (let n = 1; n <= rows.length && hit < 0; n++) if (names[(cur + n) % rows.length].startsWith(want)) hit = (cur + n) % rows.length;
+    hit = next(want);
   } else {
-    hit = names.findIndex((n) => n.startsWith(want));
+    hit = first(want);
   }
   if (hit < 0) return;
+  tab.indexHint = hit;
   tab.selectOnly(keyOf(rows[hit]));
   layout.reveal();
 }

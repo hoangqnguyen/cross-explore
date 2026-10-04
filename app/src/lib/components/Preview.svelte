@@ -13,6 +13,8 @@
 
   let { entry, uri, large = false }: { entry: Item; uri: string; large?: boolean } = $props();
 
+  const PREVIEW_SETTLE_MS = 120;
+
   const htmlExts = new Set("html htm".split(" "));
 
   const textExts = new Set("txt md markdown log csv tsv json yaml yml toml xml ini cfg conf env sh zsh bash ps1 bat js mjs cjs ts tsx jsx rs go py rb java kt swift c h cc cpp hpp cs php lua dart scala svelte vue css scss sql gradle gitignore dockerfile makefile".split(" "));
@@ -48,6 +50,8 @@
   let pdfFailed = $state(false);
   let officeFailed = $state(false);
   let mediaEl = $state<HTMLMediaElement>();
+  /** The cursor has rested here long enough to load heavy previews. */
+  let settled = $state(false);
 
   // Every call site keys this component by uri, so one instance ever shows
   // one file: destroy (navigating away, picking a different file, closing
@@ -70,32 +74,46 @@
     officeFailed = false;
     pdfFailed = false;
     htmlMode = "preview";
+    settled = false;
     let stale = false;
-    if (k === "text" || k === "html") {
-      previewText(u, large ? 1024 * 1024 : 64 * 1024)
-        .then((t) => !stale && (text = t))
-        .catch(() => !stale && (textError = "No preview available"));
-    } else if (k === "folder" || k === "archive") {
-      const list: Entry[] = [];
-      const target = k === "archive" ? `archive://${u}!/` : u;
-      listDir(target, (ev) => ev.type === "batch" && list.push(...ev.entries))
-        .then(() => !stale && (children = list.sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))))
-        .catch(() => !stale && (children = []));
-    } else if (k === "office") {
-      previewOffice(u)
-        .then((o) => !stale && (office = o))
-        .catch(() => !stale && (officeFailed = true));
-    } else if (k === "font") {
-      const family = `cx-preview-${Math.random().toString(36).slice(2)}`;
-      new FontFace(family, `url("${fileUrl(u)}")`)
-        .load()
-        .then((f) => {
-          document.fonts.add(f);
-          if (!stale) fontFamily = family;
-        })
-        .catch(() => {});
-    }
-    return () => (stale = true);
+    let font: FontFace | null = null;
+    const start = () => {
+      settled = true;
+      if (k === "text" || k === "html") {
+        previewText(u, large ? 1024 * 1024 : 64 * 1024)
+          .then((t) => !stale && (text = t))
+          .catch(() => !stale && (textError = "No preview available"));
+      } else if (k === "folder" || k === "archive") {
+        const list: Entry[] = [];
+        const target = k === "archive" ? `archive://${u}!/` : u;
+        listDir(target, (ev) => ev.type === "batch" && list.push(...ev.entries))
+          .then(() => !stale && (children = list.sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))))
+          .catch(() => !stale && (children = []));
+      } else if (k === "office") {
+        previewOffice(u)
+          .then((o) => !stale && (office = o))
+          .catch(() => !stale && (officeFailed = true));
+      } else if (k === "font") {
+        const family = `cx-preview-${Math.random().toString(36).slice(2)}`;
+        new FontFace(family, `url("${fileUrl(u)}")`)
+          .load()
+          .then((f) => {
+            if (stale) return;
+            font = f;
+            document.fonts.add(f);
+            fontFamily = family;
+          })
+          .catch(() => {});
+      }
+    };
+    // The pane and the gallery follow the cursor: wait until it settles so
+    // holding an arrow key doesn't read (or list) every file it passes.
+    const timer = setTimeout(start, large ? 0 : PREVIEW_SETTLE_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+      if (font) document.fonts.delete(font);
+    };
   });
 
   let html = $derived(text ? (ext === "md" || ext === "markdown" ? renderMarkdown(text.text) : highlight(text.text, ext)) : "");
@@ -117,7 +135,7 @@
   {:else if kind === "pdf" && !pdfFailed}
     <!-- pdf.js, not a thumbnail: a remote PDF has no fast native thumbnail
          (unlike images), so the small preview pane used to just go blank. -->
-    <div class="pdfwrap"><PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} /></div>
+    <div class="pdfwrap">{#if settled}<PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} />{/if}</div>
   {:else if kind === "pdf"}
     <iframe src={fileUrl(uri)} title={entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "html"}

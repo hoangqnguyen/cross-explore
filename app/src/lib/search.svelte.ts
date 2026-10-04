@@ -46,7 +46,8 @@ abstract class Results implements Source {
   }
   upsertLocal(_e: Entry) {}
   removeLocal(keys: string[]) {
-    this.items = this.items.filter((i) => !keys.includes(i.uri!));
+    const gone = new Set(keys);
+    this.items = this.items.filter((i) => !gone.has(i.uri!));
   }
 }
 

@@ -17,7 +17,6 @@
   import TransferFlyout from "./lib/components/TransferFlyout.svelte";
   import Dialogs from "./lib/dialogs/Dialogs.svelte";
   import MobileBar from "./lib/components/MobileBar.svelte";
-  import TerminalPanel from "./lib/components/TerminalPanel.svelte";
   import AccessBanner from "./lib/components/AccessBanner.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { isTextInput } from "./lib/keys";
@@ -40,7 +39,7 @@
     if (!settings.data.onboarded && !testing && !selftest) void dialogs.ask("onboarding");
     if (inTauri) {
       void listenForOsDrops();
-      void import("./lib/selftest").then((m) => m.selftest());
+      if (selftest) void import("./lib/selftest").then((m) => m.selftest());
     }
   });
 
@@ -157,7 +156,8 @@
       </div>
       {#if settings.data.previewPane}<PreviewPane />{/if}
     </div>
-    {#if ui.terminalOpen}<TerminalPanel />{/if}
+    <!-- xterm is big and most sessions never open the terminal: load it on first use. -->
+    {#if ui.terminalOpen}{#await import("./lib/components/TerminalPanel.svelte") then { default: TerminalPanel }}<TerminalPanel />{/await}{/if}
     <StatusBar />
   </div>
   <QuickLook />

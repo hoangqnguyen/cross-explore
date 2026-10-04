@@ -2,6 +2,8 @@
 class FileClipboard {
   uris = $state.raw<string[]>([]);
   mode = $state<"copy" | "cut">("copy");
+  /** Every visible row asks `isCut`; a set keeps that O(1) after cutting thousands. */
+  #cut = $derived(this.mode === "cut" ? new Set(this.uris) : null);
 
   set(uris: string[], mode: "copy" | "cut") {
     this.uris = uris;
@@ -13,7 +15,7 @@ class FileClipboard {
   }
 
   isCut(uri: string) {
-    return this.mode === "cut" && this.uris.includes(uri);
+    return this.#cut?.has(uri) ?? false;
   }
 }
 

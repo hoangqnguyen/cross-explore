@@ -14,8 +14,10 @@
   let selBytes = $derived(sel.reduce((n, e) => n + (e.isDir ? 0 : e.size), 0));
   let space = $state<{ free: number; total: number } | null>(null);
 
+  // A string, so a reload of the same folder (new `info` object) doesn't re-ask.
+  let spaceUri = $derived(folder?.kind === "folder" ? (folder.info?.uri ?? null) : null);
   $effect(() => {
-    const uri = folder?.kind === "folder" ? folder.info?.uri : null;
+    const uri = spaceUri;
     space = null;
     if (!uri) return;
     let stale = false;

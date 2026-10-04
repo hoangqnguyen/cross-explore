@@ -11,30 +11,60 @@
   import FileIcon from "./FileIcon.svelte";
   import Icon from "./Icon.svelte";
   import Preview from "./Preview.svelte";
+  import VirtualRows from "./VirtualRows.svelte";
 
   let { tab }: { tab: Tab } = $props();
 
   const MAX_ANCESTORS = 3;
+  const ROW_H = 26;
+  /** Folders kept listed (and watched) for the side columns, least recent first. */
+  const CACHE_SIZE = 8;
   const cache = new Map<string, Folder>();
   let wrap: HTMLDivElement | undefined = $state();
   let current: HTMLDivElement | undefined = $state();
 
   function folderFor(uri: string): Folder {
     let f = cache.get(uri);
-    if (!f) {
+    if (f) {
+      cache.delete(uri); // most recent goes last
+    } else {
       f = new Folder(uri, settings.data.sort);
       void f.load();
-      cache.set(uri, f);
     }
+    cache.set(uri, f);
     return f;
   }
+
+  // Drop folders no column shows any more, oldest first: walking through
+  // many folders used to keep every listing it passed in memory.
+  $effect(() => {
+    const keep = new Set([...ancestors.map((a) => a.uri), ...(next ? [next] : [])]);
+    for (const [uri, f] of cache) {
+      if (cache.size <= CACHE_SIZE) break;
+      if (keep.has(uri)) continue;
+      f.dispose();
+      cache.delete(uri);
+    }
+  });
 
   $effect(() => () => cache.forEach((f) => f.dispose()));
 
   let crumbs = $derived(tab.folder.info?.crumbs ?? []);
   let ancestors = $derived(crumbs.slice(Math.max(0, crumbs.length - 1 - MAX_ANCESTORS), -1).map((c, i, all) => ({ uri: c.uri, label: c.label, child: (all[i + 1] ?? crumbs.at(-1))!.label })));
   let focusEntry = $derived(tab.cursorEntry);
-  let next = $derived(focusEntry?.isDir && tab.selection.size <= 1 ? childUri(tab.dirUri, focusEntry.name) : null);
+  let wantNext = $derived(focusEntry?.isDir && tab.selection.size <= 1 ? childUri(tab.dirUri, focusEntry.name) : null);
+  // Holding an arrow key over folders shouldn't list each one it passes:
+  // folders not listed yet wait for the cursor to settle.
+  let next = $state<string | null>(null);
+  $effect(() => {
+    const want = wantNext;
+    if (want == null || cache.has(want)) {
+      next = want;
+      return;
+    }
+    const t = setTimeout(() => (next = want), 100);
+    return () => clearTimeout(t);
+  });
 
   const visibleOf = (items: Item[]) => (settings.data.showHidden ? items : items.filter((e) => !e.hidden));
 
@@ -45,8 +75,13 @@
   });
 
   function reveal() {
-    const el = current?.querySelector(".item.cursor") as HTMLElement | null;
-    el?.scrollIntoView({ block: "nearest" });
+    const i = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
+    if (!current || i < 0) return;
+    // Rows start below the column's top padding.
+    const top = (current.firstElementChild as HTMLElement | null)?.offsetTop ?? 0;
+    const y = top + i * ROW_H;
+    if (y < current.scrollTop) current.scrollTop = y;
+    else if (y + ROW_H > current.scrollTop + current.clientHeight) current.scrollTop = y + ROW_H - current.clientHeight;
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -129,13 +164,15 @@
     {@const f = folderFor(a.uri)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="column" style:width="{settings.data.columnWidth}px" use:dropTarget={{ dest: () => a.uri }} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
-      {#each visibleOf(f.items) as e (e.name)}
-        <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
-          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
-          <span>{e.name}</span>
-          {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
-        </button>
-      {/each}
+      <VirtualRows items={visibleOf(f.items)} rowH={ROW_H} key={(e) => e.name}>
+        {#snippet row(e)}
+          <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
+            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+            <span>{e.name}</span>
+            {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
+          </button>
+        {/snippet}
+      </VirtualRows>
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
     </div>
@@ -156,35 +193,37 @@
     oncontextmenu={(e) => e.target === e.currentTarget && blankMenu(e, tab)}
     use:dropTarget={{ dest: () => (tab.writable ? tab.dirUri : null) }}
   >
-    {#each tab.visible as e (keyOf(e))}
-      {@const key = keyOf(e)}
-      <div
-        class="item"
-        class:selected={tab.selection.has(key)}
-        class:cursor={tab.cursor === key}
-        class:fresh={tab.folder.fresh.has(key)}
-        class:dim={e.hidden}
-        role="option"
-        tabindex="-1"
-        aria-selected={tab.selection.has(key)}
-        draggable="true"
-        onpointerdown={(ev) => onItemPointerDown(ev, tab, e)}
-        onpointerup={(ev) => onItemPointerUp(ev, tab, e)}
-        ondblclick={() => tab.open(e)}
-        oncontextmenu={(ev) => itemMenu(ev, tab, e)}
-        ondragstart={(ev) => onDragStart(ev, tab, e)}
-        ondragend={onDragEnd}
-        use:dropTarget={{ dest: () => (e.isDir ? tab.uriOf(e) : null), spring: () => tab.open(e) }}
-      >
-        <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
-        {#if tab.renaming === key}
-          <input class="rename" value={e.name} use:renameInput={e} spellcheck="false" />
-        {:else}
-          <span>{e.name}</span>
-        {/if}
-        {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
-      </div>
-    {/each}
+    <VirtualRows items={tab.visible} rowH={ROW_H} key={keyOf}>
+      {#snippet row(e)}
+        {@const key = keyOf(e)}
+        <div
+          class="item"
+          class:selected={tab.selection.has(key)}
+          class:cursor={tab.cursor === key}
+          class:fresh={tab.folder.fresh.has(key)}
+          class:dim={e.hidden}
+          role="option"
+          tabindex="-1"
+          aria-selected={tab.selection.has(key)}
+          draggable="true"
+          onpointerdown={(ev) => onItemPointerDown(ev, tab, e)}
+          onpointerup={(ev) => onItemPointerUp(ev, tab, e)}
+          ondblclick={() => tab.open(e)}
+          oncontextmenu={(ev) => itemMenu(ev, tab, e)}
+          ondragstart={(ev) => onDragStart(ev, tab, e)}
+          ondragend={onDragEnd}
+          use:dropTarget={{ dest: () => (e.isDir ? tab.uriOf(e) : null), spring: () => tab.open(e) }}
+        >
+          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+          {#if tab.renaming === key}
+            <input class="rename" value={e.name} use:renameInput={e} spellcheck="false" />
+          {:else}
+            <span>{e.name}</span>
+          {/if}
+          {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
+        </div>
+      {/snippet}
+    </VirtualRows>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
   </div>
@@ -193,13 +232,15 @@
     {@const f = folderFor(next)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="column" style:width="{settings.data.columnWidth}px" oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, next!, null)}>
-      {#each visibleOf(f.items) as e (e.name)}
-        <button class="item" oncontextmenu={(ev) => menuIn(ev, next!, e.name)} onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
-          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
-          <span>{e.name}</span>
-          {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
-        </button>
-      {/each}
+      <VirtualRows items={visibleOf(f.items)} rowH={ROW_H} key={(e) => e.name}>
+        {#snippet row(e)}
+          <button class="item" oncontextmenu={(ev) => menuIn(ev, next!, e.name)} onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
+            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+            <span>{e.name}</span>
+            {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
+          </button>
+        {/snippet}
+      </VirtualRows>
       {#if f.status === "ready" && !visibleOf(f.items).length}<div class="hint">Empty folder</div>{/if}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
