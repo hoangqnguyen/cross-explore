@@ -106,8 +106,16 @@ fn volume_name(mount: &Path, label: &str) -> String {
         .unwrap_or_else(|| label.to_string())
 }
 
+/// Off the main thread: listing disks stats every mount, and a stale
+/// network mount can take seconds to answer.
 #[tauri::command]
-pub fn places() -> Places {
+pub async fn places() -> std::result::Result<Places, String> {
+    tauri::async_runtime::spawn_blocking(list_places)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+fn list_places() -> Places {
     let home_dir = cx_core::location::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let phone = cfg!(any(target_os = "ios", target_os = "android"));
     let favorites = [

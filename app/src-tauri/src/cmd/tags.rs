@@ -3,12 +3,18 @@ use cx_core::{Location, Result};
 use serde::Serialize;
 use std::collections::HashMap;
 
+/// Off the main thread: one extended-attribute read per file.
 #[tauri::command]
-pub fn tags_get(uris: Vec<String>, app: AppState<'_>) -> HashMap<String, Vec<String>> {
-    uris.into_iter()
-        .map(|u| (app.tags.get(&u), u))
-        .map(|(t, u)| (u, t))
-        .collect()
+pub async fn tags_get(uris: Vec<String>, app: AppState<'_>) -> Result<HashMap<String, Vec<String>>> {
+    let app = app.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        uris.into_iter()
+            .map(|u| (app.tags.get(&u), u))
+            .map(|(t, u)| (u, t))
+            .collect()
+    })
+    .await
+    .map_err(|e| cx_core::CxError::Io(e.to_string()))
 }
 
 #[tauri::command]
@@ -28,7 +34,12 @@ pub struct TaggedHit {
 #[tauri::command]
 pub async fn tags_find(tag: String, app: AppState<'_>) -> Result<Vec<TaggedHit>> {
     let mut out = Vec::new();
-    for uri in app.tags.find(&tag) {
+    // Spotlight (`mdfind`) can take seconds: keep it off the async workers.
+    let shared = app.inner().clone();
+    let uris = tauri::async_runtime::spawn_blocking(move || shared.tags.find(&tag))
+        .await
+        .map_err(|e| cx_core::CxError::Io(e.to_string()))?;
+    for uri in uris {
         let Ok(loc) = Location::parse(&uri) else {
             continue;
         };

@@ -42,7 +42,10 @@ pub(crate) struct Session {
     // Dropping the master closes the PTY (and, on Windows, the ConPTY and
     // every process attached to it).
     master: Mutex<Box<dyn MasterPty + Send>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    /// Input for the writer thread. Writing to the PTY blocks while the
+    /// program isn't reading (a big paste into a busy program), and callers
+    /// can be on the UI thread, so they only queue.
+    writer: Mutex<mpsc::Sender<Vec<u8>>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     pid: Option<u32>,
     local: bool,
@@ -110,10 +113,23 @@ impl Session {
             .master
             .try_clone_reader()
             .map_err(|e| CxError::io("pty reader", e))?;
-        let writer = pty
+        let mut writer = pty
             .master
             .take_writer()
             .map_err(|e| CxError::io("pty writer", e))?;
+        let (input, queued) = mpsc::channel::<Vec<u8>>();
+        thread::Builder::new()
+            .name("cx-term-write".into())
+            .spawn(move || {
+                // Ends when the session (the sender) is dropped, or the PTY
+                // stops taking input; later writes then fail.
+                for data in queued {
+                    if writer.write_all(&data).and_then(|_| writer.flush()).is_err() {
+                        return;
+                    }
+                }
+            })
+            .map_err(|e| CxError::io("spawn thread", e))?;
         let exited = Arc::new(AtomicBool::new(false));
         let (tx, rx) = mpsc::channel::<Msg>();
 
@@ -159,7 +175,7 @@ impl Session {
 
         Ok(Session {
             master: Mutex::new(pty.master),
-            writer: Mutex::new(writer),
+            writer: Mutex::new(input),
             killer: Mutex::new(killer),
             pid,
             local: cmd.local,
@@ -172,10 +188,9 @@ impl Session {
     }
 
     pub fn write(&self, data: &[u8]) -> Result<()> {
-        let mut w = self.writer.lock().unwrap_or_else(|e| e.into_inner());
-        w.write_all(data)
-            .and_then(|_| w.flush())
-            .map_err(|e| CxError::io("write to terminal", e))
+        let w = self.writer.lock().unwrap_or_else(|e| e.into_inner());
+        w.send(data.to_vec())
+            .map_err(|_| CxError::Io("write to terminal: it no longer takes input".into()))
     }
 
     pub fn resize(&self, cols: u16, rows: u16) -> Result<()> {

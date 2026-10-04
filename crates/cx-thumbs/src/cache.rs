@@ -4,7 +4,8 @@
 //! size and format in the name (`<hash>-<w>x<h>.png`), so nothing else has to
 //! be stored and the in-memory index can be rebuilt from a directory listing
 //! at startup. The file's mtime doubles as its "last used" time: hits touch
-//! it, which keeps the LRU order across restarts.
+//! it (at most once per [`TOUCH_EVERY`]), which keeps the LRU order across
+//! restarts.
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -14,6 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// A hit rewrites the file's mtime only if it is older than this: the
+/// in-memory order is exact, the disk one only has to survive a restart, and
+/// a write per hit made scrolling a cached folder write to disk constantly.
+const TOUCH_EVERY: u64 = 60 * 60 * 1000;
 
 /// A cached (or freshly made) thumbnail image.
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +44,8 @@ struct Item {
     bytes: u64,
     /// Milliseconds since the epoch, strictly increasing per use.
     last_used: u64,
+    /// The file's mtime, in the same unit.
+    touched: u64,
 }
 
 #[derive(Default)]
@@ -75,7 +83,7 @@ impl DiskCache {
             let last_used = meta.modified().map(millis).unwrap_or(0);
             state.clock = state.clock.max(last_used);
             state.total += meta.len();
-            state.items.insert(hash.to_string(), Item { file, bytes: meta.len(), last_used });
+            state.items.insert(hash.to_string(), Item { file, bytes: meta.len(), last_used, touched: last_used });
         }
         let cache = DiskCache { dir, max_bytes, state: Mutex::new(state), hits: AtomicU64::new(0), misses: AtomicU64::new(0) };
         cache.evict();
@@ -99,13 +107,17 @@ impl DiskCache {
     /// Look up `key`; a hit refreshes its place in the LRU order.
     pub(crate) fn get(&self, key: &str) -> Option<Cached> {
         let hash = hash_key(key);
-        let file = {
+        let (file, touch) = {
             let mut st = self.state.lock().unwrap();
             let now = tick(&mut st);
             match st.items.get_mut(&hash) {
                 Some(item) => {
                     item.last_used = now;
-                    item.file.clone()
+                    let touch = now.saturating_sub(item.touched) >= TOUCH_EVERY;
+                    if touch {
+                        item.touched = now;
+                    }
+                    (item.file.clone(), touch)
                 }
                 None => {
                     drop(st);
@@ -118,8 +130,10 @@ impl DiskCache {
         let (_, (width, height, mime)) = parse_name(&file)?;
         match fs::read(&path) {
             Ok(bytes) => {
-                if let Ok(f) = fs::File::options().write(true).open(&path) {
-                    let _ = f.set_modified(SystemTime::now());
+                if touch {
+                    if let Ok(f) = fs::File::options().write(true).open(&path) {
+                        let _ = f.set_modified(SystemTime::now());
+                    }
                 }
                 self.hits.fetch_add(1, Ordering::Relaxed);
                 Some(Cached { bytes, mime, width, height })
@@ -153,7 +167,7 @@ impl DiskCache {
             let mut st = self.state.lock().unwrap();
             let now = tick(&mut st);
             let bytes = thumb.bytes.len() as u64;
-            if let Some(old) = st.items.insert(hash, Item { file: file.clone(), bytes, last_used: now }) {
+            if let Some(old) = st.items.insert(hash, Item { file: file.clone(), bytes, last_used: now, touched: now }) {
                 st.total -= old.bytes;
                 if old.file != file {
                     let _ = fs::remove_file(self.dir.join(&old.file));
@@ -164,15 +178,18 @@ impl DiskCache {
         self.evict();
     }
 
+    /// Once over budget, trim to 90% of it, so a full cache sorts its index
+    /// once per many new thumbnails rather than on every one.
     fn evict(&self) {
         let mut st = self.state.lock().unwrap();
         if st.total <= self.max_bytes {
             return;
         }
+        let target = self.max_bytes / 10 * 9;
         let mut order: Vec<(u64, String)> = st.items.iter().map(|(h, i)| (i.last_used, h.clone())).collect();
         order.sort_unstable();
         for (_, hash) in order {
-            if st.total <= self.max_bytes {
+            if st.total <= target {
                 break;
             }
             if let Some(item) = st.items.remove(&hash) {

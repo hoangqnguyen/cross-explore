@@ -2,7 +2,7 @@
 //! shows, for every type that has a QuickLook extension installed.
 //!
 //! The generator is asynchronous and reports through a completion handler
-//! on one of its own queues; the handler converts the CGImage to PNG right
+//! on one of its own queues; the handler encodes the CGImage (PNG or JPEG) right
 //! there and hands the bytes to a tokio oneshot. If the awaiting future is
 //! dropped, the request is cancelled so QuickLook stops working on it.
 
@@ -101,8 +101,12 @@ unsafe fn convert(rep: *mut QLThumbnailRepresentation, err: *mut NSError) -> Res
     if bitmap.pixelsWide() <= 0 || bitmap.pixelsHigh() <= 0 {
         return Err(CxError::Unsupported("QuickLook: empty image".into()));
     }
+    // Opaque thumbnails (video frames, photos) as JPEG: several times
+    // smaller than PNG, so faster to encode, load and cache. Anything with an
+    // alpha channel (icons, page previews with shadows) stays PNG.
+    let (kind, mime) = if bitmap.hasAlpha() { (NSBitmapImageFileType::PNG, "image/png") } else { (NSBitmapImageFileType::JPEG, "image/jpeg") };
     let data = bitmap
-        .representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new())
-        .ok_or_else(|| CxError::Io("QuickLook: PNG encoding failed".into()))?;
-    Ok(Cached { bytes: data.to_vec(), mime: "image/png", width: bitmap.pixelsWide() as u32, height: bitmap.pixelsHigh() as u32 })
+        .representationUsingType_properties(kind, &NSDictionary::new())
+        .ok_or_else(|| CxError::Io("QuickLook: thumbnail encoding failed".into()))?;
+    Ok(Cached { bytes: data.to_vec(), mime, width: bitmap.pixelsWide() as u32, height: bitmap.pixelsHigh() as u32 })
 }

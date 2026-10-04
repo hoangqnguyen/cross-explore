@@ -9,7 +9,15 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// Errors kept on a running job: every update carries the whole list, so a
+/// job failing on thousands of files would otherwise send O(n²) data. The
+/// `finished` event still reports them all.
+const LIVE_ERRORS: usize = 1000;
+/// Per-file errors arrive in bursts; push at most this often, the rest ride
+/// along with the next progress update.
+const ERROR_PUSH_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +108,8 @@ impl UiJob {
 
 pub struct Jobs {
     map: Mutex<HashMap<u64, UiJob>>,
+    /// When each job last pushed an update caused by a file error.
+    error_pushed: Mutex<HashMap<u64, Instant>>,
     events: Arc<Events>,
 }
 
@@ -107,6 +117,7 @@ impl Jobs {
     pub fn new(events: Arc<Events>) -> Arc<Jobs> {
         Arc::new(Jobs {
             map: Mutex::new(HashMap::new()),
+            error_pushed: Mutex::new(HashMap::new()),
             events,
         })
     }
@@ -119,14 +130,22 @@ impl Jobs {
 
     /// Update a job and push it to the UI.
     pub fn update(&self, id: u64, f: impl FnOnce(&mut UiJob)) {
-        let snapshot = {
+        self.update_then(id, true, f);
+    }
+
+    /// Update a job; push it to the UI when `push`. Serialized straight from
+    /// the map, so the job (its source list can be 100k URIs) isn't cloned.
+    fn update_then(&self, id: u64, push: bool, f: impl FnOnce(&mut UiJob)) {
+        let payload = {
             let mut map = self.map.lock().unwrap();
             let Some(j) = map.get_mut(&id) else { return };
             f(j);
-            j.clone()
+            if !push {
+                return;
+            }
+            serde_json::json!({ "job": &*j })
         };
-        self.events
-            .emit("job", serde_json::json!({ "job": snapshot }));
+        self.events.emit_value("job", payload);
     }
 
     pub fn insert(&self, job: UiJob) {
@@ -156,29 +175,48 @@ impl Jobs {
                     dest_uri: conflict.dest_uri,
                 });
             }),
-            TransferEvent::FileError { id, error } => self.update(id.0, |j| j.errors.push(error)),
+            TransferEvent::FileError { id, error } => {
+                let push = {
+                    let mut pushed = self.error_pushed.lock().unwrap();
+                    let due = pushed
+                        .get(&id.0)
+                        .is_none_or(|t| t.elapsed() >= ERROR_PUSH_INTERVAL);
+                    if due {
+                        pushed.insert(id.0, Instant::now());
+                    }
+                    due
+                };
+                self.update_then(id.0, push, |j| {
+                    if j.errors.len() < LIVE_ERRORS {
+                        j.errors.push(error);
+                    }
+                })
+            }
             TransferEvent::Finished {
                 id,
                 state,
                 error,
                 undo,
                 errors,
-            } => self.update(id.0, |j| {
-                j.state = name_of(&state);
-                j.conflict = None;
-                j.speed = 0.0;
-                j.eta = None;
-                j.errors = errors;
-                if let Some(e) = error {
-                    if j.errors.is_empty() {
-                        j.errors.push(FileError {
-                            uri: j.sources.first().cloned().unwrap_or_default(),
-                            message: e,
-                        });
+            } => {
+                self.error_pushed.lock().unwrap().remove(&id.0);
+                self.update(id.0, |j| {
+                    j.state = name_of(&state);
+                    j.conflict = None;
+                    j.speed = 0.0;
+                    j.eta = None;
+                    j.errors = errors;
+                    if let Some(e) = error {
+                        if j.errors.is_empty() {
+                            j.errors.push(FileError {
+                                uri: j.sources.first().cloned().unwrap_or_default(),
+                                message: e,
+                            });
+                        }
                     }
-                }
-                j.undo = undo.and_then(|u| serde_json::to_value(u).ok());
-            }),
+                    j.undo = undo.and_then(|u| serde_json::to_value(u).ok());
+                })
+            }
         }
     }
 

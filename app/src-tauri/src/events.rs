@@ -18,10 +18,17 @@ impl Events {
 
     /// Send `{"type": kind, ...payload}`.
     pub fn emit(&self, kind: &str, payload: impl Serialize) {
+        if self.channel.lock().unwrap().is_none() {
+            return;
+        }
+        self.emit_value(kind, serde_json::to_value(payload).unwrap_or(Value::Null));
+    }
+
+    /// [`emit`](Self::emit) for a payload that is already a JSON value.
+    pub fn emit_value(&self, kind: &str, mut v: Value) {
         let Some(ch) = self.channel.lock().unwrap().clone() else {
             return;
         };
-        let mut v = serde_json::to_value(payload).unwrap_or(Value::Null);
         if let Value::Object(map) = &mut v {
             map.insert("type".into(), Value::String(kind.into()));
         } else {

@@ -111,7 +111,10 @@ impl Job {
     }
 
     fn saved(&self) -> Saved {
-        Saved { id: self.id, request: self.req.clone(), record: self.record.lock().unwrap().clone() }
+        let mut record = self.record.lock().unwrap();
+        // The snapshot holds these; the journal starts after it.
+        record.take_unsaved();
+        Saved { id: self.id, request: self.req.clone(), record: record.clone() }
     }
 }
 
@@ -379,10 +382,17 @@ impl TransferManager {
         compare::compare(&self.vfs, left, right, opts).await
     }
 
-    pub(crate) fn save_if_dirty(&self, job: &Job) {
-        if job.dirty.swap(false, Ordering::Relaxed) && !job.state().is_finished() {
-            self.store.save(&job.saved());
+    /// Append the record's changes since the last save to the job's journal.
+    pub(crate) async fn save_if_dirty(&self, job: &Arc<Job>) {
+        if !job.dirty.swap(false, Ordering::Relaxed) || job.state().is_finished() {
+            return;
         }
+        let ops = job.record.lock().unwrap().take_unsaved();
+        if ops.is_empty() {
+            return;
+        }
+        let (mgr, id) = (self.arc(), job.id);
+        let _ = tokio::task::spawn_blocking(move || mgr.store.append(id, &ops)).await;
     }
 }
 
@@ -410,6 +420,6 @@ async fn tick(mgr: Arc<TransferManager>, job: Arc<Job>) {
             mgr.emit(TransferEvent::Progress { id: job.id, progress: p.clone() });
             last = Some(p);
         }
-        mgr.save_if_dirty(&job);
+        mgr.save_if_dirty(&job).await;
     }
 }

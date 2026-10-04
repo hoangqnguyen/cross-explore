@@ -50,8 +50,15 @@ pub async fn open_entry_with(
 
 /// Apps that can open a file of this extension, for the "Open With" menu.
 /// Best effort and OS-specific: there's no single portable API for it.
+/// Async and off the main thread: it reads app bundles from disk.
 #[tauri::command]
-pub fn apps_for_extension(ext: String) -> Vec<AppInfo> {
+pub async fn apps_for_extension(ext: String) -> Vec<AppInfo> {
+    tauri::async_runtime::spawn_blocking(move || find_apps(ext))
+        .await
+        .unwrap_or_default()
+}
+
+fn find_apps(ext: String) -> Vec<AppInfo> {
     let ext = ext.trim_start_matches('.').to_ascii_lowercase();
     #[cfg(target_os = "macos")]
     return macos_apps::for_extension(&ext);
@@ -99,6 +106,8 @@ pub fn open_with_dialog(uri: String) -> Result<()> {
 mod macos_apps {
     use super::AppInfo;
     use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
 
     /// Where `.app` bundles actually live. Not recursive beyond one extra
     /// level (e.g. `/Applications/Utilities`), since apps don't nest apps.
@@ -165,18 +174,41 @@ mod macos_apps {
         Some((name, exts))
     }
 
-    pub fn for_extension(ext: &str) -> Vec<AppInfo> {
+    /// Every installed app with the extensions it opens. Reading hundreds of
+    /// Info.plists takes a while, so the list is reused for a few minutes
+    /// (long enough for a burst of "Open With" menus, short enough to pick up
+    /// newly installed apps).
+    fn index() -> Arc<Vec<(AppInfo, Vec<String>)>> {
+        const FRESH: Duration = Duration::from_secs(300);
+        type Index = Arc<Vec<(AppInfo, Vec<String>)>>;
+        static CACHE: Mutex<Option<(Instant, Index)>> = Mutex::new(None);
+        if let Some((at, list)) = &*CACHE.lock().unwrap() {
+            if at.elapsed() < FRESH {
+                return list.clone();
+            }
+        }
         let mut bundles = Vec::new();
         for r in roots() {
             bundles_in(&r, &mut bundles);
         }
+        let list: Index = Arc::new(
+            bundles
+                .iter()
+                .filter_map(|path| {
+                    let (name, exts) = read_bundle(path)?;
+                    Some((AppInfo { name, id: path.to_string_lossy().into_owned() }, exts))
+                })
+                .collect(),
+        );
+        *CACHE.lock().unwrap() = Some((Instant::now(), list.clone()));
+        list
+    }
+
+    pub fn for_extension(ext: &str) -> Vec<AppInfo> {
         let mut matched = Vec::new();
         let mut all = Vec::new();
-        for path in bundles {
-            let Some((name, exts)) = read_bundle(&path) else {
-                continue;
-            };
-            let info = AppInfo { name, id: path.to_string_lossy().into_owned() };
+        for (info, exts) in index().iter() {
+            let info = info.clone();
             if exts.iter().any(|e| e == ext || e == "*") {
                 matched.push(info);
             } else {
@@ -324,13 +356,18 @@ async fn download(app: &AppState<'_>, loc: &Location) -> Result<PathBuf> {
         .await
         .map_err(|e| CxError::from_io(e, dir.display()))?;
     let part = dir.join(format!(".{}.part", entry.name));
-    let mut src = provider.open_read(loc, 0).await?;
-    let mut dst = app
+    // 1 MB buffers: the default 8 KB means tiny network reads and a
+    // blocking-pool hop per 8 KB written.
+    const BUF: usize = 1024 * 1024;
+    let src = provider.open_read(loc, 0).await?;
+    let dst = app
         .vfs
         .local()
         .open_write(&cx_core::Location::local(&part), WriteMode::Truncate)
         .await?;
-    tokio::io::copy(&mut src, &mut dst)
+    let mut src = tokio::io::BufReader::with_capacity(BUF, src);
+    let mut dst = tokio::io::BufWriter::with_capacity(BUF, dst);
+    tokio::io::copy_buf(&mut src, &mut dst)
         .await
         .map_err(|e| CxError::io("download failed", e))?;
     tokio::io::AsyncWriteExt::shutdown(&mut dst)

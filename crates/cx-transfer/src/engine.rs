@@ -157,7 +157,7 @@ async fn transfer(cx: &Ctx) -> Result<()> {
             None if same_dir => free_name(dst_p.as_ref(), &dest, 1, |n| copy_name(&entry.name, entry.is_dir, n)).await?,
             None => entry.name.clone(),
         };
-        job.record(|r| r.targets.insert(src.uri(), dest.join(&name).uri()));
+        job.record(|r| r.add_target(src.uri(), dest.join(&name).uri()));
         let plan = if is_move && src.same_provider(&dest) {
             job.counters.add_total(1, if entry.is_dir { 0 } else { entry.size });
             Plan::Rename
@@ -259,9 +259,9 @@ impl Walker {
         let delete_src = self.delete_src;
         self.cx.job.record(|r| {
             if delete_src {
-                r.moved.push(MovedItem { from: src.uri(), to: dst.uri() });
+                r.add_moved(MovedItem { from: src.uri(), to: dst.uri() });
             } else {
-                r.created.push(dst.uri());
+                r.add_created(dst.uri());
             }
         });
     }
@@ -527,7 +527,7 @@ impl Walker {
             match moved {
                 Ok(()) => {
                     counters.skip(1, item_size);
-                    cx.job.record(|r| r.moved.push(MovedItem { from: src.uri(), to: dst.uri() }));
+                    cx.job.record(|r| r.add_moved(MovedItem { from: src.uri(), to: dst.uri() }));
                 }
                 Err(CxError::Unsupported(_)) => {
                     counters.sub_total(1, item_size);
@@ -588,12 +588,12 @@ async fn run_file(cx: &Ctx, t: &FileTask, delete_src: bool, problems: &Mutex<Vec
             cx.job.record(|r| {
                 if t.top {
                     if delete_src {
-                        r.moved.push(MovedItem { from: src_uri.clone(), to: t.dst.uri() });
+                        r.add_moved(MovedItem { from: src_uri.clone(), to: t.dst.uri() });
                     } else {
-                        r.created.push(t.dst.uri());
+                        r.add_created(t.dst.uri());
                     }
                 }
-                r.completed.insert(src_uri);
+                r.add_completed(src_uri);
             });
             Ok(())
         }
@@ -621,7 +621,7 @@ async fn remove(cx: &Ctx) -> Result<()> {
                 JobKind::Trash => {
                     let dir = loc.parent().ok_or_else(|| CxError::InvalidLocation(uri.clone()))?;
                     let items = p.trash(&dir, &[loc.name()]).await?;
-                    job.record(|r| r.trashed.extend(items));
+                    job.record(|r| r.add_trashed(items));
                     Ok(())
                 }
                 _ => p.remove(&loc).await,
