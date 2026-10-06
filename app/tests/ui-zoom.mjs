@@ -6,6 +6,15 @@ const { check, failures } = checker();
 const t = await launch();
 const tf = () => t.eval(`document.querySelector('.ql .zoom img')?.style.transform ?? ''`);
 const scaleOf = async () => Number((await tf()).match(/scale\(([\d.]+)\)/)?.[1] ?? 0);
+// Pinch (ctrl+wheel) at the middle of `sel`, as Chromium reports a trackpad pinch.
+const pinchAt = async (sel, steps = 5, deltaY = -40) => {
+  const p = await t.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 3 }; })()`);
+  for (let k = 0; k < steps; k++) await t.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: p.x, y: p.y, deltaX: 0, deltaY, modifiers: 2 });
+  await sleep(150);
+};
+const frameZoom = (sel) => t.eval(`Number(document.querySelector(${JSON.stringify(sel)})?.contentDocument?.body?.style.zoom || 1)`);
+const badge = () => t.eval(`document.querySelector('.ql .zoom-badge')?.textContent ?? ''`);
+const sandboxOk = (sel) => t.eval(`(() => { const f = document.querySelector(${JSON.stringify(sel)}); return !!f && f.getAttribute('sandbox') === 'allow-same-origin'; })()`);
 
 try {
   await t.open("?path=~/Pictures");
@@ -61,8 +70,60 @@ try {
   }
   await t.key(" ");
   await sleep(500);
-  check("Quick Look renders a Word document", await t.eval(`(() => { const f = document.querySelector('.ql iframe.office'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('Resume.docx'); })()`));
+  check("Quick Look renders a Word document", await t.eval(`(() => { const f = document.querySelector('.ql iframe.office'); return !!f && f.srcdoc.includes('Resume.docx'); })()`));
+  check("…sandboxed with no scripts (same origin only, for gestures)", await sandboxOk(".ql iframe.office"));
+  await pinchAt(".ql iframe.office");
+  check("pinch zooms the document", (await frameZoom(".ql iframe.office")) > 1.5, String(await frameZoom(".ql iframe.office")));
+  check("…with a zoom badge", /%$/.test(await badge()), await badge());
+  await t.key("0");
+  await sleep(100);
+  check("0 fits the document again (Quick Look focused)", (await frameZoom(".ql iframe.office")) === 1);
+  await t.key("=");
+  await sleep(100);
+  check("+ zooms the document", (await frameZoom(".ql iframe.office")) > 1.2);
+  await pinchAt(".ql iframe.office", 20, 60);
+  check("pinch out stops at 50%", (await frameZoom(".ql iframe.office")) === 0.5, String(await frameZoom(".ql iframe.office")));
+  // Click into the document: its keys are its own now, but Quick Look's still work.
+  {
+    const r = await t.eval(`(() => { const r = document.querySelector('.ql iframe.office').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 40 }; })()`);
+    for (const type of ["mousePressed", "mouseReleased"]) await t.send("Input.dispatchMouseEvent", { type, x: r.x, y: r.y, button: "left", clickCount: 1 });
+    await sleep(100);
+    check("clicking the document focuses it", await t.eval(`document.activeElement?.tagName === 'IFRAME'`));
+    await t.key("0");
+    await sleep(100);
+    check("0 still resets from inside the document", (await frameZoom(".ql iframe.office")) === 1);
+    await t.key("ArrowUp");
+    await sleep(400);
+    check("arrow keys still move to another file", await t.eval(`document.querySelector('.ql header strong')?.textContent === 'Pitch deck.pptx'`), await t.eval(`document.querySelector('.ql header strong')?.textContent`));
+  }
+  {
+    const r = await t.eval(`(() => { const r = document.querySelector('.ql iframe.office').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 40 }; })()`);
+    for (const type of ["mousePressed", "mouseReleased"]) await t.send("Input.dispatchMouseEvent", { type, x: r.x, y: r.y, button: "left", clickCount: 1 });
+    await sleep(100);
+  }
   await t.key("Escape");
+  await sleep(150);
+  check("Escape inside the document closes Quick Look", !(await t.eval(`!!document.querySelector('.ql')`)));
+  {
+    const rows = await t.rows();
+    await t.key("Home");
+    for (let k = 0; k < rows.indexOf("Pitch deck.pptx"); k++) await t.key("ArrowDown");
+  }
+  await t.key(" ");
+  await sleep(500);
+  await pinchAt(".ql iframe.office");
+  check("pinch zooms a PowerPoint deck", (await frameZoom(".ql iframe.office")) > 1.5, String(await frameZoom(".ql iframe.office")));
+  await t.key("Escape");
+  await sleep(150);
+  // The preview pane's (half-size) document zooms too.
+  await t.eval(`void (window.__cx.settings.data.previewPane = true)`);
+  await sleep(600);
+  check("the preview pane shows the deck", await t.eval(`!!document.querySelector('.preview-pane iframe.office.small, iframe.office.small')`));
+  await pinchAt("iframe.office.small");
+  check("pinch zooms the preview pane's document", (await frameZoom("iframe.office.small")) > 1.5, String(await frameZoom("iframe.office.small")));
+  await t.eval(`void (window.__cx.settings.data.previewPane = false)`);
+  await sleep(150);
+
 
   // HTML files: rendered by default, with a Code toggle for the source.
   await t.open("?path=~/Documents/Projects");
@@ -71,7 +132,11 @@ try {
   for (let k = 0; k < (await t.rows()).indexOf("report.html"); k++) await t.key("ArrowDown");
   await t.key(" ");
   await sleep(400);
-  check("Quick Look shows the rendered page by default", await t.eval(`(() => { const f = document.querySelector('.ql .htmlview iframe'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('<h1>Full Run Report</h1>'); })()`));
+  check("Quick Look shows the rendered page by default", await t.eval(`(() => { const f = document.querySelector('.ql .htmlview iframe'); return !!f && f.srcdoc.includes('<h1>Full Run Report</h1>'); })()`));
+  check("…sandboxed with no scripts (same origin only, for gestures)", await sandboxOk(".ql .htmlview iframe"));
+  await pinchAt(".ql .htmlview iframe");
+  check("pinch zooms the web page", (await frameZoom(".ql .htmlview iframe")) > 1.5, String(await frameZoom(".ql .htmlview iframe")));
+  check("…and scrolls to keep the point under the fingers", await t.eval(`document.querySelector('.ql .htmlview iframe').contentDocument.scrollingElement.scrollTop > 0`));
   check("…with a Preview/Code switch, Preview active", (await t.eval(`document.querySelector('.ql .mode-switch button.active')?.textContent.trim()`) ?? "").includes("Preview"));
   await t.clickText(".ql .mode-switch button", "Code");
   await sleep(150);
@@ -127,6 +192,12 @@ try {
     for (let k = 0; k < rows.indexOf("main.rs"); k++) await t.key("ArrowDown");
     await t.key(" ");
     await sleep(400);
+    const codeZoom = () => t.eval(`Number(document.querySelector('.ql .codeview .lines').style.zoom || 1)`);
+    await pinchAt(".ql .codeview .scroll");
+    check("pinch makes code bigger", (await codeZoom()) > 1.5, String(await codeZoom()));
+    await t.key("0");
+    await sleep(100);
+    check("0 puts code back to normal size", (await codeZoom()) === 1);
     const lineNos = () => t.eval(`[...document.querySelectorAll('.ql .codeview .line .no')].map(e => +e.textContent)`);
     check("code preview shows line numbers", JSON.stringify(await lineNos()) === "[1,2,3,4,5,6,7]", JSON.stringify(await lineNos()));
     const folds = await t.eval(`[...document.querySelectorAll('.ql .codeview .line')].filter(l => l.querySelector('.fold')).map(l => +l.querySelector('.no').textContent)`);
@@ -150,6 +221,17 @@ try {
     check("collapsing a Python class hides its methods", JSON.stringify(await lineNos()) === "[1,2,3,4,13,14,15,16]", JSON.stringify(await lineNos()));
     await t.key("Escape");
   }
+  // Markdown renders formatted; pinch makes it bigger too.
+  await t.focusList();
+  await t.key("Home");
+  for (let k = 0; k < (await t.rows()).indexOf("README.md"); k++) await t.key("ArrowDown");
+  await t.key(" ");
+  await sleep(400);
+  await pinchAt(".ql .md");
+  check("pinch zooms Markdown", (await t.eval(`Number(document.querySelector('.ql .md > div').style.zoom || 1)`)) > 1.5);
+  await t.key("Escape");
+  await sleep(150);
+
   const split = await t.eval(`import('/src/lib/folding.ts').then(m => JSON.stringify(m.splitHtmlLines('a<span class="c">/* x\\ny */</span>b')))`);
   check("highlight spans across lines are closed and reopened", split === JSON.stringify(['a<span class="c">/* x</span>', '<span class="c">y */</span>b']), split);
 

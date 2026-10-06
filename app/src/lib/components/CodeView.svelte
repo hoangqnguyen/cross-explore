@@ -4,9 +4,17 @@
   // "⋯ N lines" marker opens it again, and Collapse all / Expand all sit in
   // the corner.
   import { foldRanges, splitHtmlLines, type FoldRange } from "../folding";
+  import { pinchZoom } from "../pinchZoom";
   import Icon from "./Icon.svelte";
 
-  let { text, html, lang, large = false }: { text: string; html: string; lang: string | null; large?: boolean } = $props();
+  let { text, html, lang, large = false, onzoom }: { text: string; html: string; lang: string | null; large?: boolean; onzoom?: (zoom: number) => void } = $props();
+
+  // Pinch (or ⌘-scroll) makes the code bigger or smaller.
+  let scroller = $state<HTMLDivElement>();
+  let linesEl = $state<HTMLDivElement>();
+  $effect(() => {
+    if (scroller && linesEl) return pinchZoom({ events: scroller, scroller, content: linesEl, keys: large, onzoom });
+  });
 
   // A final newline ends the last line; it doesn't start an empty one.
   let lines = $derived.by(() => {
@@ -62,8 +70,8 @@
       <button type="button" title="Expand all blocks" aria-label="Expand all" onclick={expandAll} disabled={!collapsed.size}><Icon name="chevronDown" size={11} stroke={2} /> Expand all</button>
     </div>
   {/if}
-  <div class="scroll">
-    <div class="lines" style:--gutter="{digits + 1.2}ch">
+  <div class="scroll" bind:this={scroller}>
+    <div class="lines" bind:this={linesEl} style:--gutter="{digits + 1.2}ch">
       {#each visible as n (n)}
         {@const r = startOf.get(n)}
         {@const closed = collapsed.has(n)}

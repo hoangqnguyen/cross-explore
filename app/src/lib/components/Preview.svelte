@@ -4,6 +4,7 @@
   import { extOf } from "../format";
   import { highlight } from "../highlight";
   import { renderMarkdown } from "../markdown";
+  import { pinchZoom, pinchZoomFrame } from "../pinchZoom";
   import { builtInKind, mimeFor, previewKind, previewLabel } from "../previewKinds";
   import { settings, type PreviewAs } from "../stores/settings.svelte";
   import FileIcon from "./FileIcon.svelte";
@@ -102,6 +103,25 @@
     };
   });
 
+  // Pinch to zoom documents, web pages and Markdown, like images and PDFs.
+  let frame = $state<HTMLIFrameElement>();
+  let mdBox = $state<HTMLDivElement>();
+  let mdBody = $state<HTMLDivElement>();
+  let zoomBadge = $state<string | null>(null);
+  let badgeTimer = 0;
+  function showZoom(z: number) {
+    zoomBadge = `${Math.round(z * 100)}%`;
+    clearTimeout(badgeTimer);
+    badgeTimer = window.setTimeout(() => (zoomBadge = null), 900);
+  }
+  $effect(() => {
+    if (frame) return pinchZoomFrame(frame, { keys: large, forwardKeys: large, onzoom: showZoom });
+  });
+  $effect(() => {
+    if (mdBox && mdBody) return pinchZoom({ events: mdBox, scroller: mdBox, content: mdBody, keys: large, onzoom: showZoom });
+  });
+  $effect(() => () => clearTimeout(badgeTimer));
+
   let markdown = $derived((ext === "md" || ext === "markdown") && settings.data.previewMarkdown);
   let html = $derived(text ? (markdown ? renderMarkdown(text.text) : highlight(text.text, ext)) : "");
 </script>
@@ -126,8 +146,10 @@
   {:else if kind === "pdf"}
     <iframe {src} title={entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "html"}
-    <!-- Script-free HTML from cx-office; the empty sandbox also blocks scripts, forms and navigation. -->
-    <iframe class="office" class:small={!large} sandbox="" srcdoc={office.html} title={office.title ?? entry.name}></iframe>
+    <!-- Script-free HTML from cx-office; the sandbox also blocks scripts, forms and
+         navigation. allow-same-origin (never with allow-scripts) only lets this
+         page reach in to handle pinch zoom. -->
+    <iframe bind:this={frame} class="office" class:small={!large} sandbox="allow-same-origin" srcdoc={office.html} title={office.title ?? entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "pdf"}
     <div class="pdfwrap"><PdfView src={fileUrl(office.uri)} /></div>
   {:else if kind === "office" && !officeFailed}
@@ -143,9 +165,9 @@
       {#if htmlMode === "preview"}
         <!-- The page itself, sandboxed: no scripts, forms or navigation — the
              same posture as cx-office's converted-document preview. -->
-        <iframe sandbox="" srcdoc={text.text} title={entry.name}></iframe>
+        <iframe bind:this={frame} sandbox="allow-same-origin" srcdoc={text.text} title={entry.name}></iframe>
       {:else}
-        <CodeView text={text.text} {html} lang={ext} {large} />
+        <CodeView text={text.text} {html} lang={ext} {large} onzoom={showZoom} />
       {/if}
       <div class="mode-switch" role="tablist" aria-label="Preview or source">
         <button type="button" role="tab" aria-selected={htmlMode === "preview"} class:active={htmlMode === "preview"} onclick={() => (htmlMode = "preview")}>
@@ -159,9 +181,9 @@
     {#if text.truncated}<div class="note">Preview shows the beginning of the file</div>{/if}
   {:else if kind === "text" && text}
     {#if markdown}
-      <div class="md">{@html html}</div>
+      <div class="md" bind:this={mdBox}><div bind:this={mdBody}>{@html html}</div></div>
     {:else}
-      <CodeView text={text.text} {html} lang={ext} {large} />
+      <CodeView text={text.text} {html} lang={ext} {large} onzoom={showZoom} />
     {/if}
     {#if text.truncated}<div class="note">Preview shows the beginning of the file</div>{/if}
   {:else if (kind === "folder" || kind === "archive") && children}
@@ -178,10 +200,12 @@
       {:else if textError && large}<p>{textError}</p>{/if}
     </div>
   {/if}
+  {#if zoomBadge}<div class="zoom-badge">{zoomBadge}</div>{/if}
 </div>
 
 <style>
   .preview {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -321,6 +345,20 @@
     bottom: 8px;
     font-size: 11px;
     color: var(--text-3);
+  }
+  .zoom-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.6);
+    color: #fff;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 4;
   }
   .listing {
     align-self: stretch;
