@@ -107,10 +107,14 @@ function touchUp(e: PointerEvent, tab: Tab, item: Item) {
   }
 }
 
+/** The row a mouse press began on, so only a click on it (not a selection drag ending there) narrows the selection. */
+let pressedKey: string | null = null;
+
 export function onItemPointerDown(e: PointerEvent, tab: Tab, item: Item) {
   ws.focusPane(tab.pane.id);
   if (e.pointerType === "touch") return touchDown(e, tab, item);
   const key = keyOf(item);
+  pressedKey = e.button === 0 ? key : null;
   if (e.button === 2) {
     if (!tab.selection.has(key)) tab.selectOnly(key);
     return;
@@ -127,7 +131,10 @@ export function onItemPointerUp(e: PointerEvent, tab: Tab, item: Item) {
   if (e.pointerType === "touch") return touchUp(e, tab, item);
   // Clicking one row of a multi-selection narrows to it on release (a drag
   // of the whole selection would have started instead).
-  if (e.button === 0 && !e.shiftKey && !primary(e) && tab.selection.size > 1 && !dragging) tab.selectOnly(keyOf(item));
+  const key = keyOf(item);
+  const pressedHere = pressedKey === key;
+  pressedKey = null;
+  if (e.button === 0 && pressedHere && !e.shiftKey && !primary(e) && tab.selection.size > 1 && !dragging) tab.selectOnly(key);
 }
 
 export interface NavLayout {

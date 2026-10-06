@@ -5,6 +5,8 @@ import type { SortSpec } from "../sort";
 export type ViewMode = "details" | "icons" | "columns" | "gallery";
 export type Keymap = "finder" | "explorer" | "commander";
 export type Theme = "system" | "light" | "dark";
+/** Ways a file can be previewed that the user can pick for a file type. */
+export type PreviewAs = "text" | "image" | "video" | "audio" | "pdf" | "font" | "html";
 
 export interface Bookmark {
   name: string;
@@ -74,6 +76,20 @@ export interface SettingsData {
   keyBindings: Record<string, string[]>;
   /** Command ids last run, newest first, for the command bar's recent strip. */
   recentCommands: string[];
+  /** How to preview files by extension (lower case, no dot), remembered from the preview pane. */
+  previewAs: Record<string, PreviewAs>;
+  /** Quick Look starts playing video and audio right away. */
+  previewAutoplay: boolean;
+  /** Markdown files show formatted (else as source). */
+  previewMarkdown: boolean;
+  /** HTML files first show as a page or as code. */
+  previewHtml: "page" | "code";
+  /** How much of a text file the preview pane reads (Quick Look reads 1 MB). */
+  previewTextKB: number;
+  /** Wait for the cursor to rest this long before previewing in the pane and gallery. */
+  previewDelayMs: number;
+  /** Folders preview as a list of what's inside. */
+  previewFolders: boolean;
 }
 
 /** What typing in a file list does, given the settings. */
@@ -112,6 +128,13 @@ const defaults: SettingsData = {
   pathBar: true,
   keyBindings: {},
   recentCommands: [],
+  previewAs: {},
+  previewAutoplay: true,
+  previewMarkdown: true,
+  previewHtml: "page",
+  previewTextKB: 64,
+  previewDelayMs: 120,
+  previewFolders: true,
 };
 
 function load(): SettingsData {

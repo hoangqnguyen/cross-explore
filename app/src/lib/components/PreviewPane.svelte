@@ -2,9 +2,10 @@
   // Right-hand details pane: a preview of the focused item plus its info
   // (Explorer's details pane and Finder's preview column in one).
   import { fileUriToPath, getTags, openEntry, errorText, type Item } from "../api";
-  import { formatDateFull, formatSize, typeLabel } from "../format";
+  import { extOf, formatDateFull, formatSize, typeLabel } from "../format";
+  import { PREVIEW_AS, builtInKind, previewLabel, rememberedAs } from "../previewKinds";
   import { dialogs } from "../stores/dialogs.svelte";
-  import { settings } from "../stores/settings.svelte";
+  import { settings, type PreviewAs } from "../stores/settings.svelte";
   import { sizes } from "../stores/sizes.svelte";
   import { tagColor } from "../tags";
   import { toasts } from "../toasts.svelte";
@@ -17,6 +18,33 @@
   let entry = $derived<Item | null>(tab?.cursorEntry ?? (sel.length === 1 ? sel[0] : null));
   let uri = $derived(entry && tab ? tab.uriOf(entry) : null);
   let tags = $state<string[]>([]);
+
+  // "Preview as" for file types we don't know: try a way for this file, then
+  // remember it for every file with that extension (Settings → Previews lists them).
+  let tryAs = $state<PreviewAs | "none" | null>(null);
+  let ext = $derived(entry && !entry.isDir ? extOf(entry.name) : "");
+  let remembered = $derived(entry ? rememberedAs(entry) : undefined);
+  let chooser = $derived(!!entry && !entry.isDir && (builtInKind(entry) === "other" || !!remembered));
+  let chosen = $derived(tryAs ?? remembered ?? "none");
+
+  $effect(() => {
+    void uri;
+    tryAs = null;
+  });
+
+  function remember() {
+    if (!ext || chosen === "none") return;
+    settings.data.previewAs = { ...settings.data.previewAs, [ext]: chosen };
+    tryAs = null;
+    toasts.show(`.${ext} files now preview as ${previewLabel(chosen)}. Change it in Settings → Previews.`);
+  }
+
+  function forget() {
+    const next = { ...settings.data.previewAs };
+    delete next[ext];
+    settings.data.previewAs = next;
+    tryAs = null;
+  }
 
   $effect(() => {
     const u = uri;
@@ -62,8 +90,26 @@
   ></div>
   {#if entry && uri}
     <div class="stage">
-      {#key uri}<Preview {entry} {uri} />{/key}
+      {#key `${uri}|${tryAs ?? ""}`}<Preview {entry} {uri} as={tryAs} />{/key}
     </div>
+    {#if chooser}
+      <div class="preview-as">
+        <label>
+          <span>Preview as</span>
+          <select value={chosen} onchange={(e) => (tryAs = (e.currentTarget as HTMLSelectElement).value as PreviewAs | "none")}>
+            <option value="none">Icon only</option>
+            {#each PREVIEW_AS as p (p.kind)}<option value={p.kind}>{p.label}</option>{/each}
+          </select>
+        </label>
+        {#if ext && chosen !== "none" && chosen !== remembered}
+          <button class="remember" onclick={remember}><Icon name="check" size={13} /> Remember for .{ext} files</button>
+        {:else if ext && remembered && chosen === remembered}
+          <div class="as-note">Remembered for .{ext} files · <button class="link" onclick={forget}>Forget</button></div>
+        {:else if ext && remembered}
+          <button class="link" onclick={forget}>Stop previewing .{ext} files as {previewLabel(remembered)}</button>
+        {/if}
+      </div>
+    {/if}
     <h3 title={entry.name}>{entry.name}</h3>
     <div class="kind">{typeLabel(entry)}</div>
     <div class="actions">
@@ -142,6 +188,51 @@
     flex: none;
     display: flex;
     margin-bottom: 6px;
+  }
+  .preview-as {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: var(--radius);
+    background: var(--layer-2);
+    box-shadow: 0 0 0 1px var(--stroke);
+    font-size: 12px;
+  }
+  .preview-as label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-2);
+  }
+  .preview-as select {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--layer);
+    box-shadow: inset 0 0 0 1px var(--stroke-strong);
+    color: var(--text);
+    font: inherit;
+  }
+  .remember {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 26px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+  .remember :global(svg) {
+    color: inherit;
+  }
+  .as-note {
+    color: var(--text-3);
   }
   h3 {
     margin: 4px 0 0;

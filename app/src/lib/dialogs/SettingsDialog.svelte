@@ -9,11 +9,13 @@
   import { toasts } from "../toasts.svelte";
   import { ws } from "../workspace.svelte";
   import Modal from "./Modal.svelte";
+  import PreviewSettings from "./PreviewSettings.svelte";
   import ShortcutsSettings from "./ShortcutsSettings.svelte";
 
-  const SECTIONS: { id: "general" | "shortcuts" | "sharing" | "network" | "about"; label: string; icon: IconName }[] = [
+  const SECTIONS: { id: "general" | "shortcuts" | "previews" | "sharing" | "network" | "about"; label: string; icon: IconName }[] = [
     { id: "general", label: "General", icon: "settings" },
     { id: "shortcuts", label: "Shortcuts", icon: "command" },
+    { id: "previews", label: "Previews", icon: "eye" },
     { id: "sharing", label: "Sharing & devices", icon: "laptop" },
     { id: "network", label: "Servers", icon: "server" },
     { id: "about", label: "About", icon: "info" },
@@ -174,6 +176,8 @@
         {/snippet}
       {:else if section === "shortcuts"}
         <ShortcutsSettings />
+      {:else if section === "previews"}
+        <PreviewSettings />
       {:else if section === "sharing"}
         {#if devices.peer}
           {@render group("This device", deviceBody)}

@@ -1,45 +1,31 @@
 <script lang="ts">
   // Renders a file for Quick Look, the preview pane and the gallery.
   import { fileUrl, listDir, previewOffice, previewText, thumbUrl, type Entry, type Item, type OfficeView, type TextPreview } from "../api";
-  import { categoryOf, extOf } from "../format";
+  import { extOf } from "../format";
   import { highlight } from "../highlight";
   import { renderMarkdown } from "../markdown";
-  import { isArchive } from "../workspace.svelte";
+  import { builtInKind, mimeFor, previewKind, previewLabel } from "../previewKinds";
+  import { settings, type PreviewAs } from "../stores/settings.svelte";
   import FileIcon from "./FileIcon.svelte";
   import Icon from "./Icon.svelte";
   import CodeView from "./CodeView.svelte";
   import PdfView from "./PdfView.svelte";
   import ZoomImage from "./ZoomImage.svelte";
 
-  let { entry, uri, large = false }: { entry: Item; uri: string; large?: boolean } = $props();
+  // `as`: a way to preview picked for this look ("none" = just the icon).
+  let { entry, uri, large = false, as = null }: { entry: Item; uri: string; large?: boolean; as?: PreviewAs | "none" | null } = $props();
 
-  const PREVIEW_SETTLE_MS = 120;
-
-  const htmlExts = new Set("html htm".split(" "));
-
-  const textExts = new Set("txt md markdown log csv tsv json yaml yml toml xml ini cfg conf env sh zsh bash ps1 bat js mjs cjs ts tsx jsx rs go py rb java kt swift c h cc cpp hpp cs php lua dart scala svelte vue css scss sql gradle gitignore dockerfile makefile".split(" "));
-
-  const officeExts = new Set("docx docm dotx dotm doc xlsx xlsm xltx xlsb xls ods pptx pptm potx ppsx ppt odt ott odp otp rtf csv tsv".split(" "));
-
-  let cat = $derived(categoryOf(entry));
   let ext = $derived(extOf(entry.name));
-  let kind = $derived.by(() => {
-    if (entry.isDir) return "folder";
-    if (isArchive(entry.name)) return "archive";
-    if (cat === "image") return "image";
-    if (cat === "video") return "video";
-    if (cat === "audio") return "audio";
-    if (cat === "pdf") return "pdf";
-    if (cat === "font") return "font";
-    if (htmlExts.has(ext)) return "html";
-    if (officeExts.has(ext)) return "office";
-    if (textExts.has(ext) || cat === "code" || cat === "text" || !ext) return "text";
-    return "other";
-  });
+  let kind = $derived(previewKind(entry, as));
+  // Picked by the user for an extension we don't know: tell the web view what the bytes are.
+  let mime = $derived(mimeFor(entry, kind));
+  /** Shown a way the user picked (not the file type's own): say so if it fails. */
+  let picked = $derived(kind !== "other" && kind !== builtInKind(entry));
+  let src = $derived(fileUrl(uri, mime));
 
   /** A real HTML file (unlike cx-office's converted HTML) can show as a
-   * rendered page or as source. Starts on Preview for each file. */
-  let htmlMode = $state<"preview" | "raw">("preview");
+   * rendered page or as source. Each file starts the way Settings says. */
+  let htmlMode = $state<"preview" | "raw">(settings.data.previewHtml === "code" ? "raw" : "preview");
 
   let text = $state<TextPreview | null>(null);
   let textError = $state<string | null>(null);
@@ -73,17 +59,17 @@
     office = null;
     officeFailed = false;
     pdfFailed = false;
-    htmlMode = "preview";
+    htmlMode = settings.data.previewHtml === "code" ? "raw" : "preview";
     settled = false;
     let stale = false;
     let font: FontFace | null = null;
     const start = () => {
       settled = true;
       if (k === "text" || k === "html") {
-        previewText(u, large ? 1024 * 1024 : 64 * 1024)
+        previewText(u, large ? 1024 * 1024 : settings.data.previewTextKB * 1024)
           .then((t) => !stale && (text = t))
           .catch(() => !stale && (textError = "No preview available"));
-      } else if (k === "folder" || k === "archive") {
+      } else if ((k === "folder" || k === "archive") && settings.data.previewFolders) {
         const list: Entry[] = [];
         const target = k === "archive" ? `archive://${u}!/` : u;
         listDir(target, (ev) => ev.type === "batch" && list.push(...ev.entries))
@@ -95,7 +81,7 @@
           .catch(() => !stale && (officeFailed = true));
       } else if (k === "font") {
         const family = `cx-preview-${Math.random().toString(36).slice(2)}`;
-        new FontFace(family, `url("${fileUrl(u)}")`)
+        new FontFace(family, `url("${fileUrl(u, mime)}")`)
           .load()
           .then((f) => {
             if (stale) return;
@@ -103,12 +89,12 @@
             document.fonts.add(f);
             fontFamily = family;
           })
-          .catch(() => {});
+          .catch(() => !stale && (textError = "No preview available"));
       }
     };
     // The pane and the gallery follow the cursor: wait until it settles so
     // holding an arrow key doesn't read (or list) every file it passes.
-    const timer = setTimeout(start, large ? 0 : PREVIEW_SETTLE_MS);
+    const timer = setTimeout(start, large ? 0 : settings.data.previewDelayMs);
     return () => {
       stale = true;
       clearTimeout(timer);
@@ -116,28 +102,29 @@
     };
   });
 
-  let html = $derived(text ? (ext === "md" || ext === "markdown" ? renderMarkdown(text.text) : highlight(text.text, ext)) : "");
+  let markdown = $derived((ext === "md" || ext === "markdown") && settings.data.previewMarkdown);
+  let html = $derived(text ? (markdown ? renderMarkdown(text.text) : highlight(text.text, ext)) : "");
 </script>
 
 <div class="preview" class:large>
   {#if kind === "image" && !imageFailed && large}
-    <ZoomImage src={fileUrl(uri)} alt={entry.name} onerror={() => (imageFailed = true)} />
+    <ZoomImage {src} alt={entry.name} onerror={() => (imageFailed = true)} />
   {:else if kind === "image" && !imageFailed}
-    <img src={thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={() => (imageFailed = true)} />
+    <img src={mime ? src : thumbUrl(uri, 640, entry.modified)} alt={entry.name} onerror={() => (imageFailed = true)} />
   {:else if kind === "video"}
     <!-- svelte-ignore a11y_media_has_caption -->
-    <video bind:this={mediaEl} src={fileUrl(uri)} controls autoplay={large} preload="metadata" poster={thumbUrl(uri, 640, entry.modified)}></video>
+    <video bind:this={mediaEl} {src} controls autoplay={large && settings.data.previewAutoplay} preload="metadata" poster={thumbUrl(uri, 640, entry.modified)}></video>
   {:else if kind === "audio"}
     <div class="audio">
       <FileIcon name={entry.name} isDir={false} size={96} />
-      <audio bind:this={mediaEl} src={fileUrl(uri)} controls autoplay={large}></audio>
+      <audio bind:this={mediaEl} {src} controls autoplay={large && settings.data.previewAutoplay}></audio>
     </div>
   {:else if kind === "pdf" && !pdfFailed}
     <!-- pdf.js, not a thumbnail: a remote PDF has no fast native thumbnail
          (unlike images), so the small preview pane used to just go blank. -->
-    <div class="pdfwrap">{#if settled}<PdfView src={fileUrl(uri)} onerror={() => (pdfFailed = true)} />{/if}</div>
+    <div class="pdfwrap">{#if settled}<PdfView {src} onerror={() => (pdfFailed = true)} />{/if}</div>
   {:else if kind === "pdf"}
-    <iframe src={fileUrl(uri)} title={entry.name}></iframe>
+    <iframe {src} title={entry.name}></iframe>
   {:else if kind === "office" && office?.kind === "html"}
     <!-- Script-free HTML from cx-office; the empty sandbox also blocks scripts, forms and navigation. -->
     <iframe class="office" class:small={!large} sandbox="" srcdoc={office.html} title={office.title ?? entry.name}></iframe>
@@ -171,7 +158,7 @@
     </div>
     {#if text.truncated}<div class="note">Preview shows the beginning of the file</div>{/if}
   {:else if kind === "text" && text}
-    {#if ext === "md" || ext === "markdown"}
+    {#if markdown}
       <div class="md">{@html html}</div>
     {:else}
       <CodeView text={text.text} {html} lang={ext} {large} />
@@ -187,7 +174,8 @@
   {:else}
     <div class="fallback">
       <FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={large ? 128 : 88} />
-      {#if textError && large}<p>{textError}</p>{/if}
+      {#if picked && (textError || imageFailed)}<p>This file doesn't open as {previewLabel(kind as PreviewAs)}.</p>
+      {:else if textError && large}<p>{textError}</p>{/if}
     </div>
   {/if}
 </div>

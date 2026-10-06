@@ -65,6 +65,22 @@ fn remote_bytes() -> &'static Arc<crate::remote_bytes::RemoteBytes> {
     CACHE.get_or_init(Default::default)
 }
 
+/// The type to serve a file as: guessed from its name, unless the page asks
+/// for one with `?type=` (a file the user chose to preview as, say, video
+/// despite an extension we don't know). Only media, fonts and PDF can be
+/// asked for, never anything a web view would run.
+fn mime_for(req: &Request<Vec<u8>>, name: &str) -> String {
+    let asked = req
+        .uri()
+        .query()
+        .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("type=")))
+        .map(decode);
+    match asked {
+        Some(t) if t == "application/pdf" || (["image/", "video/", "audio/", "font/"].iter().any(|p| t.starts_with(p)) && !t.contains("svg")) => t,
+        _ => mime_guess::from_path(name).first_or_octet_stream().to_string(),
+    }
+}
+
 /// Files on servers: ranges come from a shared chunk cache with read-ahead.
 async fn serve_remote(
     app: Arc<App>,
@@ -75,9 +91,7 @@ async fn serve_remote(
     let cache = remote_bytes();
     let entry = cache.stat(provider.as_ref(), &loc).await?;
     let size = entry.size;
-    let mime = mime_guess::from_path(&entry.name)
-        .first_or_octet_stream()
-        .to_string();
+    let mime = mime_for(req, &entry.name);
     let range = req
         .headers()
         .get(header::RANGE)
@@ -138,9 +152,7 @@ async fn serve_file(app: Arc<App>, req: Request<Vec<u8>>) -> Response<Vec<u8>> {
         let provider = app.vfs.provider(&loc).await?;
         let entry = provider.stat(&loc).await?;
         let size = entry.size;
-        let mime = mime_guess::from_path(&entry.name)
-            .first_or_octet_stream()
-            .to_string();
+        let mime = mime_for(&req, &entry.name);
         let range = req
             .headers()
             .get(header::RANGE)

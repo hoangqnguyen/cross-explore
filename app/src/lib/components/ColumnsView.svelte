@@ -5,7 +5,7 @@
   import { childUri, uriName, type Item } from "../api";
   import { Folder, keyOf } from "../folder.svelte";
   import { stemRange } from "../format";
-  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp } from "../listing";
+  import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp, startMarquee, type MarqueeRect } from "../listing";
   import { settings } from "../stores/settings.svelte";
   import { ws, type Tab } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
@@ -73,6 +73,20 @@
     void tab.folder.uri;
     requestAnimationFrame(() => wrap && (wrap.scrollLeft = wrap.scrollWidth));
   });
+
+  // Drag from the empty part of the focused column to select a range of
+  // rows, like Finder; a plain click there clears the selection.
+  let marquee = $state<MarqueeRect | null>(null);
+
+  function rowsIn(r: MarqueeRect) {
+    const top = (current?.firstElementChild as HTMLElement | null)?.offsetTop ?? 0;
+    const rows = tab.visible;
+    const first = Math.max(0, Math.floor((r.y - top) / ROW_H));
+    const last = Math.min(rows.length - 1, Math.floor((r.y + r.h - top) / ROW_H));
+    const keys: string[] = [];
+    for (let i = first; i <= last; i++) keys.push(keyOf(rows[i]));
+    return keys;
+  }
 
   function reveal() {
     const i = tab.cursor == null ? -1 : tab.indexOf(tab.cursor);
@@ -188,7 +202,9 @@
     {onkeydown}
     onpointerdown={(e) => {
       ws.focusPane(tab.pane.id);
-      if (e.target === e.currentTarget) tab.selectOnly(null);
+      if (e.target !== e.currentTarget || !current) return;
+      current.focus();
+      startMarquee(e, current, tab, rowsIn, (r) => (marquee = r), () => tab.selectOnly(null));
     }}
     oncontextmenu={(e) => e.target === e.currentTarget && blankMenu(e, tab)}
     use:dropTarget={{ dest: () => (tab.writable ? tab.dirUri : null) }}
@@ -224,6 +240,7 @@
         </div>
       {/snippet}
     </VirtualRows>
+    {#if marquee}<div class="marquee" style:left="{marquee.x}px" style:top="{marquee.y}px" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>{/if}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
   </div>
@@ -366,6 +383,14 @@
   .item:global(.drop-hover),
   .column:global(.drop-hover) {
     background: var(--accent-soft);
+  }
+  .marquee {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 2px;
+    pointer-events: none;
   }
   .hint {
     padding: 12px;

@@ -291,9 +291,9 @@ function schemeUrl(scheme: string, path: string) {
 }
 
 /** URL the web view can load a file's bytes from (supports Range for media). */
-export function fileUrl(uri: string): string {
+export function fileUrl(uri: string, type?: string): string {
   if (mock) return mock.fileUrl(uri);
-  return schemeUrl("cxfile", encodeURIComponent(uri));
+  return schemeUrl("cxfile", encodeURIComponent(uri)) + (type ? `?type=${encodeURIComponent(type)}` : "");
 }
 
 /** URL of a cached thumbnail; `version` (mtime) busts the browser cache. */
