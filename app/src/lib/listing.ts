@@ -11,7 +11,8 @@ import { dialogs } from "./stores/dialogs.svelte";
 import { settings, typeAction } from "./stores/settings.svelte";
 import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
-import { appsForExtension, errorText, inTauri, openEntryWith, openWithDialog } from "./api";
+import { appsForExtension, errorText, inTauri, openWithDialog } from "./api";
+import { openings } from "./opening.svelte";
 import { toasts } from "./toasts.svelte";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -68,7 +69,7 @@ function openWithItem(tab: Tab, item: Item): MenuItem {
     items: async () => {
       const apps = await appsForExtension(extOf(item.name)).catch(() => []);
       if (!apps.length) return [{ label: "No apps found", disabled: true, action: () => {} }];
-      return apps.map((a): MenuItem => ({ label: a.name, action: () => void openEntryWith(uri, a.id).catch(openFail) }));
+      return apps.map((a): MenuItem => ({ label: a.name, action: () => void openings.open(uri, a.id) }));
     },
   };
 }

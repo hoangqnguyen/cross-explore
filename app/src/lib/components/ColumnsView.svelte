@@ -2,8 +2,8 @@
   // Finder's column (Miller) view. The tab's folder is the focused column;
   // columns to the left are its ancestors, and the column to the right
   // previews the selected folder (or file).
-  import { childUri, uriName, type Item } from "../api";
-  import { Folder, keyOf } from "../folder.svelte";
+  import { childUri, uriName, type Crumb, type Item } from "../api";
+  import { Folder, hasSnapshot, keyOf } from "../folder.svelte";
   import { stemRange } from "../format";
   import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp, startMarquee, type MarqueeRect } from "../listing";
   import { settings } from "../stores/settings.svelte";
@@ -49,16 +49,30 @@
 
   $effect(() => () => cache.forEach((f) => f.dispose()));
 
-  let crumbs = $derived(tab.folder.info?.crumbs ?? []);
+  // A folder doesn't know where it sits until its first listing answers.
+  // Meanwhile keep the columns already on screen (going up: drop the tail;
+  // into a child: add it) rather than clearing them and drawing them again.
+  let lastCrumbs: Crumb[] = [];
+  let crumbs = $derived.by(() => {
+    const known = tab.folder.info?.crumbs;
+    if (known?.length) return (lastCrumbs = known);
+    const uri = tab.folder.uri;
+    const i = lastCrumbs.findIndex((c) => c.uri === uri);
+    if (i >= 0) return lastCrumbs.slice(0, i + 1);
+    const last = lastCrumbs.at(-1);
+    if (last && childUri(last.uri, uriName(uri)) === uri) return [...lastCrumbs, { uri, label: uriName(uri) }];
+    return [];
+  });
   let ancestors = $derived(crumbs.slice(Math.max(0, crumbs.length - 1 - MAX_ANCESTORS), -1).map((c, i, all) => ({ uri: c.uri, label: c.label, child: (all[i + 1] ?? crumbs.at(-1))!.label })));
   let focusEntry = $derived(tab.cursorEntry);
   let wantNext = $derived(focusEntry?.isDir && tab.selection.size <= 1 ? childUri(tab.dirUri, focusEntry.name) : null);
   // Holding an arrow key over folders shouldn't list each one it passes:
-  // folders not listed yet wait for the cursor to settle.
+  // folders not listed yet wait for the cursor to settle (ones seen lately
+  // show their last listing at once).
   let next = $state<string | null>(null);
   $effect(() => {
     const want = wantNext;
-    if (want == null || cache.has(want)) {
+    if (want == null || cache.has(want) || hasSnapshot(want)) {
       next = want;
       return;
     }
@@ -86,6 +100,18 @@
     const keys: string[] = [];
     for (let i = first; i <= last; i++) keys.push(keyOf(rows[i]));
     return keys;
+  }
+
+  /** Scroll an ancestor column so the folder it leads into is in view. */
+  function showTrail(el: HTMLElement, index: number) {
+    const apply = (i: number) => {
+      if (i < 0) return;
+      const top = (el.firstElementChild as HTMLElement | null)?.offsetTop ?? 0;
+      const y = top + i * ROW_H;
+      if (y < el.scrollTop || y + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = Math.max(0, y - el.clientHeight / 3);
+    };
+    apply(index);
+    return { update: apply };
   }
 
   function reveal() {
@@ -176,9 +202,10 @@
 <div class="columns" bind:this={wrap}>
   {#each ancestors as a (a.uri)}
     {@const f = folderFor(a.uri)}
+    {@const rows = visibleOf(f.items)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="column" style:width="{settings.data.columnWidth}px" use:dropTarget={{ dest: () => a.uri }} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
-      <VirtualRows items={visibleOf(f.items)} rowH={ROW_H} key={(e) => e.name}>
+    <div class="column" style:width="{settings.data.columnWidth}px" use:dropTarget={{ dest: () => a.uri }} use:showTrail={rows.findIndex((e) => e.name === a.child)} oncontextmenu={(ev) => ev.target === ev.currentTarget && menuIn(ev, a.uri, null)}>
+      <VirtualRows items={rows} rowH={ROW_H} key={(e) => e.name}>
         {#snippet row(e)}
           <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
             <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />

@@ -255,6 +255,29 @@ try {
   check("share lists after sign in", (await t.rows()).includes("Movies"), JSON.stringify(await t.rows()));
   check("remote folder shows auto-refresh", (await t.eval(`document.querySelector('.state.polling')?.textContent ?? ''`)).includes("Auto"));
 
+  // Opening a file on a server downloads it first: a progress card says so.
+  {
+    const card = () => t.eval(`(() => { const c = document.querySelector('.toast.opening'); return c ? { title: c.querySelector('.title').textContent.trim(), detail: c.querySelector('.detail').textContent.trim(), bar: parseFloat(c.querySelector('.bar > div').style.width) } : null; })()`);
+    const openMovie = `window.__cx.ws.activeTab.open({ name: "Dune (2021).mkv", isDir: false, uri: window.__cx.ws.activeTab.dirUri.replace(/\\/?$/, "/Movies/Dune%20(2021).mkv") })`;
+    await t.eval(`void ${openMovie}`);
+    await sleep(100);
+    check("a quick open shows no progress card yet", (await card()) === null);
+    await sleep(350);
+    const early = await card();
+    check("opening a server's file shows a download card", !!early && early.title.includes("Dune (2021).mkv"), JSON.stringify(early));
+    await sleep(600);
+    const mid = await card();
+    check("…with bytes, total and speed", !!mid && / of 1[78](\.\d)? GB · .+\/s$/.test(mid.detail), JSON.stringify(mid));
+    check("…and a filling bar", !!mid && mid.bar > 0 && mid.bar < 100, JSON.stringify(mid));
+    await sleep(1200);
+    check("the card goes away once it opens", (await card()) === null);
+    await t.eval(`void ${openMovie}`);
+    await sleep(600);
+    await t.clickText(".toast.opening button", "Cancel");
+    await sleep(300);
+    check("Cancel stops it, without an error", (await card()) === null && !(await t.eval(`!!document.querySelector('.toast.error')`)));
+  }
+
   // Drag a selection rectangle across row whitespace.
   await t.open("?path=~/Downloads");
   {
@@ -488,6 +511,32 @@ try {
     const after = await widths();
     check("dragging widens every column together", after.every((w) => w > before[0]) && new Set(after).size === 1, `${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
     check("the width is remembered in settings", (await t.eval(`window.__cx.settings.data.columnWidth`)) === after[0]);
+  }
+
+  // Column view on a slow server: moving between folders seen before never
+  // blanks a column or drops the columns to the left, even for a frame.
+  {
+    const tab = `window.__cx.ws.activeTab`;
+    await t.open("?path=~/Documents");
+    await t.eval(`${tab}.view = "columns"`);
+    await sleep(400);
+    const docs = await t.eval(`${tab}.dirUri`);
+    const proj = docs + "/Projects";
+    await t.eval(`window.__cxSlowList = 400`);
+    const go = async (expr) => { await t.eval(`void (${expr})`); await sleep(650); };
+    await go(`${tab}.navigate(${JSON.stringify(proj)})`); // first visit: lists for the first time
+    await t.eval(`window.__frames = []; window.__sampling = true; (function f() { const cols = [...document.querySelectorAll('.columns .column:not(.preview)')]; window.__frames.push(cols.map((c) => c.querySelectorAll('.item').length).join(',')); if (window.__sampling) requestAnimationFrame(f); })()`);
+    await go(`${tab}.up()`);
+    await go(`${tab}.navigate(${JSON.stringify(proj)})`);
+    await go(`${tab}.up()`);
+    await go(`${tab}.up()`);
+    await go(`${tab}.navigate(${JSON.stringify(docs)})`);
+    await t.eval(`window.__sampling = false; window.__cxSlowList = 0`);
+    const frames = await t.eval(`window.__frames`);
+    const blank = frames.filter((f) => f === "" || f.split(",").some((n) => n === "0"));
+    check("Column view: revisiting folders on a slow server never blanks a column", blank.length === 0, `${blank.length} of ${frames.length} frames: ${[...new Set(blank)].join(" | ")}`);
+    const fewest = Math.min(...frames.map((f) => f.split(",").length));
+    check("…and never drops the columns to the left", fewest >= 2, frames.filter((f, i) => f !== frames[i - 1]).join(" → "));
   }
 
   // Background refreshes are seamless: no spinner, rows never disappear

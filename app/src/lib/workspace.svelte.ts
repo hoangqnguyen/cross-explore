@@ -7,7 +7,6 @@ import {
   osClipboardGet,
   osClipboardSet,
   inTauri,
-  openEntry,
   places as loadPlaces,
   renameEntry,
   subscribe,
@@ -27,6 +26,7 @@ import { dialogs } from "./stores/dialogs.svelte";
 import { settings, type SavedWorkspace, type ViewMode } from "./stores/settings.svelte";
 import { transfers } from "./stores/transfers.svelte";
 import { ui } from "./stores/ui.svelte";
+import { openings } from "./opening.svelte";
 import { toasts } from "./toasts.svelte";
 
 export const HOME_URI = "cx:home";
@@ -343,7 +343,7 @@ export class Tab {
     if (target) {
       if (inNewTab) ws.newTab(target, false);
       else this.navigate(target);
-    } else openEntry(uri).catch((e) => toasts.show(errorText(e), "error"));
+    } else void openings.open(uri);
   }
 
   async newFolder() {

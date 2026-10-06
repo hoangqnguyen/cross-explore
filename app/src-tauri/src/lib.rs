@@ -50,6 +50,7 @@ pub fn run() {
             cmd::files::subscribe,
             cmd::system::open_entry,
             cmd::system::open_entry_with,
+            cmd::system::cancel_open,
             cmd::system::apps_for_extension,
             cmd::system::open_with_dialog,
             cmd::system::stage_for_drag,

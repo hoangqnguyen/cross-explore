@@ -179,7 +179,14 @@ export const createFolder = (uri: string, name?: string) => invoke<Entry>("creat
 export const createFile = (uri: string, stem: string, ext: string) => invoke<Entry>("create_file", { uri, stem, ext });
 export const renameEntry = (uri: string, from: string, to: string) => invoke<Entry>("rename_entry", { uri, from, to });
 export const trashEntries = (uri: string, names: string[]) => invoke<TrashedItem[]>("trash_entries", { uri, names });
-export const openEntry = (uri: string) => invoke<void>("open_entry", { uri });
+/** How far a remote file being opened has downloaded. */
+export interface OpenProgress {
+  done: number;
+  total: number;
+}
+/** Open with the default app; a remote file downloads first, reporting on `onProgress` (stop it with `cancelOpen(id)`). */
+export const openEntry = (uri: string, id = 0, onProgress: (p: OpenProgress) => void = () => {}) => invoke<void>("open_entry", { uri, id, onProgress: channel(onProgress) });
+export const cancelOpen = (id: number) => invoke<void>("cancel_open", { id });
 export interface AppChoice {
   name: string;
   /** What `openEntryWith` is given back: an app name (macOS) or an executable path (Linux). */
@@ -194,7 +201,8 @@ export async function appVersion(): Promise<string> {
 /** Shortcuts of the macOS menu items, by command id (no-op elsewhere). */
 export const setMenuKeys = (keys: Record<string, string | null>) => invoke<void>("menu_set_keys", { keys });
 export const appsForExtension = (ext: string) => invoke<AppChoice[]>("apps_for_extension", { ext });
-export const openEntryWith = (uri: string, withApp: string) => invoke<void>("open_entry_with", { uri, with: withApp });
+export const openEntryWith = (uri: string, withApp: string, id = 0, onProgress: (p: OpenProgress) => void = () => {}) =>
+  invoke<void>("open_entry_with", { uri, with: withApp, id, onProgress: channel(onProgress) });
 export const openWithDialog = (uri: string) => invoke<void>("open_with_dialog", { uri });
 export const revealEntry = (uri: string) => invoke<void>("reveal_entry", { uri });
 export const openTerminal = (uri: string) => invoke<void>("open_terminal", { uri });

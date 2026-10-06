@@ -1,7 +1,8 @@
 <script lang="ts">
   // Right-hand details pane: a preview of the focused item plus its info
   // (Explorer's details pane and Finder's preview column in one).
-  import { fileUriToPath, getTags, openEntry, errorText, type Item } from "../api";
+  import { fileUriToPath, getTags, errorText, type Item } from "../api";
+  import { openings } from "../opening.svelte";
   import { extOf, formatDateFull, formatSize, typeLabel } from "../format";
   import { PREVIEW_AS, builtInKind, previewLabel, rememberedAs } from "../previewKinds";
   import { dialogs } from "../stores/dialogs.svelte";
@@ -154,7 +155,7 @@
       <h3>{tab.folder.info.name}</h3>
       <div class="kind">{tab.visible.length.toLocaleString()} items</div>
       {#if tab.folder.info.local && tab.folder.kind === "folder"}
-        <button class="link" onclick={() => openEntry(tab.dirUri).catch((e) => toasts.show(errorText(e), "error"))}>Open with default app</button>
+        <button class="link" onclick={() => openings.open(tab.dirUri)}>Open with default app</button>
       {/if}
     </div>
   {/if}

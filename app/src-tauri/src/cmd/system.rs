@@ -3,8 +3,13 @@
 use super::AppState;
 use cx_core::{CxError, Location, Result, Scheme, WriteMode};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use tauri::ipc::Channel;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -14,13 +19,64 @@ fn spawn(cmd: &mut Command) -> Result<()> {
         .map_err(|e| CxError::Io(format!("couldn't start {:?}: {e}", cmd.get_program())))
 }
 
-/// Open with the default app. Remote files are downloaded to a cache first.
+/// How far the download of a remote file being opened has got.
+#[derive(Serialize, Clone, Copy)]
+pub struct OpenProgress {
+    done: u64,
+    total: u64,
+}
+
+/// Where a download reports to, and the flag that cancels it.
+struct Progress {
+    channel: Channel<OpenProgress>,
+    cancel: Arc<AtomicBool>,
+}
+
+/// Downloads in flight for opening, by the id the UI gave them.
+fn open_cancels() -> &'static Mutex<HashMap<u64, Arc<AtomicBool>>> {
+    static MAP: OnceLock<Mutex<HashMap<u64, Arc<AtomicBool>>>> = OnceLock::new();
+    MAP.get_or_init(Default::default)
+}
+
+/// Registers a download under `id` for [`cancel_open`]; unregisters on drop.
+struct Registered(u64);
+impl Drop for Registered {
+    fn drop(&mut self) {
+        open_cancels().lock().unwrap().remove(&self.0);
+    }
+}
+
+fn register(id: u64, channel: Channel<OpenProgress>) -> (Progress, Registered) {
+    let cancel = Arc::new(AtomicBool::new(false));
+    open_cancels().lock().unwrap().insert(id, cancel.clone());
+    (Progress { channel, cancel }, Registered(id))
+}
+
+/// Stop downloading a remote file that was being opened.
 #[tauri::command]
-pub async fn open_entry(app_handle: AppHandle, uri: String, app: AppState<'_>) -> Result<()> {
+pub fn cancel_open(id: u64) {
+    if let Some(flag) = open_cancels().lock().unwrap().get(&id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Open with the default app. Remote files are downloaded to a cache first,
+/// reporting progress on `on_progress` (cancel with [`cancel_open`]`(id)`).
+#[tauri::command]
+pub async fn open_entry(
+    app_handle: AppHandle,
+    uri: String,
+    id: u64,
+    on_progress: Channel<OpenProgress>,
+    app: AppState<'_>,
+) -> Result<()> {
     let loc = Location::parse(&uri)?;
     let path = match loc.local_path() {
         Some(p) => p.to_path_buf(),
-        None => download(&app, &loc).await?,
+        None => {
+            let (progress, _registered) = register(id, on_progress);
+            download(&app, &loc, Some(&progress)).await?
+        }
     };
     app_handle
         .opener()
@@ -35,12 +91,17 @@ pub async fn open_entry_with(
     app_handle: AppHandle,
     uri: String,
     with: String,
+    id: u64,
+    on_progress: Channel<OpenProgress>,
     app: AppState<'_>,
 ) -> Result<()> {
     let loc = Location::parse(&uri)?;
     let path = match loc.local_path() {
         Some(p) => p.to_path_buf(),
-        None => download(&app, &loc).await?,
+        None => {
+            let (progress, _registered) = register(id, on_progress);
+            download(&app, &loc, Some(&progress)).await?
+        }
     };
     app_handle
         .opener()
@@ -319,7 +380,7 @@ mod linux_apps {
 /// A local copy of a remote file, cached by URI + size + mtime. Concurrent
 /// requests for the same file share one download, and the file only appears
 /// under its real name once complete (so no app ever sees half of it).
-async fn download(app: &AppState<'_>, loc: &Location) -> Result<PathBuf> {
+async fn download(app: &AppState<'_>, loc: &Location, progress: Option<&Progress>) -> Result<PathBuf> {
     let provider = app.vfs.provider(loc).await?;
     let entry = provider.stat(loc).await?;
     if entry.is_dir {
@@ -344,6 +405,12 @@ async fn download(app: &AppState<'_>, loc: &Location) -> Result<PathBuf> {
         .or_default()
         .clone();
     let _guard = lock.lock().await;
+    let report = |done: u64| {
+        if let Some(p) = progress {
+            let _ = p.channel.send(OpenProgress { done, total: entry.size });
+        }
+    };
+    let cancelled = || progress.is_some_and(|p| p.cancel.load(Ordering::Relaxed));
 
     if tokio::fs::metadata(&dest)
         .await
@@ -356,23 +423,45 @@ async fn download(app: &AppState<'_>, loc: &Location) -> Result<PathBuf> {
         .await
         .map_err(|e| CxError::from_io(e, dir.display()))?;
     let part = dir.join(format!(".{}.part", entry.name));
-    // 1 MB buffers: the default 8 KB means tiny network reads and a
-    // blocking-pool hop per 8 KB written.
-    const BUF: usize = 1024 * 1024;
-    let src = provider.open_read(loc, 0).await?;
-    let dst = app
-        .vfs
-        .local()
-        .open_write(&cx_core::Location::local(&part), WriteMode::Truncate)
-        .await?;
-    let mut src = tokio::io::BufReader::with_capacity(BUF, src);
-    let mut dst = tokio::io::BufWriter::with_capacity(BUF, dst);
-    tokio::io::copy_buf(&mut src, &mut dst)
-        .await
-        .map_err(|e| CxError::io("download failed", e))?;
-    tokio::io::AsyncWriteExt::shutdown(&mut dst)
-        .await
-        .map_err(|e| CxError::io("download failed", e))?;
+    report(0);
+    let copied = async {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        // 1 MB buffers: the default 8 KB means tiny network reads and a
+        // blocking-pool hop per 8 KB written.
+        const BUF: usize = 1024 * 1024;
+        let mut src = provider.open_read(loc, 0).await?;
+        let dst = app
+            .vfs
+            .local()
+            .open_write(&cx_core::Location::local(&part), WriteMode::Truncate)
+            .await?;
+        let mut dst = tokio::io::BufWriter::with_capacity(BUF, dst);
+        let mut buf = vec![0u8; BUF];
+        let (mut done, mut last) = (0u64, Instant::now());
+        loop {
+            if cancelled() {
+                return Err(CxError::Cancelled);
+            }
+            let n = src.read(&mut buf).await.map_err(|e| CxError::io("download failed", e))?;
+            if n == 0 {
+                break;
+            }
+            dst.write_all(&buf[..n]).await.map_err(|e| CxError::io("download failed", e))?;
+            done += n as u64;
+            if last.elapsed() >= Duration::from_millis(100) {
+                report(done);
+                last = Instant::now();
+            }
+        }
+        dst.shutdown().await.map_err(|e| CxError::io("download failed", e))?;
+        report(done);
+        Ok(())
+    }
+    .await;
+    if let Err(e) = copied {
+        let _ = tokio::fs::remove_file(&part).await;
+        return Err(e);
+    }
     tokio::fs::rename(&part, &dest)
         .await
         .map_err(|e| CxError::from_io(e, dest.display()))?;
@@ -388,7 +477,7 @@ pub async fn stage_for_drag(uris: Vec<String>, app: AppState<'_>) -> Result<Vec<
         let loc = Location::parse(&uri)?;
         let path = match loc.local_path() {
             Some(p) => p.to_path_buf(),
-            None => download(&app, &loc).await?,
+            None => download(&app, &loc, None).await?,
         };
         out.push(path.to_string_lossy().into_owned());
     }

@@ -36,6 +36,53 @@ const FRESH_MS = 1600;
 /** Above this many changes at once, re-sorting everything beats patching. */
 const BULK_CHANGES = 64;
 
+/**
+ * The last listing of recently seen folders. A folder opened again (going
+ * back, up, into a Column view column, a server that takes a second to
+ * answer) shows these rows at once and swaps in the fresh listing when it
+ * lands, instead of going blank in between.
+ */
+interface Snapshot {
+  info: LocationInfo | null;
+  caps: Capabilities | null;
+  items: Entry[];
+  sort: SortSpec;
+}
+const SNAPSHOTS = 64;
+const SNAPSHOT_ROWS = 300_000;
+const snapshots = new Map<string, Snapshot>();
+let snapshotRows = 0;
+
+function keepSnapshot(uri: string, snap: Snapshot) {
+  const old = snapshots.get(uri);
+  if (old) {
+    snapshots.delete(uri);
+    snapshotRows -= old.items.length;
+  }
+  snapshots.set(uri, snap);
+  snapshotRows += snap.items.length;
+  // Oldest first, but never the one just kept.
+  for (const [k, v] of snapshots) {
+    if (snapshots.size <= SNAPSHOTS && snapshotRows <= SNAPSHOT_ROWS) break;
+    if (k === uri) continue;
+    snapshots.delete(k);
+    snapshotRows -= v.items.length;
+  }
+}
+
+/** Forget a folder's last listing (it failed to list: gone, or no access). */
+function dropSnapshot(uri: string) {
+  const old = snapshots.get(uri);
+  if (!old) return;
+  snapshots.delete(uri);
+  snapshotRows -= old.items.length;
+}
+
+/** Opening this folder would show rows at once. */
+export const hasSnapshot = (uri: string) => snapshots.has(uri);
+
+const sameSort = (a: SortSpec, b: SortSpec) => a.key === b.key && a.desc === b.desc;
+
 export class Folder implements Source {
   readonly uri: string;
   readonly kind = "folder" as const;
@@ -55,6 +102,9 @@ export class Folder implements Source {
   timing = $state.raw<{ firstRowsMs: number; totalMs: number; count: number } | null>(null);
 
   #cmp: (a: Entry, b: Entry) => number;
+  #sort: SortSpec;
+  /** Showing a remembered listing: the next load replaces it without a spinner. */
+  #stale = false;
   #byName = new Map<string, Entry>();
   #gen = 0;
   #watchId: number | null = null;
@@ -67,10 +117,28 @@ export class Folder implements Source {
 
   constructor(uri: string, sort: SortSpec) {
     this.uri = uri;
+    this.#sort = sort;
     this.#cmp = comparator(sort);
+    const snap = snapshots.get(uri);
+    if (snap) {
+      this.items = sameSort(snap.sort, sort) ? snap.items : [...snap.items].sort(this.#cmp);
+      this.#byName = new Map(this.items.map((e) => [e.name, e]));
+      this.info = snap.info;
+      this.caps = snap.caps;
+      this.status = "ready";
+      this.#stale = true;
+    }
+  }
+
+  #keep() {
+    if (this.status !== "ready") return;
+    const snap = { info: this.info, caps: this.caps, items: this.items, sort: this.#sort };
+    keepSnapshot(this.uri, snap);
+    if (this.info?.uri && this.info.uri !== this.uri) keepSnapshot(this.info.uri, snap);
   }
 
   setSort(spec: SortSpec) {
+    this.#sort = spec;
     this.#cmp = comparator(spec);
     this.items = [...this.items].sort(this.#cmp);
   }
@@ -87,9 +155,13 @@ export class Folder implements Source {
   async load(opts: { quiet?: boolean } = {}): Promise<void> {
     const gen = ++this.#gen;
     const refresh = this.items.length > 0;
-    const quiet = !!opts.quiet && refresh;
+    // Replacing a remembered listing is as quiet as it gets: no spinner,
+    // and rows that turn out to be new don't glow (they aren't news).
+    const stale = this.#stale && refresh;
+    this.#stale = false;
+    const quiet = !!opts.quiet && refresh && !stale;
     const before = quiet ? new Set(this.#byName.keys()) : null;
-    if (refresh && !quiet) this.refreshing = true;
+    if (refresh && !quiet && !stale) this.refreshing = true;
     else if (!refresh) this.status = "loading";
     this.#buffer = [];
 
@@ -140,6 +212,7 @@ export class Folder implements Source {
       this.refreshing = false;
       const total = performance.now() - t0;
       this.timing = { firstRowsMs: this.timing?.firstRowsMs ?? total, totalMs: total, count: acc.length };
+      this.#keep();
       const buffered = this.#buffer;
       this.#buffer = null;
       if (buffered?.length) this.#apply(buffered);
@@ -155,6 +228,7 @@ export class Folder implements Source {
         // next change or poll will try again.
         return;
       }
+      dropSnapshot(this.uri);
       this.#byName = new Map();
       this.items = [];
       this.refreshing = false;
@@ -192,6 +266,7 @@ export class Folder implements Source {
   }
 
   dispose() {
+    this.#keep(); // with whatever live changes arrived since the listing
     this.#gen++;
     this.unwatch();
     for (const t of this.#freshTimers) clearTimeout(t);

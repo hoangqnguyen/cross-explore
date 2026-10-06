@@ -103,6 +103,19 @@ function parse(uri: string): { base: string; path: string } {
 }
 
 // A 100,000-item folder for performance checks, generated on first use.
+/** Opening a server's file downloads it first: about a second and a half, in steps. */
+const openCancels = new Set<number>();
+async function mockDownload({ uri, id, onProgress }: { uri: string; id: number; onProgress: (p: { done: number; total: number }) => void }) {
+  if (parse(uri).base === "file://") return;
+  const total = lookup(uri)?.size ?? 10_000_000;
+  await sleep(200); // connecting
+  for (let i = 0; i <= 15; i++) {
+    if (openCancels.delete(id)) throw { kind: "cancelled" };
+    onProgress({ done: Math.round((total * i) / 15), total });
+    await sleep(100);
+  }
+}
+
 function bigFolder(n: Node) {
   if (n.children!.size) return;
   const exts = ["jpg", "pdf", "txt", "mp4", "zip", "md", "rs", "png"];
@@ -384,6 +397,9 @@ const handlers: Record<string, (a: Args) => unknown> = {
   }),
   free_space: () => ({ free: 212e9, total: 994e9 }),
   async list_dir({ uri, onEvent }: { uri: string; onEvent: (e: ListEvent) => void }) {
+    // Tests can make every listing as slow as a far-away server (meta included).
+    const slow = (globalThis as { __cxSlowList?: number }).__cxSlowList;
+    if (slow) await sleep(slow);
     const node = lookup(uri);
     if (!node?.isDir) throw { kind: "notFound", message: parse(uri).path };
     const remote = parse(uri).base !== "file://";
@@ -470,7 +486,7 @@ const handlers: Record<string, (a: Args) => unknown> = {
     names.forEach((n: string) => node.children!.delete(n));
     return names.map((n: string) => ({ original: uri + "/" + encodeURIComponent(n), trashed: null }));
   },
-  open_entry: () => undefined,
+  open_entry: (a: Args) => mockDownload(a),
   apps_for_extension({ ext }: Args) {
     const pretty = (e: string) => e.charAt(0).toUpperCase() + e.slice(1);
     return [
@@ -479,7 +495,10 @@ const handlers: Record<string, (a: Args) => unknown> = {
       { name: "Preview", id: "Preview" },
     ];
   },
-  open_entry_with: () => undefined,
+  open_entry_with: (a: Args) => mockDownload(a),
+  cancel_open({ id }: Args) {
+    openCancels.add(id);
+  },
   open_with_dialog: () => undefined,
   os_clipboard_set: () => undefined,
   os_clipboard_get: () => [],
