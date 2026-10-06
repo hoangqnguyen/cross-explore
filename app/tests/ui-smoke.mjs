@@ -631,6 +631,12 @@ try {
   await t.key("Escape");
   await sleep(200);
 
+  // A line starting with "#" that isn't a heading (a hashtag) used to send
+  // the Markdown preview into an endless loop, freezing the app on Space.
+  {
+    const html = await t.eval(`import('/src/lib/markdown.ts').then((m) => m.renderMarkdown("# Title\\nIntro\\n#pickleball #gameonline\\n\\n#tag\\n## Next"))`);
+    check("Markdown with #hashtag lines renders (no freeze)", typeof html === "string" && html.includes("<p>#pickleball #gameonline</p>") === false && html.includes("#pickleball #gameonline") && html.includes("<h2>Next</h2>"), html);
+  }
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

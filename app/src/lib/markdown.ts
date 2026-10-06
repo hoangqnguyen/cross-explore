@@ -58,8 +58,10 @@ export function renderMarkdown(src: string): string {
       i++;
       continue;
     }
-    const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#|```|>|\s*[-*+]\s|\s*\d+\.\s)/.test(lines[i])) para.push(lines[i++]);
+    // Always take this line: it matched no block above (say "#hashtag", which
+    // isn't a heading), so stopping on it again would loop forever.
+    const para: string[] = [lines[i++]];
+    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|```|>|\s*[-*+]\s|\s*\d+\.\s)/.test(lines[i])) para.push(lines[i++]);
     out.push(`<p>${inline(para.join(" "))}</p>`);
   }
   return out.join("\n");
