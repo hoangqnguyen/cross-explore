@@ -55,6 +55,7 @@
     grid: "M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z",
     gallery: "M3 3.5h14v9H3zM3 15.5h3M8.5 15.5h3M14 15.5h3",
     sidebarRight: "M3 4h14v12H3zM12.5 4v12",
+    panelBottom: "M3 4h14v12H3zM3 11.5h14",
     pause: "M7 5v10M13 5v10",
     play: "M6.5 4.5v11l9-5.5z",
     phone: "M6.5 2.5h7v15h-7zM9.5 15h1",

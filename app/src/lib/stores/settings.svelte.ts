@@ -90,6 +90,10 @@ export interface SettingsData {
   previewDelayMs: number;
   /** Folders preview as a list of what's inside. */
   previewFolders: boolean;
+  /** Where the terminal panel sits: under the file panes or beside them. */
+  terminalDock: "bottom" | "right";
+  terminalHeight: number;
+  terminalWidth: number;
 }
 
 /** What typing in a file list does, given the settings. */
@@ -135,6 +139,9 @@ const defaults: SettingsData = {
   previewTextKB: 64,
   previewDelayMs: 120,
   previewFolders: true,
+  terminalDock: "bottom",
+  terminalHeight: 260,
+  terminalWidth: 520,
 };
 
 function load(): SettingsData {

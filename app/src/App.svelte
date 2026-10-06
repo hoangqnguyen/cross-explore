@@ -158,16 +158,20 @@
     {#if !ws.dual}<AddressBar tab={ws.activeTab} />{/if}
     <CommandBar />
     <AccessBanner />
-    <div class="body">
-      <Sidebar />
-      <div class="panes" bind:clientWidth={ws.panesWidth}>
-        <PaneView pane={ws.panes[0]} />
-        {#if ws.dual}<PaneView pane={ws.panes[1]} />{/if}
+    <!-- The terminal docks under or beside the file panes; only the flex
+         direction changes when it moves, so its shells stay connected. -->
+    <div class="work" class:dock-right={settings.data.terminalDock === "right"}>
+      <div class="body">
+        <Sidebar />
+        <div class="panes" bind:clientWidth={ws.panesWidth}>
+          <PaneView pane={ws.panes[0]} />
+          {#if ws.dual}<PaneView pane={ws.panes[1]} />{/if}
+        </div>
+        {#if settings.data.previewPane}<PreviewPane />{/if}
       </div>
-      {#if settings.data.previewPane}<PreviewPane />{/if}
+      <!-- xterm is big and most sessions never open the terminal: load it on first use. -->
+      {#if ui.terminalOpen}{#await import("./lib/components/TerminalPanel.svelte") then { default: TerminalPanel }}<TerminalPanel />{/await}{/if}
     </div>
-    <!-- xterm is big and most sessions never open the terminal: load it on first use. -->
-    {#if ui.terminalOpen}{#await import("./lib/components/TerminalPanel.svelte") then { default: TerminalPanel }}<TerminalPanel />{/await}{/if}
     <StatusBar />
   </div>
   <QuickLook />
@@ -186,10 +190,20 @@
     height: 100vh;
     height: 100dvh;
   }
+  .work {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .work.dock-right {
+    flex-direction: row;
+  }
   .body {
     display: flex;
     flex: 1;
     min-height: 0;
+    min-width: 0;
     background: var(--sidebar-bg);
   }
   .panes {

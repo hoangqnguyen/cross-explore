@@ -94,6 +94,17 @@ export const commands: Command[] = [
   { id: "file.copyPath", label: "Copy path", group: "File", icon: "link", keys: { finder: ["Mod+Alt+C"], explorer: ["Mod+Shift+C"] }, run: () => tab().copyPath() },
   { id: "file.reveal", label: isMac ? "Show in Finder" : "Show in Explorer", group: "File", icon: "open", keys: { finder: ["Mod+Shift+R"], explorer: ["Mod+Shift+E"] }, when: () => tab().folder.info?.local === true && tab().folder.kind !== "home", run: () => revealEntry(tab().targets()[0] ? tab().uriOf(tab().targets()[0]) : tab().dirUri).catch((e) => toasts.show(errorText(e), "error")) },
   { id: "view.terminal", label: "Toggle terminal panel", group: "View", icon: "terminal", keys: { finder: ["Ctrl+`"], explorer: ["Mod+`", "Ctrl+`"] }, when: () => !ui.phone, run: () => (ui.terminalOpen = !ui.terminalOpen) },
+  {
+    id: "view.terminalDock",
+    label: "Move terminal panel right / bottom",
+    group: "View",
+    icon: "sidebarRight",
+    when: () => !ui.phone,
+    run: () => {
+      settings.data.terminalDock = settings.data.terminalDock === "right" ? "bottom" : "right";
+      ui.terminalOpen = true;
+    },
+  },
   { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`", "Ctrl+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => void openExternalTerminal() },
   { id: "file.calcSize", label: "Calculate folder sizes", group: "Tools", icon: "sigma", keys: { all: ["Alt+Shift+Enter"], commander: ["Space"] }, list: true, when: () => tab().targets().some((e) => e.isDir) || tab().visible.some((e) => e.isDir), run: () => calcSizes() },
   { id: "file.compress", label: "Compress to ZIP", group: "Tools", icon: "archive", when: () => hasTargets() && writable(), run: () => compress() },

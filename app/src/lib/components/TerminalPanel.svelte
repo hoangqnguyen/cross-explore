@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Commander One-style terminal under the file panes. Opens in the current
+  // Commander One-style terminal under (or beside) the file panes. Opens in the current
   // folder (an SSH session for SFTP folders). Each tab keeps its own PTY and
   // xterm instance for as long as this panel stays open: switching tabs only
   // shows/hides the right one, it never reconnects — important for SSH,
@@ -10,6 +10,7 @@
   import "@xterm/xterm/css/xterm.css";
   import { errorText, termClose, termCwd, termOpen, termResize, termWrite, type TermEvent } from "../api";
   import { offerSshKey, resolveSshUri, sftpTarget } from "../ssh";
+  import { settings } from "../stores/settings.svelte";
   import { ui } from "../stores/ui.svelte";
   import { ws } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
@@ -202,13 +203,17 @@
     if (uri) ws.activeTab.navigate(uri);
   }
 
+  const right = $derived(settings.data.terminalDock === "right");
+
   let dragging = false;
   function resize(e: PointerEvent) {
-    if (dragging) ui.terminalHeight = Math.round(Math.min(window.innerHeight * 0.7, Math.max(120, window.innerHeight - e.clientY - 28)));
+    if (!dragging) return;
+    if (right) settings.data.terminalWidth = Math.round(Math.min(window.innerWidth * 0.7, Math.max(280, window.innerWidth - e.clientX)));
+    else settings.data.terminalHeight = Math.round(Math.min(window.innerHeight * 0.7, Math.max(120, window.innerHeight - e.clientY - 28)));
   }
 </script>
 
-<section class="terminal" style:height="{ui.terminalHeight}px">
+<section class="terminal" class:right style:height={right ? null : `${settings.data.terminalHeight}px`} style:width={right ? `${settings.data.terminalWidth}px` : null}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="grip"
@@ -224,8 +229,15 @@
     <span class="title">Terminal — {activeSession?.startedIn ?? ""}</span>
     {#if activeSession?.status}<span class="status">{activeSession.status}</span>{/if}
     <span class="spacer"></span>
-    <button title="cd to the folder shown above" onclick={cdHere}><Icon name="forward" size={13} /> Go to current folder</button>
-    <button title="Show the shell's folder above" onclick={followShell}><Icon name="up" size={13} /> Show shell's folder</button>
+    <!-- Docked right the panel is narrow: the buttons keep their tooltips but drop their labels. -->
+    <button class:icon={right} title={right ? "Go to current folder: cd to the folder shown in the file pane" : "cd to the folder shown above"} onclick={cdHere}><Icon name="forward" size={13} />{#if !right}Go to current folder{/if}</button>
+    <button class:icon={right} title={right ? "Show shell's folder in the file pane" : "Show the shell's folder above"} onclick={followShell}><Icon name="up" size={13} />{#if !right}Show shell's folder{/if}</button>
+    <button
+      class="icon"
+      title={right ? "Move terminal to the bottom" : "Move terminal to the right"}
+      aria-label={right ? "Move terminal to the bottom" : "Move terminal to the right"}
+      onclick={() => (settings.data.terminalDock = right ? "bottom" : "right")}><Icon name={right ? "panelBottom" : "sidebarRight"} size={13} /></button
+    >
     <button class="icon" aria-label="Close terminal" onclick={() => (ui.terminalOpen = false)}><Icon name="close" size={12} /></button>
   </header>
   <div class="hosts" bind:this={hostsEl}></div>
@@ -240,6 +252,11 @@
     border-top: 1px solid var(--stroke-strong);
     background: var(--layer);
   }
+  .terminal.right {
+    border-top: 0;
+    border-left: 1px solid var(--stroke-strong);
+    min-width: 0;
+  }
   .grip {
     position: absolute;
     top: -3px;
@@ -248,6 +265,15 @@
     height: 6px;
     cursor: row-resize;
     z-index: 2;
+  }
+  .right .grip {
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    right: auto;
+    width: 6px;
+    height: auto;
+    cursor: col-resize;
   }
   header {
     display: flex;
@@ -261,6 +287,9 @@
     flex: none;
   }
   .title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .status {
@@ -270,6 +299,7 @@
     flex: 1;
   }
   header button {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 5px;

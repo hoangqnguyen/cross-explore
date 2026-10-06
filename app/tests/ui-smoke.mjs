@@ -240,6 +240,31 @@ try {
     await t.key("w", M);
     await sleep(200);
     check("closing a tab also closes its terminal", (await t.eval(`document.querySelectorAll('.hosts .host').length`)) === 1);
+
+    // Docking right and back only re-flows the layout: the same shell stays.
+    const rect = (sel) => t.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)})?.getBoundingClientRect(); return r && { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; })()`);
+    const dockBtn = `document.querySelector('.terminal header button[aria-label^="Move terminal"]')`;
+    const live = await termId(".hosts .host.active");
+    await t.eval(`${dockBtn}.click()`);
+    await sleep(250);
+    const body = await rect(".work .body");
+    const right = await rect(".terminal");
+    check("terminal moves to the right of the file panes", !!right && (await t.eval(`!!document.querySelector('.terminal.right')`)) && right.left >= body.right - 1 && Math.abs(right.top - body.top) < 2 && Math.abs(right.height - body.height) < 2, JSON.stringify({ body, right }));
+    check("docked right keeps the same shell session", !!live && (await termId(".hosts .host.active")) === live);
+    check("the xterm fills the right-docked panel", ((await rect(".hosts .host.active .xterm-screen"))?.height ?? 0) > body.height * 0.6);
+    const grip = await rect(".terminal .grip");
+    const gx = grip.left + grip.width / 2, gy = grip.top + grip.height / 2;
+    await t.send("Input.dispatchMouseEvent", { type: "mousePressed", x: gx, y: gy, button: "left", clickCount: 1 });
+    await t.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: gx - 120, y: gy, button: "left" });
+    await t.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: gx - 120, y: gy, button: "left", clickCount: 1 });
+    await sleep(200);
+    const wider = await rect(".terminal");
+    check("dragging its left edge widens it", Math.abs(wider.width - right.width - 120) < 3, `${right.width} -> ${wider.width}`);
+    await t.eval(`${dockBtn}.click()`);
+    await sleep(250);
+    const bottom = await rect(".terminal");
+    check("and moves back under the panes", !(await t.eval(`!!document.querySelector('.terminal.right')`)) && bottom.top >= (await rect(".work .body")).bottom - 1);
+    check("back at the bottom, still the same shell", (await termId(".hosts .host.active")) === live && (await t.eval(`document.querySelectorAll('.hosts .host').length`)) === 1);
     await t.eval(`import('/src/lib/commands.svelte.ts').then((m) => m.run('view.terminal'))`);
     await sleep(150);
     check("terminal panel closes", !(await t.eval(`!!document.querySelector('.terminal')`)));
