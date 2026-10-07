@@ -18,7 +18,7 @@ function file(name: string, size: number, age: number, hidden = false, content?:
   return { name, kind: "file", isDir: false, size, modified: now - age, created: now - age, hidden, readonly: false, content };
 }
 
-const readme = `# Cross Explore\n\nA fast, **live** file explorer.\n\n- Dual pane\n- Quick Look\n- Network shares & peers\n`;
+const readme = `# Cross Explore\n\nA fast, **live** file explorer.\n\n- Dual pane\n- Quick Look\n- Network shares & peers\n\n## Views\n| View | Key | Best for |\n|---|:-:|---|\n| Details | ⌘1 | sorting by size or date |\n| Column | ⌘3 | deep folder trees, browsing a server |\n\n1. Open a folder, or a server\n   from the sidebar.\n2. Press Space to preview.\n`;
 const code = `use std::fs;\n\nfn main() {\n    for e in fs::read_dir(".").unwrap() {\n        println!("{}", e.unwrap().path().display());\n    }\n}\n`;
 const reportHtml = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Run Report</title>\n<style>body{font-family:sans-serif;padding:24px}.status{display:inline-block;padding:4px 12px;border-radius:999px;background:#2fa66a;color:#fff}</style>\n</head>\n<body>\n<h1>Full Run Report</h1>\n<p>Status: <span class="status">All checks passed</span></p>\n</body>\n</html>\n`;
 

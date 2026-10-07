@@ -227,6 +227,9 @@ try {
   for (let k = 0; k < (await t.rows()).indexOf("README.md"); k++) await t.key("ArrowDown");
   await t.key(" ");
   await sleep(400);
+  const md = await t.eval(`(() => { const m = document.querySelector('.ql .md'); const tb = m?.querySelector('table'); const ol = m?.querySelector('ol'); return m && { cols: tb ? tb.querySelectorAll('thead th').length : 0, rows: tb ? tb.querySelectorAll('tbody tr').length : 0, center: tb?.querySelector('th:nth-child(2)')?.style.textAlign ?? '', bordered: tb ? getComputedStyle(tb.querySelector('td')).borderTopStyle : '', pipes: m.textContent.includes('|---'), items: ol ? ol.children.length : 0, wrapped: ol?.children[0]?.textContent ?? '' }; })()`);
+  check("Markdown tables render as tables", md?.cols === 3 && md.rows === 2 && md.center === "center" && md.bordered === "solid" && !md.pipes, JSON.stringify(md));
+  check("a numbered item's wrapped line stays in that item", md?.items === 2 && md.wrapped === "Open a folder, or a server from the sidebar.", JSON.stringify(md));
   await pinchAt(".ql .md");
   check("pinch zooms Markdown", (await t.eval(`Number(document.querySelector('.ql .md > div').style.zoom || 1)`)) > 1.5);
   await t.key("Escape");

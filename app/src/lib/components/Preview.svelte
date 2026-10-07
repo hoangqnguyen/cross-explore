@@ -303,6 +303,30 @@
     border-left: 3px solid var(--stroke-strong);
     color: var(--text-2);
   }
+  /* Wide tables scroll sideways in their own box instead of widening the page. */
+  .md :global(.table) {
+    overflow-x: auto;
+    margin: 0.6em 0;
+  }
+  .md :global(table) {
+    border-collapse: collapse;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .md :global(th),
+  .md :global(td) {
+    padding: 5px 10px;
+    border: 1px solid var(--stroke-strong);
+    text-align: left;
+    vertical-align: top;
+  }
+  .md :global(th) {
+    font-weight: 600;
+    background: var(--hover);
+  }
+  .md :global(tbody tr:nth-child(even)) {
+    background: var(--layer-2);
+  }
   .md :global(li.task) {
     list-style: none;
     margin-left: -18px;
