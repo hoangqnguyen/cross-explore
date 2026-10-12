@@ -11,6 +11,7 @@
   import FileIcon from "./FileIcon.svelte";
   import Icon from "./Icon.svelte";
   import Preview from "./Preview.svelte";
+  import ViewStates from "./ViewStates.svelte";
   import VirtualRows from "./VirtualRows.svelte";
 
   let { tab }: { tab: Tab } = $props();
@@ -267,6 +268,7 @@
         </div>
       {/snippet}
     </VirtualRows>
+    <ViewStates {tab} rowH={ROW_H} />
     {#if marquee}<div class="marquee" style:left="{marquee.x}px" style:top="{marquee.y}px" style:width="{marquee.w}px" style:height="{marquee.h}px"></div>{/if}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="resize" onpointerdown={startResize} onpointermove={onResizeMove}></div>
