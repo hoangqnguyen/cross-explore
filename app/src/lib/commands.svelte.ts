@@ -35,6 +35,8 @@ export interface Command {
   /** Only when a file list has focus (so typing in fields isn't hijacked). */
   list?: boolean;
   when?: () => boolean;
+  /** Left out of menus, toolbars and the palette (its keys still work). */
+  hidden?: () => boolean;
   run: () => unknown;
 }
 
@@ -89,7 +91,7 @@ export const commands: Command[] = [
   { id: "file.quicklook", label: "Quick Look", group: "File", icon: "eye", keys: { all: ["Space"], commander: ["F3"] }, list: true, when: hasTargets, run: () => quicklook.toggle() },
   { id: "file.rename", label: "Rename", group: "File", icon: "rename", keys: { finder: ["Enter"], explorer: ["F2"], commander: ["Shift+F6"] }, list: true, when: () => oneTarget() && tab().folder.kind !== "home", run: () => (tab().renaming = keyOf(tab().targets()[0])) },
   { id: "file.newFolder", label: "New folder", group: "File", icon: "newFolder", keys: { all: ["Mod+Shift+N"], commander: ["F7"] }, when: writable, run: () => tab().newFolder() },
-  { id: "file.trash", label: `Move to ${isMac ? "Trash" : "Recycle Bin"}`, group: "File", icon: "trash", keys: { finder: ["Mod+Backspace"], explorer: ["Delete"], commander: ["F8"] }, list: true, when: hasTargets, run: () => tab().trashSelection() },
+  { id: "file.trash", label: `Move to ${isMac ? "Trash" : "Recycle Bin"}`, group: "File", icon: "trash", keys: { finder: ["Mod+Backspace"], explorer: ["Delete"], commander: ["F8"] }, list: true, when: hasTargets, hidden: () => !tab().canTrash, run: () => tab().trashSelection() },
   { id: "file.delete", label: "Delete permanently…", group: "File", icon: "trash", keys: { finder: ["Mod+Alt+Backspace"], explorer: ["Shift+Delete"], commander: ["Shift+F8"] }, list: true, when: hasTargets, run: () => tab().deletePermanently() },
   { id: "edit.copy", label: "Copy", group: "Edit", icon: "copy", keys: { all: ["Mod+C"] }, list: true, when: hasTargets, run: () => ws.copy(false) },
   { id: "edit.cut", label: "Cut", group: "Edit", icon: "cut", keys: { all: ["Mod+X"] }, list: true, when: hasTargets, run: () => ws.copy(true) },

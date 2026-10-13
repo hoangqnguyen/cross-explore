@@ -43,7 +43,7 @@
     if (!open) return [];
     const out: Entry[] = [];
     for (const c of commands) {
-      if (!enabled(c.id)) continue;
+      if (!enabled(c.id) || c.hidden?.()) continue;
       const k = keysFor(c)[0];
       out.push({ label: c.label, detail: c.group, icon: c.icon ?? "command", kind: "Command", keys: k ? formatCombo(k) : undefined, run: () => run(c.id) });
     }

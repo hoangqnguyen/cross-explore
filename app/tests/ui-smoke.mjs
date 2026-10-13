@@ -358,12 +358,38 @@ try {
     await sleep(150);
     const labels = await t.eval(`[...document.querySelectorAll('.menu [role=menuitem], .menu button')].map(b => b.textContent.trim())`);
     check("context menu offers Delete permanently", labels.some((l) => l.startsWith("Delete permanently")), JSON.stringify(labels));
+    check("local context menu offers Move to Trash", labels.some((l) => /^Move to (Trash|Recycle Bin)/.test(l)), JSON.stringify(labels));
     await t.clickText(".menu button, .menu [role=menuitem]", "Delete permanently");
     await sleep(200);
     check("permanent delete asks first", (await t.eval(`document.querySelector('.modal')?.textContent ?? ''`)).includes("can't undo"));
     await t.clickText(".modal button", "Delete");
     await sleep(400);
     check("permanent delete removes the row", !(await t.rows()).includes(victim), victim);
+  }
+
+  // Remote locations have no Trash: no "Move to Trash" in the menu, the
+  // toolbar or the palette, but the delete key still asks to delete for good.
+  {
+    await t.open("?path=smb://nas.local/Media");
+    await sleep(300);
+    if (await t.eval(`!!document.querySelector('.modal input')`)) {
+      await t.eval(`(() => { const [u, p] = document.querySelectorAll('.modal input'); u.value = 'demo'; u.dispatchEvent(new Event('input')); p.value = 'demo'; p.dispatchEvent(new Event('input')); })()`);
+      await t.key("Enter");
+      await sleep(600);
+    }
+    const victim = (await t.rows())[0];
+    await t.eval(`(() => { const r = [...document.querySelectorAll('.pane.active .details .row')].find(r => r.querySelector('.text')?.textContent === ${JSON.stringify(victim)}); r.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 })); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 })); })()`);
+    await sleep(150);
+    const labels = await t.eval(`[...document.querySelectorAll('.menu [role=menuitem], .menu button')].map(b => b.textContent.trim())`);
+    check("remote context menu has no Move to Trash", !labels.some((l) => /^Move to (Trash|Recycle Bin)/.test(l)) && labels.some((l) => l.startsWith("Delete permanently")), JSON.stringify(labels));
+    await t.key("Escape");
+    check("remote toolbar delete button deletes permanently", (await t.eval(`[...document.querySelectorAll('.commands button')].map(b => b.getAttribute('aria-label') ?? '')`)).includes("Delete permanently…"));
+    await t.focusList();
+    await t.key(mac ? "Backspace" : "Delete", mac ? MOD.meta : 0);
+    await sleep(200);
+    check("remote delete key asks to delete permanently", (await t.eval(`document.querySelector('.modal')?.textContent ?? ''`)).includes("no trash"));
+    await t.key("Escape");
+    await sleep(150);
   }
 
   // Icons view: two-line names are never cut off, at any icon size.

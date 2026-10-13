@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { byId, enabled, forgetRecent, run, shortcut } from "../commands.svelte";
+  import { byId, enabled, forgetRecent, run, shortcut, type Command } from "../commands.svelte";
   import { menu, type MenuItem } from "../menu.svelte";
   import type { SortKey } from "../sort";
   import { settings } from "../stores/settings.svelte";
@@ -84,7 +84,7 @@
 
   // Recently used commands fill the bar's free space: as many as fit, newest
   // first (the rest wrap onto a hidden second line).
-  let recent = $derived(settings.data.recentCommands.map((id) => byId.get(id)).filter((c) => !!c));
+  let recent = $derived(settings.data.recentCommands.map((id) => byId.get(id)).filter((c): c is Command => !!c && !c.hidden?.()));
 
   function recentMenu(e: MouseEvent, id: string) {
     e.preventDefault();
@@ -94,14 +94,15 @@
     ], e.clientX, e.clientY);
   }
 
-  const actions: { id: string; icon: IconName }[] = [
+  // Where nothing goes to a Trash (remote locations), the delete button deletes permanently.
+  let actions = $derived<{ id: string; icon: IconName }[]>([
     { id: "edit.cut", icon: "cut" },
     { id: "edit.copy", icon: "copy" },
     { id: "edit.paste", icon: "paste" },
     { id: "file.rename", icon: "rename" },
     { id: "file.sendTo", icon: "send" },
-    { id: "file.trash", icon: "trash" },
-  ];
+    { id: tab.canTrash ? "file.trash" : "file.delete", icon: "trash" },
+  ]);
 </script>
 
 <div class="commands" role="toolbar">

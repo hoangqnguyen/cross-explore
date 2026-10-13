@@ -293,7 +293,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     ...(item.isDir && !many && tab.folder.info?.local ? [cmd("file.share", isShared(tab.uriOf(item)) ? "Sharing options…" : "Share…")] : []),
     cmd("file.sendTo"),
     { separator: true },
-    cmd("file.trash", undefined, true),
+    ...(tab.canTrash ? [cmd("file.trash", undefined, true)] : []),
     cmd("file.delete", undefined, true),
   ];
   menu.show(items, e.clientX, e.clientY);

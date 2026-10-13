@@ -85,6 +85,8 @@ export class Tab {
   /** The folder's canonical URI (what child URIs are built from). */
   dirUri = $derived(this.folder.info?.uri ?? this.folder.uri);
   writable = $derived(this.folder.kind === "folder" && this.folder.status === "ready" && (this.folder.caps?.writable ?? true));
+  /** Whether deleting here can go to a Trash (remote locations delete permanently). */
+  canTrash = $derived(this.folder.caps?.trash ?? true);
 
   /** Folders expanded in place (Finder's list-view outline), by URI. */
   expanded = $state.raw<ReadonlyMap<string, Folder>>(new Map());
@@ -414,8 +416,7 @@ export class Tab {
     const targets = this.targets();
     if (!targets.length) return;
     const trashName = ws.platform === "windows" ? "Recycle Bin" : "Trash";
-    const canTrash = this.folder.caps?.trash ?? true;
-    if (!canTrash) return this.deletePermanently(true);
+    if (!this.canTrash) return this.deletePermanently(true);
     if (settings.data.confirmTrash && !(await dialogs.confirm(`Move to ${trashName}?`, describe(targets), `Move to ${trashName}`))) return;
     const keys = targets.map(keyOf);
     // Move the cursor to the row after the deleted block, like Explorer.
