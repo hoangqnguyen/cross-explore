@@ -13,6 +13,7 @@
   import { ws, type Tab } from "../workspace.svelte";
   import { hasOsIcon } from "../fileTypes";
   import FileIcon from "./FileIcon.svelte";
+  import { isShared } from "../sharing.svelte";
   import Thumb from "./Thumb.svelte";
   import Icon from "./Icon.svelte";
   import ViewStates from "./ViewStates.svelte";
@@ -230,7 +231,7 @@
           {#if hasOsIcon(entry.name, entry.isDir, tab.uriOf(entry), ws.platform)}
             <Thumb {entry} uri={tab.uriOf(entry)} size={settings.data.compact ? 16 : 18} iconScale={1} />
           {:else}
-            <FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={settings.data.compact ? 16 : 18} />
+            <FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={settings.data.compact ? 16 : 18} shared={entry.isDir && isShared(tab.uriOf(entry))} />
           {/if}
           {#if tab.renaming === key}
             <input class="rename" value={entry.name} use:renameInput={entry} spellcheck="false" />

@@ -13,6 +13,7 @@ import { ui } from "./stores/ui.svelte";
 import { ws, isArchive, type Tab } from "./workspace.svelte";
 import { appsForExtension, errorText, inTauri, openWithDialog } from "./api";
 import { openings } from "./opening.svelte";
+import { isShared } from "./sharing.svelte";
 import { toasts } from "./toasts.svelte";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -289,6 +290,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("file.compress"),
     ...(item.isDir ? [cmd("file.calcSize")] : []),
     ...(tab.selectedEntries.filter((x) => !x.isDir).length === 2 ? [cmd("file.diff")] : []),
+    ...(item.isDir && !many && tab.folder.info?.local ? [cmd("file.share", isShared(tab.uriOf(item)) ? "Sharing options…" : "Share…")] : []),
     cmd("file.sendTo"),
     { separator: true },
     cmd("file.trash", undefined, true),
@@ -336,6 +338,7 @@ export function blankMenu(e: MouseEvent, tab: Tab) {
       { label: "Hidden items", checked: s.showHidden, action: () => (s.showHidden = !s.showHidden) },
       cmd("file.copyPath"),
       cmd("file.terminal"),
+      ...(tab.folder.info?.local ? [cmd("file.share", isShared(tab.dirUri) ? "Sharing options…" : "Share this folder…")] : []),
       cmd("bookmark.toggle", s.bookmarks.some((b) => b.uri === tab.dirUri) ? "Remove from Favorites" : "Add to Favorites"),
       cmd("file.calcSize"),
     ],

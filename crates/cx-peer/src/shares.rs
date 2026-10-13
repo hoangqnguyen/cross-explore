@@ -28,6 +28,16 @@ pub struct Share {
     pub path: PathBuf,
     #[serde(default)]
     pub read_only: bool,
+    /// Device ids allowed to use this share; `None` means every device that
+    /// may connect (paired, or auto-trusted on the tailnet).
+    #[serde(default)]
+    pub devices: Option<Vec<String>>,
+}
+
+impl Share {
+    pub fn allows(&self, device_id: &str) -> bool {
+        self.devices.as_ref().is_none_or(|d| d.iter().any(|x| x == device_id))
+    }
 }
 
 /// A share checked and ready to serve.
@@ -250,7 +260,7 @@ mod path_tests {
     fn share_paths_from_uis_are_normalized() {
         let tmp = tempfile::tempdir().unwrap();
         let uri = cx_core::Location::local(tmp.path()).uri();
-        let roots = prepare(&[Share { name: "T".into(), path: PathBuf::from(&uri), read_only: false }]).unwrap();
+        let roots = prepare(&[Share { name: "T".into(), path: PathBuf::from(&uri), read_only: false, devices: None }]).unwrap();
         assert_eq!(std::fs::canonicalize(&roots[0].share.path).unwrap(), std::fs::canonicalize(tmp.path()).unwrap());
         assert_eq!(native_path(Path::new("/C:/Users/PC/Downloads")), PathBuf::from(format!("C:{0}Users{0}PC{0}Downloads", std::path::MAIN_SEPARATOR)));
         assert_eq!(native_path(Path::new("/home/me")), PathBuf::from("/home/me"));
@@ -267,7 +277,7 @@ mod tests {
         std::fs::create_dir_all(share.join("sub")).unwrap();
         std::fs::write(share.join("sub/a.txt"), b"a").unwrap();
         std::fs::write(tmp.path().join("secret.txt"), b"s").unwrap();
-        let roots = prepare(&[Share { name: "S".into(), path: share, read_only: false }]).unwrap();
+        let roots = prepare(&[Share { name: "S".into(), path: share, read_only: false, devices: None }]).unwrap();
         (tmp, roots)
     }
 

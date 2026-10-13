@@ -11,6 +11,7 @@
   import FileIcon from "./FileIcon.svelte";
   import Icon from "./Icon.svelte";
   import Preview from "./Preview.svelte";
+  import { isShared } from "../sharing.svelte";
   import ViewStates from "./ViewStates.svelte";
   import VirtualRows from "./VirtualRows.svelte";
 
@@ -209,7 +210,7 @@
       <VirtualRows items={rows} rowH={ROW_H} key={(e) => e.name}>
         {#snippet row(e)}
           <button class="item" class:trail={e.name === a.child} oncontextmenu={(ev) => menuIn(ev, a.uri, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(a.uri, e.name) })} onclick={() => (e.isDir ? tab.navigate(childUri(a.uri, e.name)) : tab.navigate(a.uri, e.name))}>
-            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} shared={e.isDir && isShared(childUri(a.uri, e.name))} />
             <span>{e.name}</span>
             {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
           </button>
@@ -258,7 +259,7 @@
           ondragend={onDragEnd}
           use:dropTarget={{ dest: () => (e.isDir ? tab.uriOf(e) : null), spring: () => tab.open(e) }}
         >
-          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+          <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} shared={e.isDir && isShared(tab.uriOf(e))} />
           {#if tab.renaming === key}
             <input class="rename" value={e.name} use:renameInput={e} spellcheck="false" />
           {:else}
@@ -281,7 +282,7 @@
       <VirtualRows items={visibleOf(f.items)} rowH={ROW_H} key={(e) => e.name}>
         {#snippet row(e)}
           <button class="item" oncontextmenu={(ev) => menuIn(ev, next!, e.name)} onclick={() => tab.navigate(next!, e.name)} ondblclick={() => tab.open({ ...e, uri: childUri(next!, e.name) })}>
-            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} />
+            <FileIcon name={e.name} isDir={e.isDir} executable={e.executable} size={16} shared={e.isDir && isShared(childUri(next!, e.name))} />
             <span>{e.name}</span>
             {#if e.isDir}<Icon name="chevronRight" size={11} />{/if}
           </button>

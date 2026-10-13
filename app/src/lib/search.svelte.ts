@@ -13,7 +13,7 @@ export const tagUri = (tag: string) => `cx:tag?${new URLSearchParams({ name: tag
 
 abstract class Results implements Source {
   abstract readonly uri: string;
-  kind: "search" | "home" | "compare" = "search";
+  kind: "search" | "home" | "compare" | "sharing" = "search";
   info = $state.raw<LocationInfo | null>(null);
   caps = $state.raw(null);
   status = $state<"loading" | "ready" | "error">("loading");
@@ -143,7 +143,7 @@ export class TagResults extends Results {
 export class StaticSource extends Results {
   readonly uri: string;
 
-  constructor(uri: string, name: string, icon: "home" | "search", sort: SortSpec, kind: "home" | "compare" = "home") {
+  constructor(uri: string, name: string, icon: "home" | "search" | "share", sort: SortSpec, kind: "home" | "compare" | "sharing" = "home") {
     super(sort);
     this.uri = uri;
     this.kind = kind;

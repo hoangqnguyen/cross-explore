@@ -13,6 +13,7 @@ export type DialogKind =
   | "multiRename"
   | "selectPattern"
   | "sendTo"
+  | "share"
   | "offer"
   | "diff"
   | "pair"

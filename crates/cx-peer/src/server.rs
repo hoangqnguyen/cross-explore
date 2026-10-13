@@ -56,11 +56,12 @@ pub(crate) fn access(inner: &Inner, remote: &Remote) -> Option<Access> {
     if remote.is_self {
         return Some(Access { shares: inner.shares() });
     }
+    let allowed = |s: &ShareRoot| s.share.allows(&remote.device_id);
     if let Some(dev) = inner.trust.by_key(&remote.key) {
-        return Some(Access { shares: inner.shares().into_iter().filter(|s| dev.may_use_share(&s.share.name)).collect() });
+        return Some(Access { shares: inner.shares().into_iter().filter(|s| allowed(s) && dev.may_use_share(&s.share.name)).collect() });
     }
     if remote.tailnet && inner.tailnet_auto_trust() {
-        return Some(Access { shares: inner.shares() });
+        return Some(Access { shares: inner.shares().into_iter().filter(allowed).collect() });
     }
     None
 }
@@ -528,7 +529,7 @@ mod tests {
             cfg.shares = Some(shares);
             PeerService::start(cfg, crate::events::ignore_events())
         };
-        let server = start("server", vec![Share { name: "S".into(), path: tmp.path().join("share"), read_only: false }]).await.unwrap();
+        let server = start("server", vec![Share { name: "S".into(), path: tmp.path().join("share"), read_only: false, devices: None }]).await.unwrap();
         let stranger = start("stranger", vec![]).await.unwrap();
         let conn = crate::client::dial(stranger.inner(), &[server.local_addr().unwrap()]).await.unwrap();
         for req in [Request::ListShares, Request::List { path: "/S".into() }, Request::Write { path: "/S/x".into(), mode: crate::protocol::WireWriteMode::CreateNew }, Request::NewPairingCode] {

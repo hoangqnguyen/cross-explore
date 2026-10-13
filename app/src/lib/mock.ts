@@ -2,7 +2,7 @@
 // browser (`npm run dev`). It fakes a home folder, a NAS that needs a
 // password ("demo"), nearby devices and a transfer engine, so every screen
 // can be developed and tested without Tauri.
-import type { AppEvent, Change, Conflict, Device, DiffItem, Entry, JobRequest, JobSnapshot, ListEvent, PeerStatus, Places, SearchEvent, SearchHit, SearchQuery, SizeProgress } from "./api";
+import type { AppEvent, Change, Conflict, Device, DiffItem, Entry, JobRequest, JobSnapshot, ListEvent, PeerAccess, PeerStatus, Places, SearchEvent, SearchHit, SearchQuery, SizeProgress } from "./api";
 
 const HOME = "/Users/demo";
 const now = Date.now();
@@ -81,6 +81,11 @@ const roots: Record<string, Node> = {
     ]),
     dir("Applications", 30 * day),
     dir("System", 300 * day),
+  ]),
+  // A paired Cross Explore device: its root lists what it shares with us.
+  "peer://hpc": dir("", 0, [
+    dir("Projects", 1 * day, [dir("thesis", 2 * day, [file("draft-v3.docx", 240_000, 1 * day)]), file("results.csv", 12_000, 3 * day)]),
+    { ...dir("Datasets", 4 * day, [file("train.parquet", 2_400_000_000, 20 * day)]), readonly: true },
   ]),
   "smb://nas.local": dir("", 0, [
     dir("Media", 3 * day, [dir("Movies", 5 * day, [file("Dune (2021).mkv", 18_000_000_000, 90 * day)]), dir("Photos", 2 * day)]),
@@ -364,7 +369,25 @@ const fakeDevices: Device[] = [
   },
 ];
 
-let peer: PeerStatus = { enabled: false, deviceId: "k7d2-mq4x", name: "demo's MacBook Pro", port: 47470, shares: [{ name: "Downloads", path: HOME + "/Downloads", readOnly: false }], trusted: [], tailnetAutoTrust: true };
+let peer: PeerStatus = {
+  enabled: false,
+  deviceId: "k7d2-mq4x",
+  name: "demo's MacBook Pro",
+  port: 47470,
+  shares: [{ name: "Downloads", path: HOME + "/Downloads", readOnly: false, devices: null }],
+  trusted: [
+    { id: "hpc", name: "hpc", os: "windows", addedAt: now - 9 * day, connected: true },
+    { id: "joy-air", name: "Joy's MacBook Air", os: "macos", addedAt: now - 30 * day, connected: false },
+  ],
+  tailnetAutoTrust: true,
+};
+const peerLog: PeerAccess[] = [
+  { time: now - 2 * 60_000, deviceId: "hpc", name: "hpc", addr: "100.101.1.1:51000", op: "read", path: "/Downloads/invoice.pdf", ok: true, error: null },
+  { time: now - 3 * 60_000, deviceId: "hpc", name: "hpc", addr: "100.101.1.1:51000", op: "list", path: "/Downloads", ok: true, error: null },
+  { time: now - 3 * 60_000 - 500, deviceId: "hpc", name: "hpc", addr: "100.101.1.1:51000", op: "list", path: "/Downloads", ok: true, error: null },
+  { time: now - 50 * 60_000, deviceId: "hpc", name: "hpc", addr: "100.101.1.1:51000", op: "write", path: "/Downloads/notes.txt", ok: false, error: "Downloads is read-only" },
+  { time: now - 26 * 3600_000, deviceId: "joy-air", name: "Joy's MacBook Air", addr: "192.168.1.20:51000", op: "list", path: "/Downloads", ok: true, error: null },
+];
 const terms = new Map<number, (t: string) => void>();
 const tags = new Map<string, string[]>([["file://" + HOME + "/Documents/Budget%202026.xlsx", ["Red", "Work"]]]);
 
@@ -649,9 +672,10 @@ const handlers: Record<string, (a: Args) => unknown> = {
   peer_pair_code: () => "482 193",
   peer_pair({ address }: Args) {
     const d = { id: "x1", name: address };
-    peer = { ...peer, trusted: [...peer.trusted, { ...d, addedAt: Date.now() }] };
+    peer = { ...peer, trusted: [...peer.trusted, { ...d, os: "", connected: false, addedAt: Date.now() }] };
     return d;
   },
+  peer_activity: ({ limit }: Args) => peerLog.slice(0, limit),
   peer_forget({ id }: Args) {
     peer = { ...peer, trusted: peer.trusted.filter((t) => t.id !== id) };
     return peer;

@@ -10,6 +10,7 @@
   import { ui } from "../stores/ui.svelte";
   import { TAG_COLORS } from "../tags";
   import { toasts } from "../toasts.svelte";
+  import { SHARING_URI } from "../sharing.svelte";
   import { HOME_URI, ws } from "../workspace.svelte";
   import DeviceIcon from "./DeviceIcon.svelte";
   import Icon, { type IconName } from "./Icon.svelte";
@@ -97,7 +98,7 @@
   let loose = $derived(devices.connected.filter((c) => !savedUris.has(norm(c)) && !devices.nearby.some((d) => d.services.some((s) => norm(s.uri) === norm(c)))));
 </script>
 
-{#snippet item(label: string, uri: string, icon: IconName, opts: { meter?: number | null; title?: string; menu?: (e: MouseEvent) => void; dim?: boolean; indent?: boolean } = {})}
+{#snippet item(label: string, uri: string, icon: IconName, opts: { meter?: number | null; title?: string; menu?: (e: MouseEvent) => void; dim?: boolean; indent?: boolean; count?: number; live?: boolean } = {})}
   <button
     class="item"
     class:current={current === norm(uri)}
@@ -116,6 +117,8 @@
         <span class="meter"><span style:width="{Math.round(opts.meter * 100)}%" class:full={opts.meter > 0.9}></span></span>
       {/if}
     </span>
+    {#if opts.live}<span class="tdot" title="A device is connected"></span>{/if}
+    {#if opts.count}<span class="count">{opts.count}</span>{/if}
   </button>
 {/snippet}
 
@@ -134,6 +137,14 @@
     <div class="group">
       {@render item("Home", HOME_URI, "home")}
       {@render item(ws.places.home.name, ws.places.home.uri, "user")}
+      {#if devices.peer}
+        {@const busy = devices.peer.trusted.filter((t) => t.connected)}
+        {@render item("Sharing", SHARING_URI, "share", {
+          title: devices.peer.enabled ? `Sharing ${devices.peer.shares.length} ${devices.peer.shares.length === 1 ? "folder" : "folders"}${busy.length ? ` · ${busy.map((t) => t.name).join(", ")} connected` : ""}` : "Sharing is off",
+          count: devices.peer.enabled ? devices.peer.shares.length : 0,
+          live: devices.peer.enabled && busy.length > 0,
+        })}
+      {/if}
     </div>
 
     {@render section("fav", "Favorites")}
@@ -383,6 +394,17 @@
     height: 6px;
     border-radius: 50%;
     background: var(--live);
+    flex: none;
+  }
+  .count {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+    color: var(--text-3);
+    background: var(--hover);
     flex: none;
   }
   .tagdot {

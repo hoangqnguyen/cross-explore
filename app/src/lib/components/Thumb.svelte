@@ -6,6 +6,7 @@
   import { categoryOf } from "../format";
   import { ws } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
+  import { isShared } from "../sharing.svelte";
 
   let { entry, uri, size, fit = "contain", iconScale = 0.78 }: { entry: Item; uri: string; size: number; fit?: "contain" | "cover"; iconScale?: number } = $props();
 
@@ -53,7 +54,7 @@
     />
   {/each}
   {#if !shown}
-    <span class="icon"><FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={Math.round(size * iconScale)} /></span>
+    <span class="icon"><FileIcon name={entry.name} isDir={entry.isDir} executable={entry.executable} size={Math.round(size * iconScale)} shared={entry.isDir && isShared(uri)} /></span>
   {/if}
 </div>
 

@@ -80,6 +80,7 @@ pub fn run() {
             cmd::peer::peer_set_enabled,
             cmd::peer::peer_set_shares,
             cmd::peer::peer_set_auto_trust,
+            cmd::peer::peer_activity,
             cmd::peer::peer_pair_code,
             cmd::peer::peer_pair,
             cmd::peer::peer_forget,

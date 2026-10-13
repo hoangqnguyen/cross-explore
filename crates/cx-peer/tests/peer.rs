@@ -98,8 +98,8 @@ async fn paired() -> Setup {
     std::fs::write(media.join("song.mp3"), b"la la la").unwrap();
     std::fs::write(root.join("secret.txt"), b"top secret").unwrap();
     let shares = vec![
-        Share { name: "Docs".into(), path: docs.clone(), read_only: false },
-        Share { name: "Media".into(), path: media.clone(), read_only: true },
+        Share { name: "Docs".into(), path: docs.clone(), read_only: false, devices: None },
+        Share { name: "Media".into(), path: media.clone(), read_only: true, devices: None },
     ];
     let server = node("server", shares).await;
     let client = node("client", vec![]).await;
@@ -271,6 +271,29 @@ async fn read_only_share_refuses_writes() {
     let mut out = String::new();
     r.read_to_string(&mut out).await.unwrap();
     assert_eq!(out, "la la");
+}
+
+#[tokio::test]
+async fn shares_limited_to_some_devices_are_hidden_from_others() {
+    let s = paired().await;
+    let me = s.client.svc.identity().device_id;
+    let names = |p: Arc<PeerProvider>, loc: Location| async move {
+        let mut v: Vec<String> = list_all(p.as_ref(), &loc).await.unwrap().into_iter().map(|e| e.name).collect();
+        v.sort();
+        v
+    };
+    let mut shares = s.server.svc.shares();
+    let media = shares.iter().position(|x| x.name == "Media").unwrap();
+    shares[media].devices = Some(vec!["someone-else".into()]);
+    s.server.svc.set_shares(shares.clone()).unwrap();
+    let p = s.provider().await;
+    assert_eq!(names(p.clone(), s.loc("/")).await, ["Docs"]);
+    assert!(matches!(p.stat(&s.loc("/Media/song.mp3")).await, Err(CxError::NotFound(_))));
+    // Allowing this device takes effect on the next request, no reconnect.
+    shares[media].devices = Some(vec![me]);
+    s.server.svc.set_shares(shares).unwrap();
+    assert_eq!(names(p.clone(), s.loc("/")).await, ["Docs", "Media"]);
+    assert_eq!(p.stat(&s.loc("/Media/song.mp3")).await.unwrap().size, 8);
 }
 
 // Both peers share this process: give them real threads, as two machines would have.

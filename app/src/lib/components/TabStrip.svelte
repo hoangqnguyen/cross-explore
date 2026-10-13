@@ -19,6 +19,7 @@
     if (kind === "home") return "home";
     if (kind === "search") return tab.folder.uri.startsWith("cx:tag") ? "tag" : "search";
     if (kind === "compare") return "sync";
+    if (kind === "sharing") return "share";
     if (c?.length === 1 && c[0].icon === "home") return "home";
     const last = c?.at(-1)?.icon;
     if (last === "server" || last === "share") return "server";

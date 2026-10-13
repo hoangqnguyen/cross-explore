@@ -5,7 +5,7 @@ import { comparator, insertionIndex, mergeSorted, type SortSpec } from "./sort";
 /** Something a tab shows: a folder, search results, a tag… */
 export interface Source {
   readonly uri: string;
-  readonly kind: "folder" | "search" | "home" | "compare";
+  readonly kind: "folder" | "search" | "home" | "compare" | "sharing";
   info: LocationInfo | null;
   caps: Capabilities | null;
   status: "loading" | "ready" | "error";

@@ -63,7 +63,7 @@
 </script>
 
 <footer class="status">
-  {#if folder?.kind !== "home"}
+  {#if folder?.kind !== "home" && folder?.kind !== "sharing"}
     <span title={timingText}>{count.toLocaleString()} {count === 1 ? "item" : "items"}</span>
     {#if tab?.filter}<span class="muted">filtered from {folder.items.length.toLocaleString()}</span>{/if}
     {#if folder?.kind === "search" && folder.refreshing}<span class="muted">searching…</span>{/if}

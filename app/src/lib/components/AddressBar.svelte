@@ -7,6 +7,7 @@
   import { searchUri } from "../search.svelte";
   import { ws, type Tab } from "../workspace.svelte";
   import Icon from "./Icon.svelte";
+  import { SHARING_URI } from "../sharing.svelte";
 
   let { tab, compact = false }: { tab: Tab; compact?: boolean } = $props();
 
@@ -112,7 +113,7 @@
             <button class="sep" aria-label="Subfolders" onclick={(e) => subfolders(info!.crumbs[i - 1].uri, e.currentTarget)}><Icon name="chevronRight" size={12} /></button>
           {/if}
           <button class="crumb" class:current={i === info!.crumbs.length - 1} onclick={() => tab.navigate(crumb.uri)} use:dropTarget={{ dest: () => (crumb.icon === "search" || crumb.icon === "tag" ? null : crumb.uri) }}>
-            {#if crumb.icon !== "folder"}<Icon name={crumb.icon === "share" ? "folder" : crumb.icon === "drive" ? "drive" : crumb.icon} size={14} />{/if}
+            {#if crumb.icon !== "folder"}<Icon name={crumb.uri === SHARING_URI ? "share" : crumb.icon === "share" ? "folder" : crumb.icon === "drive" ? "drive" : crumb.icon} size={14} />{/if}
             {crumb.label}
           </button>
         {/each}
@@ -127,7 +128,7 @@
     {/if}
   </div>
 
-  {#if tab.folder.kind !== "home" && tab.folder.kind !== "compare"}
+  {#if tab.folder.kind !== "home" && tab.folder.kind !== "compare" && tab.folder.kind !== "sharing"}
   <label class="search" class:active={!!tab.filter}>
     <Icon name="search" size={14} />
     <input bind:this={searchInput} bind:value={tab.filter} onkeydown={onSearchKey} placeholder="Filter {info?.name ?? ''}" spellcheck="false" aria-label="Filter" />

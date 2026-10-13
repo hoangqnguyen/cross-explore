@@ -14,6 +14,7 @@
   import SelectPatternDialog from "./SelectPatternDialog.svelte";
   import SendToDialog from "./SendToDialog.svelte";
   import SettingsDialog from "./SettingsDialog.svelte";
+  import ShareDialog from "./ShareDialog.svelte";
   import SignInDialog from "./SignInDialog.svelte";
   import TagsDialog from "./TagsDialog.svelte";
 
@@ -28,6 +29,7 @@
     multiRename: MultiRenameDialog,
     selectPattern: SelectPatternDialog,
     sendTo: SendToDialog,
+    share: ShareDialog,
     offer: OfferDialog,
     diff: DiffDialog,
     pair: PairDialog,

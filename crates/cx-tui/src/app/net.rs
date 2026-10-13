@@ -375,6 +375,7 @@ impl App {
             name,
             path,
             read_only: true,
+            devices: None,
         });
         self.peer_set_shares(shares);
     }

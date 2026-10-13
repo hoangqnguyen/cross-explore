@@ -6,7 +6,7 @@
 use crate::audit::AuditLog;
 use crate::client::{PeerClient, PeerProvider};
 use crate::connector::{PeerConnector, PeerDirectory};
-use crate::events::{EventHandler, PeerEvent};
+use crate::events::{AuditRecord, EventHandler, PeerEvent};
 use crate::identity::{default_name, Identity, IdentityInfo};
 use crate::offer::PendingOffer;
 use crate::pairing::{PairingCode, PairingCodes, CODE_TTL};
@@ -295,6 +295,19 @@ impl PeerService {
     /// Path of the append-only audit log.
     pub fn audit_log_path(&self) -> PathBuf {
         self.inner.audit.path().to_path_buf()
+    }
+
+    /// What remote devices did here lately, newest first.
+    pub fn recent_activity(&self, limit: usize) -> Vec<AuditRecord> {
+        crate::audit::recent(self.inner.audit.path(), limit)
+    }
+
+    /// Ids of the devices connected to this one right now (browsing its shares).
+    pub fn connected_devices(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.inner.incoming.lock().unwrap().values().map(|(id, _)| id.clone()).collect();
+        ids.sort();
+        ids.dedup();
+        ids
     }
 }
 

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { untrack, type Snippet } from "svelte";
-  import { appVersion, errorText, fileUriToPath, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
+  import { appVersion, errorText, peerForget, peerPairCode, peerSetAutoTrust, peerSetEnabled, peerSetShares, type PeerShare } from "../api";
   import Icon, { type IconName } from "../components/Icon.svelte";
   import Toggle from "../components/Toggle.svelte";
   import { devices } from "../stores/devices.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import { settings } from "../stores/settings.svelte";
   import { toasts } from "../toasts.svelte";
+  import { openShareDialog, shareOf, SHARING_URI } from "../sharing.svelte";
   import { ws } from "../workspace.svelte";
   import Modal from "./Modal.svelte";
   import PreviewSettings from "./PreviewSettings.svelte";
@@ -40,13 +41,14 @@
     }
   }
 
-  async function addShare() {
-    const path = ws.activeTab.folder.info?.local ? ws.activeTab.dirUri : ws.places?.home.uri;
-    if (!path?.startsWith("file://")) return;
-    const name = await dialogs.prompt("Share a folder", "Name other devices will see", decodeURIComponent(path.split("/").pop() ?? "Share"), "Share");
-    if (!name || !devices.peer) return;
-    const shares: PeerShare[] = [...devices.peer.shares, { name, path: fileUriToPath(path), readOnly: false }];
-    await peer(peerSetShares(shares));
+  function addShare() {
+    const cur = ws.activeTab.folder.info?.local ? ws.activeTab.dirUri : undefined;
+    void openShareDialog(cur?.startsWith("file://") && !shareOf(cur) ? cur : undefined);
+  }
+
+  function openSharingPage() {
+    dialogs.close(null);
+    ws.activeTab?.navigate(SHARING_URI);
   }
 
   async function updateShare(i: number, patch: Partial<PeerShare> | null) {
@@ -209,7 +211,10 @@
             {:else}
               <p class="empty">No folders shared yet.</p>
             {/each}
-            <button type="button" class="add" onclick={addShare}><Icon name="plus" size={14} /> Share current folder…</button>
+            <div class="pair-row">
+              <button type="button" class="add" onclick={addShare}><Icon name="plus" size={14} /> Share a folder…</button>
+              <button type="button" class="add" onclick={openSharingPage}><Icon name="share" size={14} /> Open the Sharing page</button>
+            </div>
           {/snippet}
 
           {@render group("Trusted devices", trustedBody)}

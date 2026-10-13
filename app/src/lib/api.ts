@@ -450,6 +450,29 @@ export interface PeerShare {
   name: string;
   path: string;
   readOnly: boolean;
+  /** Device ids allowed to use the share; null/absent = all my devices. */
+  devices?: string[] | null;
+}
+
+export interface TrustedPeer {
+  id: string;
+  name: string;
+  os: string;
+  addedAt: number;
+  /** Browsing this device's shares right now. */
+  connected: boolean;
+}
+
+/** One thing another device did here (from the audit log). */
+export interface PeerAccess {
+  time: number;
+  deviceId: string;
+  name: string;
+  addr: string;
+  op: string;
+  path: string | null;
+  ok: boolean;
+  error: string | null;
 }
 
 export interface PeerStatus {
@@ -458,7 +481,7 @@ export interface PeerStatus {
   name: string;
   port: number;
   shares: PeerShare[];
-  trusted: { id: string; name: string; addedAt: number }[];
+  trusted: TrustedPeer[];
   tailnetAutoTrust: boolean;
 }
 
@@ -472,6 +495,7 @@ export interface IncomingOffer {
 export const peerStatus = () => invoke<PeerStatus>("peer_status");
 export const peerSetEnabled = (enabled: boolean) => invoke<PeerStatus>("peer_set_enabled", { enabled });
 export const peerSetShares = (shares: PeerShare[]) => invoke<PeerStatus>("peer_set_shares", { shares });
+export const peerActivity = (limit = 100) => invoke<PeerAccess[]>("peer_activity", { limit });
 export const peerSetAutoTrust = (on: boolean) => invoke<PeerStatus>("peer_set_auto_trust", { on });
 export const peerPairCode = () => invoke<string>("peer_pair_code");
 export const peerPair = (address: string, code: string) => invoke<{ id: string; name: string }>("peer_pair", { address, code });
@@ -503,6 +527,7 @@ export type AppEvent =
   | { type: "devices"; devices: Device[] }
   | { type: "offer"; offer: IncomingOffer }
   | { type: "peer"; status: PeerStatus }
+  | { type: "peerAccess"; record: PeerAccess }
   | { type: "nav"; dir: "back" | "forward" }
   | { type: "command"; id: string }
   | { type: "task"; id: number; label: string; progress: number; done: boolean; error: string | null };

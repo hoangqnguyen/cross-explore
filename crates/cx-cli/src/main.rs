@@ -80,7 +80,7 @@ fn parse_share(spec: &str) -> Result<Share> {
         Some(p) => (p, true),
         None => (path.strip_suffix(":rw").unwrap_or(path), false),
     };
-    Ok(Share { name: name.trim().to_string(), path: PathBuf::from(path), read_only })
+    Ok(Share { name: name.trim().to_string(), path: PathBuf::from(path), read_only, devices: None })
 }
 
 fn state_dir(cli: &Cli) -> PathBuf {
@@ -262,8 +262,8 @@ mod tests {
 
     #[test]
     fn parses_share_specs() {
-        assert_eq!(parse_share("Media=/srv/media:ro").unwrap(), Share { name: "Media".into(), path: "/srv/media".into(), read_only: true });
-        assert_eq!(parse_share("Docs=/home/me/docs").unwrap(), Share { name: "Docs".into(), path: "/home/me/docs".into(), read_only: false });
+        assert_eq!(parse_share("Media=/srv/media:ro").unwrap(), Share { name: "Media".into(), path: "/srv/media".into(), read_only: true, devices: None });
+        assert_eq!(parse_share("Docs=/home/me/docs").unwrap(), Share { name: "Docs".into(), path: "/home/me/docs".into(), read_only: false, devices: None });
         assert_eq!(parse_share(r"W=C:\data:rw").unwrap().path, PathBuf::from(r"C:\data"));
         assert!(parse_share("nope").is_err());
     }

@@ -28,6 +28,7 @@ import { transfers } from "./stores/transfers.svelte";
 import { ui } from "./stores/ui.svelte";
 import { openings } from "./opening.svelte";
 import { toasts } from "./toasts.svelte";
+import { activity, SHARING_URI } from "./sharing.svelte";
 
 export const HOME_URI = "cx:home";
 
@@ -39,6 +40,7 @@ function makeSource(uri: string, sort: SortSpec): Source {
   if (uri.startsWith("cx:search")) return new SearchResults(uri, sort);
   if (uri.startsWith("cx:tag")) return new TagResults(uri, sort);
   if (uri.startsWith("cx:compare")) return new StaticSource(uri, "Compare folders", "search", sort, "compare");
+  if (uri === SHARING_URI) return new StaticSource(uri, "Sharing", "share", sort, "sharing");
   return new Folder(uri, sort);
 }
 
@@ -585,6 +587,7 @@ export class Workspace {
           devices.addOffer(e.offer);
           void dialogs.ask("offer", { offer: e.offer });
         } else if (e.type === "peer") devices.peer = e.status;
+        else if (e.type === "peerAccess") activity.add(e.record);
         else if (e.type === "nav") {
           // Mouse side buttons / swipes, caught natively (macOS).
           if (e.dir === "back") this.activeTab?.back();
@@ -594,7 +597,7 @@ export class Workspace {
     } catch {
       /* events unavailable */
     }
-    void devices.init();
+    void devices.init().then(() => activity.load());
 
     const start = inTauri ? null : new URLSearchParams(location.search).get("path");
     const session = settings.data.session;

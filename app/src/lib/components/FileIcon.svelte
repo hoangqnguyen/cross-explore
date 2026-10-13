@@ -5,7 +5,9 @@
   import { iconSpec, type Mark } from "../fileTypes";
   import { extOf } from "../format";
 
-  let { name, isDir, size = 18, executable = false }: { name: string; isDir: boolean; size?: number; executable?: boolean } = $props();
+  import Icon from "./Icon.svelte";
+
+  let { name, isDir, size = 18, executable = false, shared = false }: { name: string; isDir: boolean; size?: number; executable?: boolean; shared?: boolean } = $props();
 
   let spec = $derived(isDir ? (extOf(name) === "app" ? iconSpec(name) : null) : iconSpec(name, executable));
   // The extension under the glyph, once there is room to read it.
@@ -32,6 +34,7 @@
   {/each}
 {/snippet}
 
+{#snippet glyph()}
 {#if !spec}
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
     <path d="M2 6.2C2 5 3 4 4.2 4h4.6c.6 0 1.1.2 1.5.6L12 6.3h7.8C21 6.3 22 7.3 22 8.5V9H2z" fill="#e8a520" />
@@ -65,8 +68,37 @@
     {/if}
   </svg>
 {/if}
+{/snippet}
+
+{#if shared}
+  <!-- Shared with my devices: a small badge on the folder's corner. -->
+  <span class="shared" style:width="{size}px" style:height="{size}px" title="Shared with your devices">
+    {@render glyph()}
+    <span class="sbadge" style:--b="{Math.max(10, Math.round(size * 0.46))}px"><Icon name="share" size={Math.max(7, Math.round(size * 0.3))} stroke={2.2} /></span>
+  </span>
+{:else}
+  {@render glyph()}
+{/if}
 
 <style>
+  .shared {
+    position: relative;
+    display: block;
+    flex: none;
+  }
+  .sbadge {
+    position: absolute;
+    right: calc(var(--b) * -0.25);
+    bottom: calc(var(--b) * -0.2);
+    display: grid;
+    place-items: center;
+    width: var(--b);
+    height: var(--b);
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-text);
+    box-shadow: 0 0 0 1.5px var(--layer, #fff);
+  }
   svg {
     flex: none;
     display: block;

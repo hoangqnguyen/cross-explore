@@ -7,6 +7,7 @@
   import GalleryView from "./GalleryView.svelte";
   import HomeView from "./HomeView.svelte";
   import IconsView from "./IconsView.svelte";
+  import SharingView from "./SharingView.svelte";
 
   let { pane }: { pane: Pane } = $props();
   let tab = $derived(pane.active);
@@ -23,6 +24,8 @@
         <HomeView {tab} />
       {:else if tab.folder.kind === "compare"}
         <CompareView {tab} />
+      {:else if tab.folder.kind === "sharing"}
+        <SharingView {tab} />
       {:else if tab.view === "icons"}
         <IconsView {tab} />
       {:else if tab.view === "columns" && tab.folder.kind === "folder"}

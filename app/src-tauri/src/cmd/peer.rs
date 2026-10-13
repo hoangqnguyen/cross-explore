@@ -5,7 +5,7 @@ use crate::jobs::UiJob;
 use crate::state::App;
 use cx_core::{CxError, Location, Result};
 use cx_discovery::{Advertisement, Device, Discovery, DiscoveryConfig, DiscoveryEvent};
-use cx_peer::{PeerConfig, PeerEvent, PeerService, Share};
+use cx_peer::{AuditRecord, PeerConfig, PeerEvent, PeerService, Share};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -19,7 +19,10 @@ pub const PEER_PORT: u16 = 47470;
 pub struct TrustedView {
     id: String,
     name: String,
+    os: String,
     added_at: i64,
+    /// Connected to this device right now (browsing its shares).
+    connected: bool,
 }
 
 #[derive(Serialize)]
@@ -41,6 +44,7 @@ async fn status(app: &App) -> Result<PeerStatus> {
         .ok_or_else(|| CxError::Unsupported("peer mode".into()))?;
     let id = svc.identity();
     let prefs = app.peer_prefs.lock().unwrap().clone();
+    let connected = svc.connected_devices();
     Ok(PeerStatus {
         enabled: prefs.enabled,
         device_id: id.device_id,
@@ -51,8 +55,10 @@ async fn status(app: &App) -> Result<PeerStatus> {
             .trusted_devices()
             .into_iter()
             .map(|t| TrustedView {
+                connected: connected.contains(&t.device_id),
                 id: t.device_id,
                 name: t.name,
+                os: t.os,
                 added_at: t.added_at,
             })
             .collect(),
@@ -281,7 +287,10 @@ fn on_peer_event(app: &Arc<App>, e: PeerEvent) {
                 }
             });
         }
-        PeerEvent::RemoteAccess(_) => {}
+        PeerEvent::RemoteAccess(record) => {
+            app.events
+                .emit("peerAccess", serde_json::json!({ "record": record }));
+        }
     }
 }
 
@@ -307,6 +316,18 @@ pub async fn peer_set_shares(shares: Vec<Share>, app: AppState<'_>) -> Result<Pe
         .ok_or_else(|| CxError::Unsupported("peer mode".into()))?
         .set_shares(shares)?;
     status(&app).await
+}
+
+/// What other devices did with this device's shares lately, newest first.
+#[tauri::command]
+pub async fn peer_activity(limit: usize, app: AppState<'_>) -> Result<Vec<AuditRecord>> {
+    Ok(app
+        .peer
+        .read()
+        .await
+        .as_ref()
+        .map(|svc| svc.recent_activity(limit.min(500)))
+        .unwrap_or_default())
 }
 
 #[tauri::command]
