@@ -83,6 +83,34 @@ pub fn feed_directory(svc: &PeerService, devices: &[Device]) {
     }
 }
 
+/// Give devices that are also paired Cross Explore peers a `peer://` service.
+/// mDNS doesn't cross Tailscale and the port probe is TCP-only while peers
+/// speak QUIC, so a paired device seen only as a tailnet node would otherwise
+/// show up with just SMB/SFTP (or nothing) and its share list stay out of reach.
+/// A device matches when an address it was last reached at is one of its own.
+pub fn add_paired_peers(devices: &mut [Device], trusted: &[cx_peer::TrustedDevice]) {
+    for d in devices.iter_mut() {
+        if d.services.iter().any(|s| s.scheme == cx_core::Scheme::Peer) {
+            continue;
+        }
+        let paired = trusted.iter().find(|t| {
+            t.last_addrs
+                .iter()
+                .filter_map(|a| a.parse::<SocketAddr>().ok())
+                .any(|a| d.addresses.contains(&a.ip().to_canonical()))
+        });
+        if let Some(t) = paired {
+            d.services.push(cx_discovery::Service {
+                scheme: cx_core::Scheme::Peer,
+                port: cx_core::Scheme::Peer.default_port(),
+                uri: format!("peer://{}/", t.device_id),
+                label: "Cross Explore".into(),
+                source: cx_discovery::Source::Probe,
+            });
+        }
+    }
+}
+
 /// "123 456" for display; codes are typed with or without the space.
 pub fn format_pair_code(code: &str) -> String {
     let i = 3.min(code.len());
@@ -224,11 +252,18 @@ impl Engine {
 
     /// Nearby devices found so far (empty until discovery runs).
     pub fn devices(&self) -> Vec<Device> {
-        self.discovery
+        let mut devices = self
+            .discovery
             .lock()
             .ok()
             .and_then(|d| d.as_ref().map(|d| d.devices()))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Ok(guard) = self.peer.try_read() {
+            if let Some(svc) = guard.as_ref() {
+                add_paired_peers(&mut devices, &svc.trusted_devices());
+            }
+        }
+        devices
     }
 
     /// Scan again now.
@@ -442,5 +477,36 @@ mod tests {
         assert_eq!(peer_address("host:5000"), "host:5000");
         assert_eq!(peer_address("fe80::1"), "fe80::1:47470");
         assert_eq!(format_pair_code("123456"), "123 456");
+    }
+
+    fn device(id: &str, ip: &str) -> Device {
+        Device {
+            id: id.into(),
+            name: id.into(),
+            kind: cx_discovery::DeviceKind::Pc,
+            model: None,
+            addresses: vec![ip.parse().unwrap()],
+            hostname: None,
+            sources: vec![cx_discovery::Source::Tailscale],
+            tailnet: None,
+            services: vec![],
+            shares: vec![],
+            last_seen: 0,
+        }
+    }
+
+    #[test]
+    fn paired_devices_get_a_peer_service() {
+        let mut paired = cx_peer::TrustedDevice::new(&[7u8; 32], "hpc".into(), "windows".into());
+        paired.last_addrs = vec!["[::ffff:100.85.18.101]:47470".into()];
+        let mut devices = vec![device("ts:hpc", "100.85.18.101"), device("ts:other", "100.1.1.1")];
+        add_paired_peers(&mut devices, &[paired.clone()]);
+        let uri = format!("peer://{}/", paired.device_id);
+        assert_eq!(devices[0].services.len(), 1);
+        assert_eq!(devices[0].services[0].uri, uri);
+        assert!(devices[1].services.is_empty());
+        // Idempotent, and an advertised peer service is left alone.
+        add_paired_peers(&mut devices, &[paired]);
+        assert_eq!(devices[0].services.len(), 1);
     }
 }

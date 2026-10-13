@@ -146,16 +146,54 @@ pub fn start_discovery(app: Arc<App>) {
                 }
             }
         }
-        let devices = app
-            .discovery
-            .lock()
-            .ok()
-            .and_then(|d| d.as_ref().map(|d| d.devices()))
-            .unwrap_or_default();
+        let devices = all_devices(app);
         app.events
             .emit("devices", serde_json::json!({ "devices": devices }));
     });
     *app.discovery.lock().unwrap() = Some(d);
+}
+
+/// Discovered devices, with a `peer://` service added to those that are also
+/// paired Cross Explore devices. mDNS doesn't cross Tailscale and the port
+/// probe is TCP-only while peers speak QUIC, so a paired device seen only as a
+/// tailnet node would otherwise show just SMB/SFTP (or nothing) in the sidebar.
+/// A device matches when an address it was last reached at is one of its own.
+fn all_devices(app: &App) -> Vec<Device> {
+    let mut devices = app
+        .discovery
+        .lock()
+        .ok()
+        .and_then(|d| d.as_ref().map(|d| d.devices()))
+        .unwrap_or_default();
+    if let Ok(guard) = app.peer.try_read() {
+        if let Some(svc) = guard.as_ref() {
+            add_paired_peers(&mut devices, &svc.trusted_devices());
+        }
+    }
+    devices
+}
+
+fn add_paired_peers(devices: &mut [Device], trusted: &[cx_peer::TrustedDevice]) {
+    for d in devices.iter_mut() {
+        if d.services.iter().any(|s| s.scheme == cx_core::Scheme::Peer) {
+            continue;
+        }
+        let paired = trusted.iter().find(|t| {
+            t.last_addrs
+                .iter()
+                .filter_map(|a| a.parse::<SocketAddr>().ok())
+                .any(|a| d.addresses.contains(&a.ip().to_canonical()))
+        });
+        if let Some(t) = paired {
+            d.services.push(cx_discovery::Service {
+                scheme: cx_core::Scheme::Peer,
+                port: cx_core::Scheme::Peer.default_port(),
+                uri: format!("peer://{}/", t.device_id),
+                label: "Cross Explore".into(),
+                source: cx_discovery::Source::Probe,
+            });
+        }
+    }
 }
 
 fn offer_jobs() -> &'static Mutex<HashMap<String, u64>> {
@@ -390,12 +428,7 @@ pub async fn peer_respond(
 
 #[tauri::command]
 pub fn discovery_devices(app: AppState<'_>) -> Vec<Device> {
-    app.discovery
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|d| d.devices())
-        .unwrap_or_default()
+    all_devices(&app)
 }
 
 #[tauri::command]
