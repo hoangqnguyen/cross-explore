@@ -20,10 +20,13 @@ export function formatSize(bytes: number): string {
 const time = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long" });
 const full = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" });
+const weekdayShort = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+const numeric = new Intl.DateTimeFormat(undefined, { dateStyle: "short" });
 const precise = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "medium" });
 
-/** Friendly relative dates like Finder: "Just now", "Today 14:02", "Yesterday 09:10". */
-export function formatDate(ms: number | null, now = Date.now()): string {
+/** Friendly relative dates like Finder: "Just now", "Today 14:02", "Yesterday 09:10".
+ * `compact` fits a narrow column: "Fri 8:51 AM", "10/28/26 8:51 AM". */
+export function formatDate(ms: number | null, now = Date.now(), compact = false): string {
   if (ms == null) return "";
   const d = new Date(ms);
   const diff = now - ms;
@@ -37,8 +40,8 @@ export function formatDate(ms: number | null, now = Date.now()): string {
   const day = 86_400_000;
   if (ms >= today.getTime()) return `Today ${time.format(d)}`;
   if (ms >= today.getTime() - day) return `Yesterday ${time.format(d)}`;
-  if (ms >= today.getTime() - 6 * day) return `${weekday.format(d)} ${time.format(d)}`;
-  return `${full.format(d)} ${time.format(d)}`;
+  if (ms >= today.getTime() - 6 * day) return `${(compact ? weekdayShort : weekday).format(d)} ${time.format(d)}`;
+  return `${(compact ? numeric : full).format(d)} ${time.format(d)}`;
 }
 
 export const formatDateFull = (ms: number | null) => (ms == null ? "" : precise.format(new Date(ms)));

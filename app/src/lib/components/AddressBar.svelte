@@ -43,14 +43,79 @@
   function editPath() {
     draft = info && tab.folder.kind === "folder" ? info.display : "";
     editing = true;
+    suggestions = [];
+    picked = -1;
+    listed = null;
     queueMicrotask(() => pathInput?.select());
   }
 
   function commit() {
+    const target = (picked >= 0 && suggestions[picked] ? suggestions[picked].path : draft).trim();
     editing = false;
-    const target = draft.trim();
+    suggestions = [];
     if (target && target !== info?.display) tab.navigate(target);
     focusList();
+  }
+
+  // ---- Path completion: folders in the typed parent that start with the last segment ----
+  let suggestions = $state<{ name: string; path: string }[]>([]);
+  let picked = $state(-1);
+  /** Last parent listed, so typing within one folder doesn't list it again. */
+  let listed: { parent: string; dirs: { name: string; hidden: boolean }[] } | null = null;
+  let completeTimer = 0;
+  let completeSeq = 0;
+
+  function splitDraft(text: string): { parent: string; prefix: string; sep: string } | null {
+    const i = Math.max(text.lastIndexOf("/"), text.lastIndexOf("\\"));
+    if (i < 0) return null;
+    const parent = text.slice(0, i + 1);
+    // "smb://" alone (no host yet) has nothing to list.
+    if (/^\w+:\/\/?$/.test(parent)) return null;
+    return { parent, prefix: text.slice(i + 1), sep: text[i] };
+  }
+
+  function updateSuggestions() {
+    clearTimeout(completeTimer);
+    picked = -1;
+    const split = splitDraft(draft);
+    if (!split) {
+      suggestions = [];
+      return;
+    }
+    const seq = ++completeSeq;
+    const show = (dirs: { name: string; hidden: boolean }[]) => {
+      if (seq !== completeSeq || !editing) return;
+      const p = split.prefix.toLowerCase();
+      // Hidden folders only once you type the dot.
+      const hidden = p.startsWith(".");
+      suggestions = dirs
+        .filter((d) => (hidden || !d.hidden) && d.name.toLowerCase().startsWith(p) && d.name !== split.prefix)
+        .slice(0, 12)
+        .map((d) => ({ name: d.name, path: split.parent + d.name + split.sep }));
+    };
+    if (listed?.parent === split.parent) return show(listed.dirs);
+    completeTimer = window.setTimeout(async () => {
+      const dirs: { name: string; hidden: boolean }[] = [];
+      try {
+        await listDir(split.parent, (ev) => {
+          if (ev.type === "batch") for (const x of ev.entries) if (x.isDir) dirs.push({ name: x.name, hidden: x.hidden || x.name.startsWith(".") });
+        });
+      } catch {
+        if (seq === completeSeq) suggestions = [];
+        return;
+      }
+      dirs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+      listed = { parent: split.parent, dirs };
+      show(dirs);
+    }, 60);
+  }
+
+  function accept(i: number) {
+    const s = suggestions[i];
+    if (!s) return;
+    draft = s.path;
+    updateSuggestions();
+    pathInput?.focus();
   }
 
   function focusList() {
@@ -58,12 +123,26 @@
   }
 
   function onPathKey(e: KeyboardEvent) {
+    e.stopPropagation();
     if (e.key === "Enter") commit();
     else if (e.key === "Escape") {
+      if (suggestions.length) {
+        suggestions = [];
+        picked = -1;
+        e.preventDefault();
+        return;
+      }
       editing = false;
       focusList();
+    } else if (e.key === "Tab" && suggestions.length && !e.shiftKey) {
+      // Tab completes, like a shell.
+      e.preventDefault();
+      accept(picked >= 0 ? picked : 0);
+    } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && suggestions.length) {
+      e.preventDefault();
+      const n = suggestions.length;
+      picked = e.key === "ArrowDown" ? (picked + 1) % n : (picked <= 0 ? n : picked) - 1;
     }
-    e.stopPropagation();
   }
 
   function onSearchKey(e: KeyboardEvent) {
@@ -104,7 +183,18 @@
 
   <div class="address" class:editing>
     {#if editing}
-      <input bind:this={pathInput} bind:value={draft} onkeydown={onPathKey} onblur={() => (editing = false)} spellcheck="false" aria-label="Path" placeholder="Path, ~/folder, smb://server/share, sftp://user@host…" />
+      <input bind:this={pathInput} bind:value={draft} oninput={updateSuggestions} onkeydown={onPathKey} onblur={() => ((editing = false), (suggestions = []))} spellcheck="false" autocomplete="off" aria-label="Path" aria-autocomplete="list" aria-expanded={suggestions.length > 0} placeholder="Path, ~/folder, smb://server/share, sftp://user@host…" />
+      {#if suggestions.length}
+        <div class="completions" role="listbox" aria-label="Folders">
+          {#each suggestions as s, i (s.path)}
+            <!-- pointerdown, not click: the input's blur would close the list first -->
+            <button class="completion" class:picked={i === picked} role="option" aria-selected={i === picked} tabindex="-1" onpointerdown={(e) => (e.preventDefault(), accept(i))} onpointermove={() => (picked = i)}>
+              <Icon name="folder" size={14} /><span>{s.name}</span>
+            </button>
+          {/each}
+          <div class="hint">Tab to complete · Enter to go</div>
+        </div>
+      {/if}
     {:else}
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       <div class="crumbs" bind:this={crumbsEl} onclick={(e) => e.target === e.currentTarget && editPath()} title="Click to type a path ({shortcut('nav.editPath')})">
@@ -192,7 +282,51 @@
     height: 28px;
   }
   .address.editing {
+    position: relative;
     box-shadow: inset 0 0 0 1px var(--stroke), inset 0 -2px 0 var(--accent);
+  }
+  .completions {
+    position: absolute;
+    z-index: 60;
+    top: calc(100% + 4px);
+    left: 0;
+    width: min(420px, 100%);
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 4px;
+    border-radius: 8px;
+    background: var(--flyout);
+    backdrop-filter: blur(40px) saturate(1.5);
+    -webkit-backdrop-filter: blur(40px) saturate(1.5);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--stroke-strong);
+  }
+  .completion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 4px;
+    text-align: left;
+    color: var(--text);
+  }
+  .completion :global(svg) {
+    color: var(--text-2);
+    flex: none;
+  }
+  .completion span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .completion.picked {
+    background: var(--sel);
+  }
+  .completions .hint {
+    padding: 4px 8px 2px;
+    font-size: 11px;
+    color: var(--text-3);
   }
   .address input,
   .search input {

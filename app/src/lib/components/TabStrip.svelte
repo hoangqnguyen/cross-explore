@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import { shortcut } from "../commands.svelte";
   import { dropTarget } from "../listing";
+  import { menu } from "../menu.svelte";
   import { ws, type Pane } from "../workspace.svelte";
   import FileIcon from "./FileIcon.svelte";
   import Icon, { type IconName } from "./Icon.svelte";
@@ -26,6 +27,27 @@
     if (last === "archive") return "archive";
     return null;
   }
+
+  function tabMenu(e: MouseEvent, tab: Pane["tabs"][number]) {
+    e.preventDefault();
+    const i = pane.tabs.indexOf(tab);
+    const many = pane.tabs.length > 1;
+    menu.show(
+      [
+        { label: "New tab", icon: "plus", shortcut: shortcut("tab.new"), action: () => (ws.focusPane(pane.id), pane.add("cx:home")) },
+        { label: "Duplicate tab", icon: "copy", action: () => (ws.focusPane(pane.id), pane.add(tab.folder.uri, true, tab.view, i + 1)) },
+        ...(ws.dual ? [{ label: "Open in other pane", icon: "columns" as const, action: () => { const other = ws.panes.find((p) => p.id !== pane.id)!; ws.focusPane(other.id); other.add(tab.folder.uri, true, tab.view); } }] : []),
+        { separator: true },
+        { label: "Close tab", shortcut: shortcut("tab.close"), action: () => pane.close(tab.id) },
+        { label: "Close other tabs", disabled: !many, action: () => pane.closeOthers(tab.id) },
+        { label: "Close tabs to the right", disabled: i === pane.tabs.length - 1, action: () => pane.closeOthers(tab.id, true) },
+        { separator: true },
+        { label: "Reopen closed tab", shortcut: shortcut("tab.reopen"), disabled: !pane.closed.length, action: () => (ws.focusPane(pane.id), pane.reopenClosed()) },
+      ],
+      e.clientX,
+      e.clientY,
+    );
+  }
 </script>
 
 <div class="tabs" class:compact role="tablist" data-tauri-drag-region>
@@ -48,6 +70,7 @@
         }
       }}
       onauxclick={(e) => e.button === 1 && pane.close(tab.id)}
+      oncontextmenu={(e) => tabMenu(e, tab)}
       ondragstart={(e) => {
         dragId = tab.id;
         e.dataTransfer!.setData("application/x-cx-tab", String(tab.id));

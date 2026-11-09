@@ -1,7 +1,7 @@
 <script lang="ts">
   // Side-by-side "which one do you keep?" card for copy/move conflicts.
-  import type { Resolution } from "../api";
-  import { formatDateFull, formatSize } from "../format";
+  import { parentUri, uriName, type Resolution } from "../api";
+  import { formatDate, formatDateFull, formatSize } from "../format";
   import { transfers } from "../stores/transfers.svelte";
   import Thumb from "./Thumb.svelte";
 
@@ -16,26 +16,37 @@
 
   let newer = $derived(c ? ((c.source.modified ?? 0) > (c.dest.modified ?? 0) ? "source" : (c.dest.modified ?? 0) > (c.source.modified ?? 0) ? "dest" : null) : null);
   let bigger = $derived(c ? (c.source.size > c.dest.size ? "source" : c.dest.size > c.source.size ? "dest" : null) : null);
+  /** Same size and the same modified time (to the second): almost surely the same file. */
+  let same = $derived(!!c && !c.dest.isDir && c.source.size === c.dest.size && Math.floor((c.source.modified ?? 0) / 1000) === Math.floor((c.dest.modified ?? 0) / 1000));
+  const folderOf = (uri: string) => uriName(parentUri(uri)) || uri;
+
+  function onkeydown(e: KeyboardEvent) {
+    if (!job || e.defaultPrevented) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      transfers.cancel(job.id);
+    }
+  }
 </script>
+
+<svelte:window {onkeydown} />
 
 {#if job && c}
   <div class="backdrop"></div>
   <div class="dialog" role="alertdialog" aria-label="File conflict">
     <h2>“{c.dest.name}” already exists</h2>
-    <p class="sub">{c.dest.isDir ? "Folders are merged: files inside are compared one by one." : "Choose which file to keep."}</p>
+    <p class="sub">{c.dest.isDir ? "Folders are merged: files inside are compared one by one." : same ? "Both have the same size and date, so they're most likely the same file." : "Choose which file to keep."}</p>
     <div class="cards">
-      <button class="card" onclick={() => pick("replace")}>
-        <span class="tag">Keep the new one</span>
-        <Thumb entry={c.source} uri={c.sourceUri} size={72} />
-        <span class="meta">{c.source.isDir ? "Folder" : formatSize(c.source.size)}{bigger === "source" ? " · larger" : ""}</span>
-        <span class="meta">{formatDateFull(c.source.modified)}{newer === "source" ? " · newer" : ""}</span>
-      </button>
-      <button class="card" onclick={() => pick("skip")}>
-        <span class="tag">Keep the existing one</span>
-        <Thumb entry={c.dest} uri={c.destUri} size={72} />
-        <span class="meta">{c.dest.isDir ? "Folder" : formatSize(c.dest.size)}{bigger === "dest" ? " · larger" : ""}</span>
-        <span class="meta">{formatDateFull(c.dest.modified)}{newer === "dest" ? " · newer" : ""}</span>
-      </button>
+      {#each [{ side: "source", e: c.source, uri: c.sourceUri, label: "Keep the new one", where: `from ${folderOf(c.sourceUri)}`, r: "replace" }, { side: "dest", e: c.dest, uri: c.destUri, label: "Keep the existing one", where: `in ${folderOf(c.destUri)}`, r: "skip" }] as k (k.side)}
+        <button class="card" onclick={() => pick(k.r as Resolution)}>
+          <span class="tag">{k.label}</span>
+          <Thumb entry={k.e} uri={k.uri} size={72} />
+          <span class="meta">{k.e.isDir ? "Folder" : formatSize(k.e.size)}{#if bigger === k.side}<em>Larger</em>{/if}</span>
+          <span class="meta" title={formatDateFull(k.e.modified)}>{formatDate(k.e.modified)}{#if newer === k.side}<em>Newer</em>{/if}</span>
+          <span class="meta where" title={k.uri}>{k.where}</span>
+        </button>
+      {/each}
     </div>
     <div class="row">
       <label><input type="checkbox" bind:checked={all} /> Do this for all conflicts</label>
@@ -99,8 +110,28 @@
     margin-bottom: 4px;
   }
   .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 12px;
     color: var(--text-2);
+  }
+  .meta em {
+    font-style: normal;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .meta.where {
+    max-width: 100%;
+    color: var(--text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
   }
   .row {
     display: flex;

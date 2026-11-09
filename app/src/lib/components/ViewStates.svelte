@@ -2,6 +2,7 @@
   // Loading skeleton, errors (with sign-in / trust actions) and empty states,
   // shared by all views.
   import { errorText, isCloudUri, trustHostKey } from "../api";
+  import { searchUri } from "../search.svelte";
   import { dialogs } from "../stores/dialogs.svelte";
   import { toasts } from "../toasts.svelte";
   import type { Tab } from "../workspace.svelte";
@@ -82,7 +83,12 @@
     {#if tab.filter}
       <Icon name="search" size={36} stroke={1} />
       <p>No items match “{tab.filter}”</p>
-      <div class="actions"><button onclick={() => (tab.filter = "")}>Clear filter</button></div>
+      <div class="actions">
+        <button onclick={() => (tab.filter = "")}>Clear filter</button>
+        {#if folder.kind === "folder"}
+          <button onclick={() => { const q = tab.filter; tab.filter = ""; tab.navigate(searchUri(tab.dirUri, q)); }}>Search subfolders</button>
+        {/if}
+      </div>
     {:else if folder.kind === "search"}
       <Icon name="search" size={36} stroke={1} />
       <p>No results</p>

@@ -137,6 +137,50 @@
     return s ? (s.done ? formatSize(s.bytes) : `${formatSize(s.bytes)}…`) : "--";
   }
 
+  // Matches the 720px container query below, where the date column shrinks.
+  let viewW = $state(1000);
+  let narrow = $derived(viewW <= 720);
+
+  // Drag a header divider to resize the column to its right; double-click resets it.
+  type FixedCol = keyof typeof settings.data.detailsCols;
+  const DEFAULT_W: Record<FixedCol, number> = { modified: 190, type: 150, size: 100 };
+  let resizing = $state(false);
+  let cols = $derived.by(() => {
+    const w = settings.data.detailsCols;
+    return `minmax(180px, 1fr) ${w.modified}px ${w.type}px ${w.size}px`;
+  });
+
+  function startColResize(e: PointerEvent, key: FixedCol) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const grip = e.currentTarget as HTMLElement;
+    grip.setPointerCapture(e.pointerId);
+    const x0 = e.clientX;
+    const w0 = settings.data.detailsCols[key];
+    resizing = true;
+    const move = (ev: PointerEvent) => {
+      // The divider is on the column's left edge: dragging left widens it.
+      const w = Math.round(Math.min(480, Math.max(60, w0 + (x0 - ev.clientX))));
+      if (w !== settings.data.detailsCols[key]) settings.data.detailsCols = { ...settings.data.detailsCols, [key]: w };
+    };
+    const up = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+      // Let the click that ends the drag pass without sorting.
+      setTimeout(() => (resizing = false));
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
+  }
+
+  function resetCol(e: MouseEvent, key: FixedCol) {
+    e.stopPropagation();
+    settings.data.detailsCols = { ...settings.data.detailsCols, [key]: DEFAULT_W[key] };
+  }
+
   let columns = $derived<{ key: SortKey | "where"; label: string }[]>([
     { key: "name", label: "Name" },
     { key: "modified", label: "Date modified" },
@@ -145,14 +189,19 @@
   ]);
 </script>
 
-<div class="view">
+<div class="view" bind:clientWidth={viewW} style:--cols={cols}>
   <div class="header" role="row">
     {#each columns as col (col.key)}
       {@const sorted = settings.data.sort.key === col.key}
-      <button class="col {col.key}" class:sorted onclick={() => col.key !== "where" && ws.sortBy(col.key)} role="columnheader" aria-sort={sorted ? (settings.data.sort.desc ? "descending" : "ascending") : "none"}>
+      <button class="col {col.key}" class:sorted onclick={() => !resizing && col.key !== "where" && ws.sortBy(col.key)} role="columnheader" aria-sort={sorted ? (settings.data.sort.desc ? "descending" : "ascending") : "none"}>
         {col.label}
         {#if sorted}
           <span class="arrow" class:desc={settings.data.sort.desc}><Icon name="chevronDown" size={11} stroke={1.8} /></span>
+        {/if}
+        {#if col.key !== "name"}
+          {@const key = (col.key === "where" ? "type" : col.key) as FixedCol}
+          <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+          <span class="grip" title="Drag to resize · double-click to reset" onpointerdown={(e) => startColResize(e, key)} onclick={(e) => e.stopPropagation()} ondblclick={(e) => resetCol(e, key)}></span>
         {/if}
       </button>
     {/each}
@@ -241,7 +290,7 @@
             {#if entry.snippet}<span class="snippet">{entry.line ? `${entry.line}: ` : ""}{entry.snippet}</span>{/if}
           {/if}
         </span>
-        <span class="cell modified" title={formatDateFull(entry.modified)}>{formatDate(entry.modified, now)}</span>
+        <span class="cell modified" title={formatDateFull(entry.modified)}>{formatDate(entry.modified, now, narrow)}</span>
         {#if isSearch}
           <span class="cell type" title={entry.relPath}>{entry.relPath?.includes("/") ? entry.relPath.slice(0, entry.relPath.lastIndexOf("/")) : "—"}</span>
         {:else}
@@ -303,6 +352,20 @@
   }
   .col.size {
     justify-content: flex-end;
+  }
+  /* Sits over the divider on the column's left edge. */
+  .grip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 7px;
+    cursor: col-resize;
+    z-index: 1;
+  }
+  .grip:hover,
+  .grip:active {
+    background: linear-gradient(to right, var(--accent) 0 2px, transparent 2px);
   }
   .arrow {
     display: grid;

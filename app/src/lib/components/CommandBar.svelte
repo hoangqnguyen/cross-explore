@@ -7,6 +7,8 @@
   import Icon, { type IconName } from "./Icon.svelte";
 
   let tab = $derived(ws.activeTab);
+  /** Sorting only means something for a file list (not Home, Sharing, Compare). */
+  let listing = $derived(tab.folder.kind === "folder" || tab.folder.kind === "search");
 
   const sortNames: Record<SortKey, string> = { name: "Name", modified: "Date modified", type: "Type", size: "Size" };
 
@@ -116,7 +118,7 @@
     </button>
   {/each}
   <div class="divider"></div>
-  <button class="labeled" onclick={sortMenu}><Icon name="sort" size={18} /> Sort <Icon name="chevronDown" size={12} /></button>
+  <button class="labeled" disabled={!listing} onclick={sortMenu}><Icon name="sort" size={18} /> Sort <Icon name="chevronDown" size={12} /></button>
   <button class="labeled" onclick={viewMenu}><Icon name={tab.view === "icons" ? "grid" : tab.view === "columns" ? "columns" : tab.view === "gallery" ? "gallery" : "rows"} size={18} /> View <Icon name="chevronDown" size={12} /></button>
   <button title="More" aria-label="More" onclick={moreMenu}><Icon name="more" size={18} stroke={2.4} /></button>
   {#if recent.length}

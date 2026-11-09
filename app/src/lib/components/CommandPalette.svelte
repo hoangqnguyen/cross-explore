@@ -16,6 +16,8 @@
     icon: IconName;
     kind: string;
     keys?: string;
+    /** Ranks recently used commands and folders higher (0 = not recent). */
+    boost?: number;
     run: () => void;
   }
 
@@ -42,15 +44,17 @@
   let entries = $derived.by((): Entry[] => {
     if (!open) return [];
     const out: Entry[] = [];
+    // Newest first: the first recent entry gets the biggest boost.
+    const recentCmd = new Map(settings.data.recentCommands.map((id, i) => [id, 12 - Math.min(10, i)]));
     for (const c of commands) {
       if (!enabled(c.id) || c.hidden?.()) continue;
       const k = keysFor(c)[0];
-      out.push({ label: c.label, detail: c.group, icon: c.icon ?? "command", kind: "Command", keys: k ? formatCombo(k) : undefined, run: () => run(c.id) });
+      out.push({ label: c.label, detail: c.group, icon: c.icon ?? "command", kind: "Command", keys: k ? formatCombo(k) : undefined, boost: recentCmd.get(c.id), run: () => run(c.id) });
     }
     for (const p of ws.panes) for (const t of p.tabs) out.push({ label: t.title || "Tab", detail: t.folder.info?.display, icon: "folder", kind: "Tab", run: () => (ws.focusPane(p.id), p.activate(t.id)) });
     for (const f of ws.places?.favorites ?? []) out.push({ label: f.name, detail: pretty(f.uri), icon: f.icon as IconName, kind: "Favorite", run: go(f.uri) });
     for (const b of settings.data.bookmarks) out.push({ label: b.name, detail: pretty(b.uri), icon: "star", kind: "Favorite", run: go(b.uri) });
-    for (const r of settings.data.recent) out.push({ label: uriName(r) || r, detail: pretty(r), icon: "folder", kind: "Recent", run: go(r) });
+    settings.data.recent.forEach((r, i) => out.push({ label: uriName(r) || r, detail: pretty(r), icon: "folder", kind: "Recent", boost: 8 - Math.min(7, i * 0.5), run: go(r) }));
     for (const c of ws.places?.cloud ?? []) out.push({ label: c.name, detail: c.account ?? pretty(c.uri), icon: "cloud", kind: "Cloud", run: go(c.uri) });
     for (const v of ws.places?.volumes ?? []) out.push({ label: v.name, detail: pretty(v.uri), icon: "drive", kind: "Drive", run: go(v.uri) });
     for (const d of devices.nearby) for (const s of d.services) out.push({ label: `${d.name} — ${s.label}`, detail: s.uri, icon: "server", kind: "Device", run: go(s.uri) });
@@ -64,10 +68,18 @@
 
   let results = $derived.by(() => {
     const q = query.trim();
+    const match = (e: Entry) => {
+      const m = fuzzy(q, e.label);
+      if (m) return m;
+      const d = e.detail ? fuzzy(q, e.detail) : null;
+      return d && { score: d.score - 8, positions: [] };
+    };
     const scored = entries
-      .map((e) => ({ e, m: fuzzy(q, e.label) ?? (e.detail ? fuzzy(q, e.detail) && { score: (fuzzy(q, e.detail)!.score - 8), positions: [] } : null) }))
+      .map((e) => ({ e, m: match(e) }))
       .filter((x): x is { e: Entry; m: { score: number; positions: number[] } } => !!x.m);
-    if (q) scored.sort((a, b) => b.m.score - a.m.score);
+    // Typed: best match first, nudged by recent use. Empty: what you used last on top.
+    const rank = (x: { e: Entry; m: { score: number } }) => (q ? x.m.score : 0) + (x.e.boost ?? 0) * (q ? 0.5 : 1);
+    scored.sort((a, b) => rank(b) - rank(a));
     const top = scored.slice(0, 60);
     if (isPath) top.unshift({ e: { label: `Go to ${q}`, icon: "forward", kind: "Path", run: go(q) }, m: { score: 1e9, positions: [] } });
     return top;
@@ -116,7 +128,7 @@
           <span class="ico"><Icon name={r.e.icon} size={16} /></span>
           <span class="label">{@html markMatches(r.e.label, r.m.positions)}</span>
           {#if r.e.detail}<span class="detail">{r.e.detail}</span>{/if}
-          {#if r.e.keys}<kbd>{r.e.keys}</kbd>{:else}<span class="kind">{r.e.kind}</span>{/if}
+          {#if r.e.keys}<kbd>{r.e.keys}</kbd>{:else if r.e.kind !== "Command"}<span class="kind">{r.e.kind}</span>{/if}
         </button>
       {:else}
         <div class="none">No matches</div>

@@ -525,6 +525,14 @@ export class Pane {
     if (id === this.activeId) this.activate(this.tabs[Math.min(i, this.tabs.length - 1)].id);
   }
 
+  /** Close every tab but `id` (or only those after it). */
+  closeOthers(id: number, onlyAfter = false) {
+    const i = this.tabs.findIndex((t) => t.id === id);
+    if (i < 0) return;
+    for (const t of this.tabs.filter((_, j) => (onlyAfter ? j > i : j !== i))) this.close(t.id);
+    this.activate(id);
+  }
+
   reopenClosed() {
     const last = this.closed.pop();
     if (last) this.add(last.uri, true, last.view);

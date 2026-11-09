@@ -4,7 +4,7 @@
   // previews the selected folder (or file).
   import { childUri, uriName, type Crumb, type Item } from "../api";
   import { Folder, hasSnapshot, keyOf } from "../folder.svelte";
-  import { stemRange } from "../format";
+  import { formatDate, formatSize, stemRange, typeLabel } from "../format";
   import { blankMenu, dropTarget, handleNavKey, itemMenu, onDragEnd, onDragStart, onItemPointerDown, onItemPointerUp, startMarquee, type MarqueeRect } from "../listing";
   import { settings } from "../stores/settings.svelte";
   import { ws, type Tab } from "../workspace.svelte";
@@ -295,10 +295,20 @@
   {:else if focusEntry && !focusEntry.isDir}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="column preview" oncontextmenu={(ev) => focusEntry && !window.getSelection()?.toString() && itemMenu(ev, tab, focusEntry)}>
-      {#key tab.uriOf(focusEntry)}
-        <Preview entry={focusEntry} uri={tab.uriOf(focusEntry)} />
-      {/key}
-      <div class="pname">{focusEntry.name}</div>
+      <div class="pstage">
+        {#key tab.uriOf(focusEntry)}
+          <Preview entry={focusEntry} uri={tab.uriOf(focusEntry)} />
+        {/key}
+      </div>
+      <!-- Finder's preview column: what it is, how big, when it changed. -->
+      <div class="pinfo">
+        <div class="pname" title={focusEntry.name}>{focusEntry.name}</div>
+        <div class="pmeta">{typeLabel(focusEntry)} · {formatSize(focusEntry.size)}</div>
+        <dl>
+          {#if focusEntry.created}<dt>Created</dt><dd>{formatDate(focusEntry.created)}</dd>{/if}
+          {#if focusEntry.modified}<dt>Modified</dt><dd>{formatDate(focusEntry.modified)}</dd>{/if}
+        </dl>
+      </div>
     </div>
   {/if}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -350,11 +360,45 @@
     gap: 8px;
     padding: 16px;
   }
-  .pname {
-    text-align: center;
+  .pstage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .pinfo {
+    flex: none;
+    padding-top: 10px;
+    border-top: 1px solid var(--stroke);
     font-size: 12px;
-    color: var(--text-2);
+  }
+  .pname {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
     word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pmeta {
+    margin-top: 2px;
+    color: var(--text-2);
+  }
+  .pinfo dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 12px;
+    margin: 8px 0 0;
+  }
+  .pinfo dt {
+    color: var(--text-3);
+  }
+  .pinfo dd {
+    margin: 0;
+    color: var(--text-2);
+    text-align: right;
   }
   .filler {
     flex: 1;

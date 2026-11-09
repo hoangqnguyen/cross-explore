@@ -663,6 +663,50 @@ try {
     const html = await t.eval(`import('/src/lib/markdown.ts').then((m) => m.renderMarkdown("# Title\\nIntro\\n#pickleball #gameonline\\n\\n#tag\\n## Next"))`);
     check("Markdown with #hashtag lines renders (no freeze)", typeof html === "string" && html.includes("<p>#pickleball #gameonline</p>") === false && html.includes("#pickleball #gameonline") && html.includes("<h2>Next</h2>"), html);
   }
+  // Path field completes folder names; Tab accepts, Enter goes.
+  {
+    await t.open("?path=~/Downloads");
+    await t.focusList();
+    await t.eval(`document.dispatchEvent(new CustomEvent('cx:edit-path'))`);
+    await sleep(150);
+    await t.eval(`(() => { const i = document.querySelector('.address input'); i.value = '/Users/demo/Doc'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(300);
+    const sugg = await t.eval(`[...document.querySelectorAll('.completion span')].map((x) => x.textContent).join(',')`);
+    check("path field suggests matching folders", sugg === "Documents", sugg);
+    await t.key("Tab");
+    await sleep(300);
+    check("Tab completes the folder", (await t.eval(`document.querySelector('.address input').value`)) === "/Users/demo/Documents/");
+    await t.key("Enter");
+    await sleep(400);
+    check("Enter goes there", (await t.eval(`[...document.querySelectorAll('.crumb')].map((c) => c.textContent.trim()).join(' > ')`)) === "demo > Documents");
+  }
+
+  // Details columns resize by dragging the header divider, without sorting.
+  {
+    await t.open("?path=~/Downloads");
+    await sleep(300);
+    const { x, y } = JSON.parse(await t.eval(`(() => { const g = document.querySelector('.col.modified .grip').getBoundingClientRect(); return JSON.stringify({ x: g.left + 3, y: g.top + g.height / 2 }); })()`));
+    const m = (type, mx, extra = {}) => t.send("Input.dispatchMouseEvent", { type, x: mx, y, button: "left", clickCount: 1, ...extra });
+    await m("mousePressed", x);
+    for (let i = 1; i <= 4; i++) await m("mouseMoved", x - i * 10, { buttons: 1 });
+    await m("mouseReleased", x - 40);
+    await sleep(200);
+    const w = await t.eval(`Math.round(document.querySelector('.row .cell.modified').getBoundingClientRect().width)`);
+    check("dragging a column divider resizes the column", w === 230, String(w));
+    check("…without re-sorting", (await t.eval(`window.__cx.settings.data.sort.key`)) === "name");
+  }
+
+  // Tab context menu: duplicate, close to the right.
+  {
+    await t.open("?path=~/Downloads");
+    const tabMenu = (label) => t.eval(`(() => { const el = document.querySelector('.tabs .tab'); const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 20, clientY: r.top + 10 })); })()`).then(() => sleep(150)).then(() => t.clickText(".menu button, [role=menuitem]", label)).then(() => sleep(250));
+    await tabMenu("Duplicate tab");
+    await tabMenu("Duplicate tab");
+    check("tab menu duplicates a tab", (await t.eval(`document.querySelectorAll('.tabs .tab').length`)) === 3);
+    await tabMenu("Close tabs to the right");
+    check("…and closes the tabs to its right", (await t.eval(`document.querySelectorAll('.tabs .tab').length`)) === 1);
+  }
+
   check("no uncaught errors", t.errors.length === 0, t.errors.join("\n"));
 } catch (e) {
   console.error(e);

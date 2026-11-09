@@ -281,6 +281,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("edit.duplicate"),
     { separator: true },
     ...(many ? [cmd("file.multiRename")] : [cmd("file.rename")]),
+    ...(!many ? [cmd("file.info")] : []),
     cmd("file.tags"),
     cmd("file.copyPath"),
     cmd("file.reveal"),
