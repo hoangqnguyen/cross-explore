@@ -123,6 +123,9 @@ impl PeerService {
             Some(s) => s.clone(),
             None => shares::load(&config.state_dir),
         };
+        // A shared folder that has since been deleted or unmounted must not keep
+        // the whole peer service (and every other share) from starting.
+        let share_list: Vec<_> = share_list.into_iter().filter(|s| std::fs::metadata(shares::native_path(&s.path)).map(|m| m.is_dir()).unwrap_or(false)).collect();
         let roots = shares::prepare(&share_list)?;
         let bind_ip = match (config.bind, config.tailscale_only) {
             (Some(ip), _) => Some(ip),

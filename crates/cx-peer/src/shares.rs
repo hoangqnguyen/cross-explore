@@ -113,7 +113,7 @@ pub fn scrub(share: &ShareRoot, e: CxError) -> CxError {
 
 /// Accept what a UI may hand us besides a plain path: a `file://` URI, or
 /// the URI's path part on Windows (`/C:/Users/me`).
-fn native_path(p: &Path) -> PathBuf {
+pub(crate) fn native_path(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     if s.starts_with("file://") {
         if let Ok(loc) = cx_core::Location::parse(&s) {
