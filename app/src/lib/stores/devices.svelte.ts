@@ -13,10 +13,23 @@ class Devices {
   nearby = $derived(this.list.filter((d) => !d.tailnet?.isSelf).sort((a, b) => Number(!!b.tailnet?.online || !b.tailnet) - Number(!!a.tailnet?.online || !a.tailnet) || a.name.localeCompare(b.name)));
 
   async init() {
-    try {
-      [this.list, this.connected, this.peer] = await Promise.all([loadDevices(), loadConnections(), peerStatus()]);
-    } catch {
-      /* features not available in this build */
+    // Load independently so one failing call doesn't hide the others.
+    await Promise.all([
+      loadDevices().then((v) => (this.list = v)).catch(() => {}),
+      loadConnections().then((v) => (this.connected = v)).catch(() => {}),
+      this.refreshPeer(),
+    ]);
+  }
+
+  /** Peer status; the service starts in the background, so retry while it comes up. */
+  async refreshPeer(tries = 8) {
+    for (let i = 0; i < tries && !this.peer; i++) {
+      try {
+        this.peer = await peerStatus();
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 750));
+      }
     }
   }
 

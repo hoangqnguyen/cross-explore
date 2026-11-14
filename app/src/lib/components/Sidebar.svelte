@@ -137,12 +137,12 @@
     <div class="group">
       {@render item("Home", HOME_URI, "home")}
       {@render item(ws.places.home.name, ws.places.home.uri, "user")}
-      {#if devices.peer}
-        {@const busy = devices.peer.trusted.filter((t) => t.connected)}
+      {#if true}
+        {@const busy = devices.peer?.trusted.filter((t) => t.connected) ?? []}
         {@render item("Sharing", SHARING_URI, "share", {
-          title: devices.peer.enabled ? `Sharing ${devices.peer.shares.length} ${devices.peer.shares.length === 1 ? "folder" : "folders"}${busy.length ? ` · ${busy.map((t) => t.name).join(", ")} connected` : ""}` : "Sharing is off",
-          count: devices.peer.enabled ? devices.peer.shares.length : 0,
-          live: devices.peer.enabled && busy.length > 0,
+          title: devices.peer ? (devices.peer.enabled ? `Sharing ${devices.peer.shares.length} ${devices.peer.shares.length === 1 ? "folder" : "folders"}${busy.length ? ` · ${busy.map((t) => t.name).join(", ")} connected` : ""}` : "Sharing is off") : "Sharing",
+          count: devices.peer?.enabled ? devices.peer.shares.length : 0,
+          live: !!devices.peer?.enabled && busy.length > 0,
         })}
       {/if}
     </div>
