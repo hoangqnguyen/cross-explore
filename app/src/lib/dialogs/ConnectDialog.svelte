@@ -6,7 +6,7 @@
   import Icon from "../components/Icon.svelte";
   import Modal from "./Modal.svelte";
 
-  let { host: initialHost = "", scheme: initialScheme = "smb" }: { host?: string; scheme?: string } = $props();
+  let { host: initialHost = "", scheme: initialScheme = "smb", focusUser = false }: { host?: string; scheme?: string; focusUser?: boolean } = $props();
 
   // svelte-ignore state_referenced_locally
   let scheme = $state(initialScheme);
@@ -37,6 +37,11 @@
 
   let defaultPort = $derived(PROTOCOLS.find((p) => p.scheme === scheme)?.port ?? 0);
   let uri = $derived(host.trim() ? buildUri(scheme, host, port || null, anonymous ? "" : user, path) : "");
+
+  /** Land in the user field when signing in as someone else. */
+  function focusIf(node: HTMLInputElement, on: boolean) {
+    if (on) setTimeout(() => (node.focus(), node.select()), 50);
+  }
 
   async function submit() {
     if (!uri) return;
@@ -79,7 +84,7 @@
     <label class="check"><input type="checkbox" bind:checked={anonymous} /> Connect as guest</label>
     {#if !anonymous}
       <div class="row">
-        <label class="field">{scheme === "s3" ? "Access key ID" : "User"}<input type="text" bind:value={user} autocomplete="username" spellcheck="false" /></label>
+        <label class="field">{scheme === "s3" ? "Access key ID" : "User"}<input type="text" bind:value={user} autocomplete="username" spellcheck="false" use:focusIf={focusUser} /></label>
         <label class="field">{scheme === "s3" ? "Secret access key" : keyPath ? "Key passphrase" : "Password"}<input type="password" bind:value={password} autocomplete="current-password" /></label>
       </div>
       {#if scheme === "sftp"}

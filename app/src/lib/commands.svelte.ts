@@ -14,6 +14,7 @@ import { transfers } from "./stores/transfers.svelte";
 import { toasts } from "./toasts.svelte";
 import { quicklook } from "./stores/quicklook.svelte";
 import { sizes } from "./stores/sizes.svelte";
+import { activeRemoteUri, signInAsAnother } from "./accounts";
 import { openShareDialog, SHARING_URI } from "./sharing.svelte";
 import { resolveSshUri } from "./ssh";
 import { HOME_URI, isArchive, ws } from "./workspace.svelte";
@@ -123,6 +124,7 @@ export const commands: Command[] = [
   { id: "file.multiRename", label: "Rename multiple…", group: "Tools", icon: "rename", keys: { finder: ["Mod+Shift+Enter"], explorer: ["Mod+M", "Ctrl+M"] }, list: true, when: () => tab().targets().length > 0, run: () => dialogs.ask("multiRename", { tab: tab() }) },
   { id: "file.tags", label: "Tags…", group: "File", icon: "tag", keys: { all: ["Mod+Alt+G"] }, list: true, when: hasTargets, run: () => dialogs.ask("tags", { uris: tab().targets().map((e) => tab().uriOf(e)) }) },
   { id: "file.share", label: "Share with my devices…", group: "Network", icon: "share", when: () => shareTarget() !== null, run: () => openShareDialog(shareTarget()!) },
+  { id: "net.signInAs", label: "Sign in as another user…", group: "Network", icon: "user", when: () => activeRemoteUri() !== null, run: () => signInAsAnother(activeRemoteUri()!) },
   { id: "go.sharing", label: "Sharing — shared folders and devices", group: "Go", icon: "share", run: () => tab().navigate(SHARING_URI) },
   { id: "file.sendTo", label: "Send to device…", group: "Network", icon: "send", when: () => hasTargets() && tab().folder.info?.local === true, run: () => dialogs.ask("sendTo", { uris: tab().targets().map((e) => tab().uriOf(e)) }) },
   { id: "file.diff", label: "Compare files", group: "Tools", icon: "diff", when: () => tab().selectedEntries.filter((e) => !e.isDir).length === 2 || (oneTarget() && !!ws.otherTab?.cursorEntry), run: () => diffFiles() },

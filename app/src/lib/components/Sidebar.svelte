@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { accountMenuItems } from "../accounts";
   import { disconnectServer, errorText, fileUriToPath, isCloudUri, type Device } from "../api";
   import { formatSize } from "../format";
   import { dropTarget } from "../listing";
@@ -54,12 +55,20 @@
       [
         { label: "Open in new tab", icon: "plus", action: () => ws.newTab(uri) },
         ...(devices.connected.some((c) => uri.startsWith(c)) ? [{ label: "Disconnect", icon: "close" as const, action: () => disconnect(uri) }] : []),
+        ...accountMenuItems(uri, (u) => ws.activeTab?.navigate(u)),
         ...(saved ? [{ label: "Rename…", icon: "rename" as const, action: () => renameServer(uri) }] : []),
         ...(saved ? [{ label: "Remove", icon: "trash" as const, action: () => (settings.data.servers = settings.data.servers.filter((s) => s.uri !== uri)) }] : []),
       ],
       e.clientX,
       e.clientY,
     );
+  }
+
+  function deviceMenu(e: MouseEvent, target: string | null) {
+    const items = target ? accountMenuItems(target, (u) => ws.activeTab?.navigate(u)) : [];
+    if (!target || !items.length) return;
+    e.preventDefault();
+    menu.show([{ label: "Open in new tab", icon: "plus", action: () => ws.newTab(target) }, ...items], e.clientX, e.clientY);
   }
 
   /** Give a favorite its own name (an alias); the folder itself is untouched. */
@@ -178,6 +187,7 @@
               disabled={offline}
               title="{d.name}{d.tailnet ? ' · tailnet' : ''}{offline ? ' · offline' : ''}"
               onclick={(e) => (target ? go(target, e) : dialogs.ask("connect", { host: d.hostname ?? d.addresses[0] }))}
+              oncontextmenu={(e) => deviceMenu(e, target)}
             >
               <span class="icon"><DeviceIcon kind={d.kind} size={16} /></span>
               <span class="text"><span class="label">{d.name}</span></span>
