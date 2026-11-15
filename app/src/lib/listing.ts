@@ -2,6 +2,7 @@
 // selection with the mouse, keyboard navigation, type-to-filter, context
 // menus and drag-and-drop.
 import type { Item } from "./api";
+import { devApps } from "./devapps.svelte";
 import { byId, enabled, run, shortcut } from "./commands.svelte";
 import { extOf } from "./format";
 import { keyOf } from "./folder.svelte";
@@ -58,6 +59,15 @@ function newFileMenu(tab: Tab): MenuItem {
 
 /** "Open With": on Windows the OS already has a picker, so skip straight to
  * it; elsewhere (no such standalone dialog exists) list candidate apps. */
+/** "Open in ▸ VS Code, Cursor, iTerm…" for local items, when any are installed. */
+function openInItems(tab: Tab, item: Item): MenuItem[] {
+  if (!tab.folder.info?.local || !devApps.list.length) return [];
+  const uri = tab.uriOf(item);
+  const apps = devApps.list.filter((a) => item.isDir || a.kind === "editor");
+  if (!apps.length) return [];
+  return [{ label: "Open in", icon: "terminal", items: () => apps.map((a): MenuItem => ({ label: a.name, action: () => devApps.open(uri, a.id) })) }];
+}
+
 function openWithItem(tab: Tab, item: Item): MenuItem {
   const uri = tab.uriOf(item);
   const openFail = (e: unknown) => toasts.show(errorText(e), "error");
@@ -272,6 +282,7 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     ...(item.parent ? [{ label: "Show in enclosing folder", icon: "up" as const, action: () => tab.navigate(item.parent!, item.name) }] : []),
     cmd("file.quicklook"),
     ...(!item.isDir && !many ? [openWithItem(tab, item)] : []),
+    ...(!many ? openInItems(tab, item) : []),
     { separator: true },
     cmd("edit.cut"),
     cmd("edit.copy"),
@@ -291,7 +302,8 @@ export function itemMenu(e: MouseEvent, tab: Tab, item: Item) {
     cmd("file.compress"),
     ...(item.isDir ? [cmd("file.calcSize")] : []),
     ...(tab.selectedEntries.filter((x) => !x.isDir).length === 2 ? [cmd("file.diff")] : []),
-    ...(item.isDir && !many && tab.folder.info?.local ? [cmd("file.share", isShared(tab.uriOf(item)) ? "Sharing options…" : "Share…")] : []),
+    ...(item.isDir && !many && tab.folder.info?.local ? [cmd("file.share", isShared(tab.uriOf(item)) ? "Sharing options…" : "Share with my devices…")] : []),
+    ...(ws.platform === "macos" && tab.folder.info?.local ? [cmd("file.shareSystem")] : []),
     cmd("file.sendTo"),
     { separator: true },
     ...(tab.canTrash ? [cmd("file.trash", undefined, true)] : []),

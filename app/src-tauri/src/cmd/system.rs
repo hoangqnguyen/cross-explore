@@ -741,3 +741,121 @@ pub fn open_full_disk_access_settings() -> Result<()> {
         Ok(())
     }
 }
+
+// ---- Open in an editor or terminal app ----
+
+#[derive(Serialize, Clone)]
+pub struct DevApp {
+    id: &'static str,
+    name: &'static str,
+    /// "editor" or "terminal".
+    kind: &'static str,
+}
+
+/// id, display name, kind, macOS app bundle, command-line launcher elsewhere.
+const DEV_APPS: &[(&str, &str, &str, &str, &str)] = &[
+    ("vscode", "VS Code", "editor", "Visual Studio Code", "code"),
+    ("cursor", "Cursor", "editor", "Cursor", "cursor"),
+    ("windsurf", "Windsurf", "editor", "Windsurf", "windsurf"),
+    ("zed", "Zed", "editor", "Zed", "zed"),
+    ("sublime", "Sublime Text", "editor", "Sublime Text", "subl"),
+    ("iterm", "iTerm", "terminal", "iTerm", ""),
+    ("warp", "Warp", "terminal", "Warp", ""),
+    ("ghostty", "Ghostty", "terminal", "Ghostty", ""),
+];
+
+#[cfg(target_os = "macos")]
+fn app_installed(bundle: &str, _cli: &str) -> bool {
+    let home = cx_core::location::home_dir().unwrap_or_default();
+    [PathBuf::from("/Applications"), home.join("Applications"), PathBuf::from("/System/Applications")]
+        .iter()
+        .any(|d| d.join(format!("{bundle}.app")).exists())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn app_installed(_bundle: &str, cli: &str) -> bool {
+    if cli.is_empty() {
+        return false;
+    }
+    let Some(path) = std::env::var_os("PATH") else { return false };
+    std::env::split_paths(&path).any(|d| ["", ".exe", ".cmd"].iter().any(|ext| d.join(format!("{cli}{ext}")).is_file()))
+}
+
+/// Editors and terminals that are installed and can open a folder.
+#[tauri::command]
+pub fn dev_apps() -> Vec<DevApp> {
+    DEV_APPS
+        .iter()
+        .filter(|(_, _, _, bundle, cli)| app_installed(bundle, cli))
+        .map(|&(id, name, kind, _, _)| DevApp { id, name, kind })
+        .collect()
+}
+
+/// Open a local file or folder in one of `dev_apps`. Terminals get the folder.
+#[tauri::command]
+pub fn open_in_app(uri: String, app: String) -> Result<()> {
+    let loc = Location::parse(&uri)?;
+    let path = loc.local_path().ok_or_else(|| CxError::Unsupported("opening remote items in another app".into()))?;
+    let &(_, _, kind, bundle, cli) = DEV_APPS
+        .iter()
+        .find(|a| a.0 == app)
+        .ok_or_else(|| CxError::Unsupported(format!("app {app}")))?;
+    let target = if kind == "terminal" && path.is_file() { path.parent().unwrap_or(path) } else { path };
+    if cfg!(target_os = "macos") {
+        spawn(Command::new("open").arg("-a").arg(bundle).arg(target))
+    } else {
+        spawn(Command::new(cli).arg(target))
+    }
+}
+
+/// Show the system share sheet (AirDrop, Messages, Mail…) for local items.
+#[tauri::command]
+pub async fn share_entries(uris: Vec<String>, app: AppHandle) -> Result<()> {
+    let mut paths = Vec::new();
+    for u in &uris {
+        let loc = Location::parse(u)?;
+        paths.push(
+            loc.local_path()
+                .ok_or_else(|| CxError::Unsupported("sharing remote items (copy them somewhere local first)".into()))?
+                .to_path_buf(),
+        );
+    }
+    share_sheet(&app, paths)
+}
+
+#[cfg(target_os = "macos")]
+fn share_sheet(app: &AppHandle, paths: Vec<PathBuf>) -> Result<()> {
+    use objc2::rc::Retained;
+    use objc2::{AnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSSharingServicePicker, NSView};
+    use objc2_foundation::{NSArray, NSPoint, NSRect, NSRectEdge, NSSize, NSString, NSURL};
+    use tauri::Manager;
+
+    let win = app.get_webview_window("main").ok_or_else(|| CxError::Io("no window".into()))?;
+    let view_ptr = win.ns_view().map_err(|e| CxError::Io(e.to_string()))? as usize;
+    app.run_on_main_thread(move || {
+        let Some(_mtm) = MainThreadMarker::new() else { return };
+        // SAFETY: Tauri hands out the window's live content view, and we are on the main thread.
+        let view: &NSView = unsafe { &*(view_ptr as *const NSView) };
+        let urls: Vec<Retained<NSURL>> = paths
+            .iter()
+            .map(|p| NSURL::fileURLWithPath(&NSString::from_str(&p.to_string_lossy())))
+            .collect();
+        let items: Retained<NSArray<NSURL>> = NSArray::from_retained_slice(&urls);
+        // SAFETY: the picker is given file URLs, which every sharing service accepts.
+        unsafe {
+            let any_items: &NSArray<objc2::runtime::AnyObject> = &*(Retained::as_ptr(&items) as *const NSArray<objc2::runtime::AnyObject>);
+            let picker = NSSharingServicePicker::initWithItems(NSSharingServicePicker::alloc(), any_items);
+            // Anchor under the toolbar's right side, where the Share button would be.
+            let b = view.bounds();
+            let rect = NSRect::new(NSPoint::new(b.size.width - 160.0, b.size.height - 60.0), NSSize::new(1.0, 1.0));
+            picker.showRelativeToRect_ofView_preferredEdge(rect, view, NSRectEdge::MinY);
+        }
+    })
+    .map_err(|e| CxError::Io(e.to_string()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn share_sheet(_app: &AppHandle, _paths: Vec<PathBuf>) -> Result<()> {
+    Err(CxError::Unsupported("the system share sheet on this platform".into()))
+}

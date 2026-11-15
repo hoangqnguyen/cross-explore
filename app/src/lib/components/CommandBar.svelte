@@ -1,5 +1,6 @@
 <script lang="ts">
   import { byId, enabled, forgetRecent, run, shortcut, type Command } from "../commands.svelte";
+  import { devApps, KNOWN_DEV_APPS } from "../devapps.svelte";
   import { menu, type MenuItem } from "../menu.svelte";
   import type { SortKey } from "../sort";
   import { settings } from "../stores/settings.svelte";
@@ -74,6 +75,8 @@
         item("file.copyPath"),
         item("file.reveal"),
         item("file.terminal"),
+        ...KNOWN_DEV_APPS.filter((a) => devApps.has(a.id)).map((a) => item(`file.openIn.${a.id}`)),
+        item("file.shareSystem"),
         item("bookmark.toggle", settings.data.bookmarks.some((b) => b.uri === tab.dirUri) ? "Remove from Favorites" : "Add to Favorites"),
         { separator: true },
         item("net.connect"),

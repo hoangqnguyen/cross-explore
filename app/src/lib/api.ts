@@ -206,6 +206,14 @@ export const openEntryWith = (uri: string, withApp: string, id = 0, onProgress: 
 export const openWithDialog = (uri: string) => invoke<void>("open_with_dialog", { uri });
 export const revealEntry = (uri: string) => invoke<void>("reveal_entry", { uri });
 export const openTerminal = (uri: string) => invoke<void>("open_terminal", { uri });
+export interface DevApp {
+  id: string;
+  name: string;
+  kind: "editor" | "terminal";
+}
+export const devApps = () => invoke<DevApp[]>("dev_apps");
+export const openInApp = (uri: string, app: string) => invoke<void>("open_in_app", { uri, app });
+export const shareEntries = (uris: string[]) => invoke<void>("share_entries", { uris });
 export const osClipboardSet = (uris: string[]) => invoke<void>("os_clipboard_set", { uris });
 export const osClipboardGet = () => invoke<string[]>("os_clipboard_get");
 export const fullDiskAccess = () => invoke<boolean>("full_disk_access");

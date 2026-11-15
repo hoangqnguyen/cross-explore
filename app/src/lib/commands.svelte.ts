@@ -1,7 +1,8 @@
 // Every user action, defined once. Menus, the command palette and the
 // keyboard all run commands from this registry, so a shortcut shown in a
 // menu is always the one that works.
-import { errorText, openTerminal, revealEntry, uriName } from "./api";
+import { errorText, openTerminal, revealEntry, shareEntries, uriName } from "./api";
+import { devApps, KNOWN_DEV_APPS } from "./devapps.svelte";
 import type { IconName } from "./components/Icon.svelte";
 import { keyOf } from "./folder.svelte";
 import { comboOf, formatCombo, isMac, isTextInput, reachable } from "./keys";
@@ -117,6 +118,15 @@ export const commands: Command[] = [
       ui.terminalOpen = true;
     },
   },
+  { id: "file.shareSystem", label: "Share…", group: "File", icon: "share", when: () => isMac && hasTargets() && tab().folder.info?.local === true, run: () => shareEntries(tab().targets().map((e) => tab().uriOf(e))).catch((e) => toasts.show(errorText(e), "error")) },
+  ...KNOWN_DEV_APPS.map((a): Command => ({
+    id: `file.openIn.${a.id}`,
+    label: `Open in ${a.name}`,
+    group: "Tools",
+    icon: a.kind === "terminal" ? "terminal" : "external",
+    when: () => devApps.has(a.id) && tab().folder.info?.local === true && tab().folder.kind === "folder",
+    run: () => devApps.open(tab().targets().length === 1 ? tab().uriOf(tab().targets()[0]) : tab().dirUri, a.id),
+  })),
   { id: "file.terminal", label: "Open in Terminal app", group: "Tools", icon: "terminal", keys: { finder: ["Mod+Alt+T"], explorer: ["Mod+Shift+`", "Ctrl+Shift+`"] }, when: () => tab().folder.kind === "folder", run: () => void openExternalTerminal() },
   { id: "file.calcSize", label: "Calculate folder sizes", group: "Tools", icon: "sigma", keys: { all: ["Alt+Shift+Enter"], commander: ["Space"] }, list: true, when: () => tab().targets().some((e) => e.isDir) || tab().visible.some((e) => e.isDir), run: () => calcSizes() },
   { id: "file.compress", label: "Compress to ZIP", group: "Tools", icon: "archive", when: () => hasTargets() && writable(), run: () => compress() },

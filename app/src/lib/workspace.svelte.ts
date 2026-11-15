@@ -1,4 +1,5 @@
 // Panes, tabs, navigation history, selection and the file actions on them.
+import { devApps } from "./devapps.svelte";
 import {
   childUri,
   createFile,
@@ -607,6 +608,7 @@ export class Workspace {
       /* events unavailable */
     }
     void devices.init().then(() => activity.load());
+    void devApps.init();
 
     const start = inTauri ? null : new URLSearchParams(location.search).get("path");
     const session = settings.data.session;

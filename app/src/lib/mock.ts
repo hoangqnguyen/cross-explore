@@ -529,6 +529,9 @@ const handlers: Record<string, (a: Args) => unknown> = {
   open_full_disk_access_settings: () => undefined,
   reveal_entry: () => undefined,
   open_terminal: () => undefined,
+  dev_apps: () => [{ id: "vscode", name: "VS Code", kind: "editor" }],
+  open_in_app: () => undefined,
+  share_entries: () => undefined,
   async dir_size({ uri, onProgress }: Args) {
     const n = lookup(uri)!;
     const total = totalSize(n);
