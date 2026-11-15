@@ -759,7 +759,12 @@ const DEV_APPS: &[(&str, &str, &str, &str, &str)] = &[
     ("windsurf", "Windsurf", "editor", "Windsurf", "windsurf"),
     ("zed", "Zed", "editor", "Zed", "zed"),
     ("sublime", "Sublime Text", "editor", "Sublime Text", "subl"),
+    ("nova", "Nova", "editor", "Nova", ""),
+    ("bbedit", "BBEdit", "editor", "BBEdit", "bbedit"),
+    ("textmate", "TextMate", "editor", "TextMate", "mate"),
+    ("terminal", "Terminal", "terminal", "Terminal", ""),
     ("iterm", "iTerm", "terminal", "iTerm", ""),
+    ("kitty", "kitty", "terminal", "kitty", ""),
     ("warp", "Warp", "terminal", "Warp", ""),
     ("ghostty", "Ghostty", "terminal", "Ghostty", ""),
 ];
@@ -767,7 +772,7 @@ const DEV_APPS: &[(&str, &str, &str, &str, &str)] = &[
 #[cfg(target_os = "macos")]
 fn app_installed(bundle: &str, _cli: &str) -> bool {
     let home = cx_core::location::home_dir().unwrap_or_default();
-    [PathBuf::from("/Applications"), home.join("Applications"), PathBuf::from("/System/Applications")]
+    [PathBuf::from("/Applications"), home.join("Applications"), PathBuf::from("/System/Applications"), PathBuf::from("/System/Applications/Utilities"), PathBuf::from("/Applications/Utilities")]
         .iter()
         .any(|d| d.join(format!("{bundle}.app")).exists())
 }

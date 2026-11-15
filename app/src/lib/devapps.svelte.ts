@@ -9,7 +9,12 @@ export const KNOWN_DEV_APPS: { id: string; name: string; kind: "editor" | "termi
   { id: "windsurf", name: "Windsurf", kind: "editor" },
   { id: "zed", name: "Zed", kind: "editor" },
   { id: "sublime", name: "Sublime Text", kind: "editor" },
+  { id: "nova", name: "Nova", kind: "editor" },
+  { id: "bbedit", name: "BBEdit", kind: "editor" },
+  { id: "textmate", name: "TextMate", kind: "editor" },
+  { id: "terminal", name: "Terminal", kind: "terminal" },
   { id: "iterm", name: "iTerm", kind: "terminal" },
+  { id: "kitty", name: "kitty", kind: "terminal" },
   { id: "warp", name: "Warp", kind: "terminal" },
   { id: "ghostty", name: "Ghostty", kind: "terminal" },
 ];
