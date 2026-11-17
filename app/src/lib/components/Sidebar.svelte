@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { accountMenuItems } from "../accounts";
+  import { accountMenuItems, parseRemote } from "../accounts";
   import { disconnectServer, errorText, fileUriToPath, isCloudUri, type Device } from "../api";
   import { formatSize } from "../format";
   import { dropTarget } from "../listing";
@@ -105,6 +105,42 @@
 
   let savedUris = $derived(new Set(settings.data.servers.map((s) => norm(s.uri))));
   let loose = $derived(devices.connected.filter((c) => !savedUris.has(norm(c)) && !devices.nearby.some((d) => d.services.some((s) => norm(s.uri) === norm(c)))));
+
+  /** The machine a URI is on, whoever is signed in: scheme, host and port. */
+  function machineKey(uri: string) {
+    const r = parseRemote(uri);
+    return r ? `${r.scheme}://${r.host}${r.port ? ":" + r.port : ""}` : norm(uri);
+  }
+
+  interface Login {
+    uri: string;
+    user: string;
+    saved: boolean;
+    live: boolean;
+  }
+  interface Machine {
+    key: string;
+    name: string;
+    icon: IconName;
+    logins: Login[];
+  }
+
+  /** Saved servers and open connections, one row per machine; several logins on it fold into one expandable row. */
+  let machines = $derived.by(() => {
+    const out = new Map<string, Machine>();
+    const add = (uri: string, name: string | null, saved: boolean) => {
+      const key = machineKey(uri);
+      const live = devices.connected.some((c) => norm(c) === norm(uri) || norm(uri).startsWith(norm(c) + "/"));
+      let m = out.get(key);
+      if (!m) out.set(key, (m = { key, name: name ?? key.replace(/^\w+:\/\//, ""), icon: isCloudUri(uri) ? "cloud" : "server", logins: [] }));
+      else if (name && saved && !m.logins.some((l) => l.saved)) m.name = name;
+      const user = parseRemote(uri)?.user ?? "";
+      if (!m.logins.some((l) => l.user === user)) m.logins.push({ uri, user, saved, live });
+    };
+    for (const s of settings.data.servers) add(s.uri, s.name, true);
+    for (const c of loose) add(c, null, false);
+    return [...out.values()];
+  });
 </script>
 
 {#snippet item(label: string, uri: string, icon: IconName, opts: { meter?: number | null; title?: string; menu?: (e: MouseEvent) => void; dim?: boolean; indent?: boolean; count?: number; live?: boolean } = {})}
@@ -171,11 +207,35 @@
     {@render section("net", "Network", { icon: "plus", label: "Connect to server…", run: () => dialogs.ask("connect") })}
     {#if !collapsed.net}
       <div class="group">
-        {#each settings.data.servers as s (s.uri)}
-          {@render item(s.name, s.uri, isCloudUri(s.uri) ? "cloud" : "server", { title: s.uri, menu: (e) => serverMenu(e, s.uri, true) })}
-        {/each}
-        {#each loose as c (c)}
-          {@render item(c.replace(/^\w+:\/\//, ""), c, isCloudUri(c) ? "cloud" : "server", { title: c, menu: (e) => serverMenu(e, c, false) })}
+        {#each machines as m (m.key)}
+          {#if m.logins.length === 1}
+            {@const l = m.logins[0]}
+            {@render item(m.name, l.uri, m.icon, { title: l.uri, menu: (e) => serverMenu(e, l.uri, l.saved), live: l.live })}
+          {:else}
+            {@const first = m.logins.find((l) => l.live) ?? m.logins[0]}
+            <div class="device">
+              <button
+                class="item"
+                class:current={m.logins.some((l) => current === norm(l.uri))}
+                title="{m.name} · {m.logins.length} logins"
+                onclick={(e) => go(first.uri, e)}
+                oncontextmenu={(e) => serverMenu(e, first.uri, first.saved)}
+              >
+                <span class="icon"><Icon name={m.icon} size={16} /></span>
+                <span class="text"><span class="label">{m.name}</span></span>
+                {#if m.logins.some((l) => l.live)}<span class="tdot" title="Signed in"></span>{/if}
+                <span class="count">{m.logins.length}</span>
+              </button>
+              <button class="exp" aria-label="Show logins" onclick={() => (expanded[m.key] = !expanded[m.key])}>
+                <span class="chev" class:closed={!expanded[m.key]}><Icon name="chevronDown" size={11} stroke={1.8} /></span>
+              </button>
+            </div>
+            {#if expanded[m.key]}
+              {#each m.logins as l (l.uri)}
+                {@render item(l.user || "guest", l.uri, "user", { title: l.uri, menu: (e) => serverMenu(e, l.uri, l.saved), indent: true, live: l.live })}
+              {/each}
+            {/if}
+          {/if}
         {/each}
         {#each devices.nearby as d (d.id)}
           {@const target = deviceTarget(d)}
@@ -205,7 +265,7 @@
             {/each}
           {/if}
         {/each}
-        {#if !devices.nearby.length && !settings.data.servers.length && !loose.length}
+        {#if !devices.nearby.length && !machines.length}
           <button class="hint" onclick={() => devices.scan()}>{devices.scanning ? "Looking for devices…" : "No devices found yet — scan"}</button>
         {/if}
       </div>
